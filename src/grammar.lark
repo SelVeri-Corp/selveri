@@ -1,0 +1,172 @@
+// ================== LEXER ==================
+// Ignore whitespace
+%import common.WS
+%ignore WS
+
+// Comment support
+%ignore /\/\/[^\n]*/
+%ignore /\/\*[\s\S]*?\*\//
+
+IDENT: /[A-Za-z_][A-Za-z0-9_]*/
+FLOAT_LIT: /[0-9]+\.[0-9]+/
+INT_LIT: /[0-9]+/
+
+COMP_OP: "=" | "<=" | "<" | ">=" | ">"
+
+// ================== PARSER ==================
+start: program
+program: contract_seq
+
+contract_seq: (contract (";" contract)* ";")?
+
+contract: stmt spec_annot?
+spec_annot: "{" spec "}"
+
+// ------------------ STATEMENTS ------------------
+// Here we fix the dangling else issue
+?stmt: matched_stmt | unmatched_stmt
+
+?matched_stmt: basic_stmt
+             | "if" bexp "then" matched_stmt "else" matched_stmt "fi"     -> if_stmt
+             | while_stmt
+             | block
+
+?unmatched_stmt: "if" bexp "then" stmt "fi"                               -> if_stmt
+               | "if" bexp "then" matched_stmt "else" unmatched_stmt "fi"  -> if_stmt
+
+?basic_stmt: decl
+           | assign
+           | list_assign
+           | "noop"                                                       -> noop_stmt
+
+block: "{" contract_seq "}"                                                   -> block_stmt
+while_stmt: "while" bexp "do" stmt "od"                                    -> while_stmt
+
+decl: IDENT ":" type                                                      -> decl_stmt
+assign: IDENT ":=" expr                                                   -> assign_stmt
+list_assign: IDENT "[" aexp "]" ":=" expr                                  -> list_assign_stmt
+
+// Expr in the paper is AExp | BExp, but BExp includes AExp.
+// To avoid ambiguity in assignments, we use:
+//   expr := aexp | bexp_strict
+// while conditions use full bexp (which includes truthy aexp).
+?expr: aexp                                                               -> expr_a
+     | bexp_strict                                                        -> expr_b
+
+// ------------------ TYPES ------------------
+?type: "Int"                                                              -> type_int
+     | "Float"                                                            -> type_float
+     | "List" "[" type "," aexp "]"                                       -> type_list
+
+// ------------------ IMMEDIATES ------------------
+?imm: INT_LIT                                                             -> int_lit
+    | FLOAT_LIT                                                           -> float_lit
+    | list_lit
+
+list_lit: "[" [imm ("," imm)*] "]"                                        -> list_lit
+
+// ------------------ ARITHMETIC EXPRESSIONS ------------------
+?aexp: aexp_sum
+
+?aexp_sum: aexp_sum "+" aexp_term                                         -> add
+         | aexp_sum "-" aexp_term                                         -> sub
+         | aexp_term
+
+?aexp_term: aexp_term "*" aexp_factor                                    -> mul
+          | aexp_term "/" aexp_factor                                      -> div
+          | aexp_factor
+
+?aexp_factor: "-" aexp_factor                                            -> neg
+            | aexp_atom
+
+?aexp_atom: imm
+         | IDENT                                                          -> a_var
+         | "len" "(" IDENT ")"                                            -> a_len
+         | IDENT "[" aexp "]"                                             -> a_index
+         | "(" aexp ")"
+
+// ------------------ BOOLEAN EXPRESSIONS ------------------
+// BExp includes AExp as truthy (C-like) per the paper.
+?bexp: b_or
+
+?b_or: b_or "or" b_xor                                                    -> bor
+     | b_xor
+
+?b_xor: b_xor "xor" b_and                                                 -> bxor
+      | b_and
+
+?b_and: b_and "and" b_not                                                 -> band
+      | b_not
+
+?b_not: "not" b_not                                                       -> bnot
+      | b_atom
+
+?b_atom: "true"                                                           -> btrue
+      | "false"                                                           -> bfalse
+      | comparison
+      | aexp                                                              -> truthy
+      | "(" bexp ")"
+
+comparison: aexp COMP_OP aexp                                             -> compare
+
+// Strict boolean: same, but without "aexp -> truthy".
+// Used in assignments to remove Expr ambiguity.
+?bexp_strict: bs_or
+
+?bs_or: bs_or "or" bs_xor                                                 -> bor
+      | bs_xor
+
+?bs_xor: bs_xor "xor" bs_and                                              -> bxor
+       | bs_and
+
+?bs_and: bs_and "and" bs_not                                              -> band
+       | bs_not
+
+?bs_not: "not" bs_not                                                     -> bnot
+       | bs_atom
+
+?bs_atom: "true"                                                          -> btrue
+        | "false"                                                         -> bfalse
+        | comparison
+        | "(" bexp_strict ")"
+
+// ------------------ SPECIFICATIONS ------------------
+?spec: spec_imp
+
+?spec_imp: spec_or "=>" spec_imp                                          -> simp
+         | spec_or
+
+?spec_or: spec_or "||" spec_and                                           -> sor
+        | spec_and
+
+?spec_and: spec_and "&&" spec_temp                                        -> sand
+         | spec_temp
+
+?spec_temp: spec_temp "Since" spec_unary                                  -> ssince
+          | spec_temp "Until" spec_unary                                  -> suntil
+          | spec_unary
+
+?spec_unary: "!" spec_unary                                               -> snot
+           | "Previously" spec_unary                                      -> spreviously
+           | "Once" spec_unary                                            -> sonce
+           | "Historically" spec_unary                                    -> shistorically
+           | "Next" spec_unary                                            -> snext
+           | "Eventually" spec_unary                                      -> seventually
+           | "Always" spec_unary                                          -> salways
+           | "Forall" IDENT domain_opt "." spec                           -> sforall
+           | "Exists" IDENT domain_opt "." spec                           -> sexists
+           | bexp                                                         -> sbexp
+           | "(" spec ")"
+
+domain_opt: ("in" domain)?                                                -> domain_opt
+
+?domain: interval
+       | IDENT                                                            -> domain_ident
+       | set_lit
+       | type                                                             -> domain_type
+
+interval: "[" aexp "," aexp ")"                                           -> interval_halfopen
+        | "[" aexp "," aexp "]"                                           -> interval_closed
+
+set_lit: "{" aexp_list "}"                                                -> set_lit
+aexp_list: aexp ("," aexp)*                                               -> aexp_list
