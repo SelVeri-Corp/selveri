@@ -1,0 +1,8 @@
+x : Int;
+y : Int;
+x := 10;
+y := 0;
+while x > 0 do
+    if x = 5 then y := y + 1; else pass; fi
+    x := x - 1;
+od;

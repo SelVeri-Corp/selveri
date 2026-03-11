@@ -1,22 +1,20 @@
 # selveri_parser.py
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, List
 
-from lark import Lark, Transformer, v_args
+from lark import Lark, Transformer, v_args, LarkError
+from errors import ParserError
 
 # =========================
 # AST
 # =========================
 @dataclass(frozen=True)
 class Program:
-    contracts: List["Contract"]
-
-@dataclass(frozen=True)
-class Contract:
-    stmt: "Stmt"
-    spec: Optional["Spec"]
+    stmt_seq: List["Stmt"]
 
 class Stmt: pass
 class Expr: pass
@@ -174,51 +172,47 @@ class ListAssign(Stmt):
     expr: Expr
 
 @dataclass(frozen=True)
-class NoOp(Stmt): pass
+class Pass(Stmt): pass
 
 @dataclass(frozen=True)
-class Block(Stmt):
-    body: List[Contract]
+class SpecAnnot(Stmt):
+    spec: Spec
 
 @dataclass(frozen=True)
 class If(Stmt):
     cond: BExp
-    then_s: Stmt
-    else_s: Optional[Stmt]
+    then_s: List[Stmt]
+    else_s: Optional[List[Stmt]]
 
 @dataclass(frozen=True)
 class While(Stmt):
     cond: BExp
-    body: Stmt
+    body: List[Stmt]
 
 
 @v_args(inline=True)
 class AstBuilder(Transformer):
     def start(self, program): return program
 
-    def program(self, contract_seq=None):
-        return Program(contracts=contract_seq or [])
+    def program(self, stmt_seq=None):
+        return Program(stmt_seq=stmt_seq or [Pass()])
 
-    def contract_seq(self, *contracts):
-        return list(contracts) or []
+    def stmt_seq(self, *stmts):
+        return list(stmts) or []
 
-    def contract(self, stmt, spec=None):
-        return Contract(stmt=stmt, spec=spec)
-
-    def spec_annot(self, spec): return spec
+    def spec_annot(self, spec):
+        return SpecAnnot(spec)
 
     # statements
     def decl_stmt(self, name, type_node): return Decl(str(name), type_node)
     def assign_stmt(self, name, expr): return Assign(str(name), expr)
     def list_assign_stmt(self, name, index, expr): return ListAssign(str(name), index, expr)
-    def noop_stmt(self): return NoOp()
-    def block_stmt(self, contract_seq=None): return Block(body=contract_seq or [])
-    def while_stmt(self, cond, body): return While(cond=cond, body=body)
+    def pass_stmt(self): return Pass()
+    def empty_stmt(self): return Pass()
+    def while_stmt(self, cond, body_seq): return While(cond=cond, body=body_seq or [Pass()])
 
-    # if_stmt handles both:
-    # - if cond then S fi
-    # - if cond then S else S fi
-    def if_stmt(self, cond, then_s, else_s=None): return If(cond=cond, then_s=then_s, else_s=else_s)
+    def if_stmt(self, cond, then_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
+    def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
 
     # expr wrappers
     def expr_a(self, aexp): return ExprA(aexp)
@@ -232,7 +226,11 @@ class AstBuilder(Transformer):
     # imm/aexp
     def int_lit(self, tok): return IntLit(int(tok))
     def float_lit(self, tok): return FloatLit(float(tok))
-    def list_lit(self, *items): return ListLit(list(items))
+    def list_lit(self, *args):
+        # Grammar: [imm ("," imm)*] - first is imm, then pairs of "," imm
+        if len(args) == 0:
+            return ListLit([])
+        return ListLit([args[i] for i in range(0, len(args), 2)])
     def a_var(self, name): return AVar(str(name))
     def a_len(self, name): return ALen(str(name))
     def a_index(self, name, idx): return AIndex(str(name), idx)
@@ -268,7 +266,8 @@ class AstBuilder(Transformer):
     def simp(self, l, r): return SpecBinOp("=>", l, r)
 
     # domain + quantifiers
-    def domain_opt(self, dom=None): return DomainOpt(dom)
+    def domain_opt(self, domain=None):
+        return DomainOpt(domain)
     def domain_ident(self, name): return DomainIdent(str(name))
     def domain_type(self, type_node): return DomainType(type_node)
     def aexp_list(self, *items): return list(items)
@@ -293,12 +292,18 @@ SELVERI_PARSER = Lark.open(
 
 def parse_selveri(src: str) -> Program:
     """Parse SelVeri source code into an AST Program."""
-    tree = SELVERI_PARSER.parse(src)
+    try:
+        tree = SELVERI_PARSER.parse(src)
+    except LarkError as e:
+        raise ParserError("Failed to parse SelVeri source code. " + str(e)) from None
     return AstBuilder().transform(tree)
 
 
 if __name__ == "__main__":
-    with open("example.sv", "r") as file:
-        src = file.read()
+    parser = argparse.ArgumentParser(description="Parse SelVeri source file to AST")
+    parser.add_argument("input_file", type=Path, help="Path to the .sv source file")
+    args = parser.parse_args()
+    with open(args.input_file, "r", encoding="utf-8") as f:
+        src = f.read()
     ast = parse_selveri(src)
     print(ast)

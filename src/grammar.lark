@@ -15,32 +15,37 @@ COMP_OP: "=" | "<=" | "<" | ">=" | ">"
 
 // ================== PARSER ==================
 start: program
-program: contract_seq
+program: stmt_seq
 
-contract_seq: (contract (";" contract)* ";")?
+// A sequence is zero or more contracts.
+// Semicolon policy is enforced by the contract forms below.
+stmt_seq: stmt*
 
-contract: stmt spec_annot?
-spec_annot: "{" spec "}"
+?stmt: terminated_stmt
+     | unterminated_stmt
+     | spec_annot                                        -> spec_annot
+     | ";"                                               -> empty_stmt
+
+?spec_annot: "{" spec "}" ";"
 
 // ------------------ STATEMENTS ------------------
-// Here we fix the dangling else issue
-?stmt: matched_stmt | unmatched_stmt
 
-?matched_stmt: basic_stmt
-             | "if" bexp "then" matched_stmt "else" matched_stmt "fi"     -> if_stmt
-             | while_stmt
-             | block
+// Statements that MUST end with ';'
+?terminated_stmt: terminated_stmt ";" 
+                | decl
+                | assign
+                | list_assign
+                | "pass"                                               -> pass_stmt
 
-?unmatched_stmt: "if" bexp "then" stmt "fi"                               -> if_stmt
-               | "if" bexp "then" matched_stmt "else" unmatched_stmt "fi"  -> if_stmt
+// Statements that MUST NOT end with ';'
+?unterminated_stmt: if_stmt
+                  | while_stmt
 
-?basic_stmt: decl
-           | assign
-           | list_assign
-           | "noop"                                                       -> noop_stmt
+// Explicit fi removes dangling-else ambiguity
+if_stmt: "if" bexp "then" stmt_seq "else" stmt_seq "fi"        -> if_else_stmt
+       | "if" bexp "then" stmt_seq "fi"                            -> if_stmt
 
-block: "{" contract_seq "}"                                                   -> block_stmt
-while_stmt: "while" bexp "do" stmt "od"                                    -> while_stmt
+while_stmt: "while" bexp "do" stmt_seq "od"                        -> while_stmt
 
 decl: IDENT ":" type                                                      -> decl_stmt
 assign: IDENT ":=" expr                                                   -> assign_stmt
@@ -49,9 +54,9 @@ list_assign: IDENT "[" aexp "]" ":=" expr                                  -> li
 // Expr in the paper is AExp | BExp, but BExp includes AExp.
 // To avoid ambiguity in assignments, we use:
 //   expr := aexp | bexp_strict
-// while conditions use full bexp (which includes truthy aexp).
-?expr: aexp                                                               -> expr_a
-     | bexp_strict                                                        -> expr_b
+// while/if conditions use full bexp.
+?expr: aexp                                                            -> expr_a
+     | bexp_strict                                                     -> expr_b
 
 // ------------------ TYPES ------------------
 ?type: "Int"                                                              -> type_int
@@ -131,7 +136,7 @@ comparison: aexp COMP_OP aexp                                             -> com
         | "(" bexp_strict ")"
 
 // ------------------ SPECIFICATIONS ------------------
-?spec: spec_imp
+?spec: spec_imp                                                          
 
 ?spec_imp: spec_or "=>" spec_imp                                          -> simp
          | spec_or
@@ -158,7 +163,8 @@ comparison: aexp COMP_OP aexp                                             -> com
            | bexp                                                         -> sbexp
            | "(" spec ")"
 
-domain_opt: ("in" domain)?                                                -> domain_opt
+_domain_in: "in" domain
+domain_opt: _domain_in?                                                   -> domain_opt
 
 ?domain: interval
        | IDENT                                                            -> domain_ident
