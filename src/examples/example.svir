@@ -1,0 +1,14 @@
+0: DECL INT, x
+1: PUSH 1
+2: STORE x
+3: PUSH 1
+4: LOAD x
+5: EQ 
+6: JZ 10
+7: PUSH 2
+8: STORE x
+9: GOTO 12
+10: PUSH 3
+11: STORE x
+12: NOOP 
+13: VERI Forall i in [0, 3) . x = 1 && true

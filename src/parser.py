@@ -21,30 +21,45 @@ class Expr: pass
 class AExp: pass
 class BExp: pass
 class Spec: pass
-class TypeNode: pass
+class TypeNode: 
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
 class Domain: pass
-class Imm: pass
+class Imm:
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
 
 # Types
 @dataclass(frozen=True)
-class TypeInt(TypeNode): pass
+class TypeInt(TypeNode):
+    def __str__(self) -> str:
+        return "INT"
 
 @dataclass(frozen=True)
-class TypeFloat(TypeNode): pass
+class TypeFloat(TypeNode):
+    def __str__(self) -> str:
+        return "FLOAT"
 
 @dataclass(frozen=True)
 class TypeList(TypeNode):
     elem: TypeNode
-    size: AExp
+    size: IntLit
+    def __str__(self) -> str:
+        return f"LIST[{self.elem},{self.size}]"
 
 # Immediates / Arithmetic
 @dataclass(frozen=True)
 class IntLit(Imm, AExp):
     value: int
 
+    def __str__(self) -> str:
+        return str(self.value)
+
 @dataclass(frozen=True)
 class FloatLit(Imm, AExp):
     value: float
+    def __str__(self) -> str:
+        return str(self.value)
 
 @dataclass(frozen=True)
 class ListLit(Imm, AExp):
@@ -54,9 +69,15 @@ class ListLit(Imm, AExp):
 class AVar(AExp):
     name: str
 
+    def __str__(self) -> str:
+        return self.name
+
 @dataclass(frozen=True)
 class ALen(AExp):
     name: str
+
+    def __str__(self) -> str:
+        return f"len({self.name})"
 
 @dataclass(frozen=True)
 class AIndex(AExp):
@@ -79,9 +100,15 @@ class ABinOp(AExp):
 class BBool(BExp):
     value: bool
 
+    def __str__(self) -> str:
+        return "true" if self.value else "false"
+
 @dataclass(frozen=True)
 class BNot(BExp):
     rhs: BExp
+
+    def __str__(self) -> str:
+        return f"!{self.rhs}"
 
 @dataclass(frozen=True)
 class BBinOp(BExp):
@@ -89,11 +116,17 @@ class BBinOp(BExp):
     left: BExp
     right: BExp
 
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
+
 @dataclass(frozen=True)
 class BCompare(BExp):
     op: str
     left: AExp
     right: AExp
+
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
 
 @dataclass(frozen=True)
 class BTruthy(BExp):
@@ -127,6 +160,9 @@ class DomainInterval(Domain):
     hi: AExp
     right_open: bool
 
+    def __str__(self) -> str:
+        return f"[{self.lo}, {self.hi})" if self.right_open else f"[{self.lo}, {self.hi}]"
+
 @dataclass(frozen=True)
 class DomainOpt:
     domain: Optional[Domain]
@@ -135,6 +171,9 @@ class DomainOpt:
 @dataclass(frozen=True)
 class SpecFromBExp(Spec):
     bexp: BExp
+
+    def __str__(self) -> str:
+        return str(self.bexp)
 
 @dataclass(frozen=True)
 class SpecUnOp(Spec):
@@ -147,12 +186,18 @@ class SpecBinOp(Spec):
     left: Spec
     right: Spec
 
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
+
 @dataclass(frozen=True)
 class SpecQuant(Spec):
     kind: str          # "Forall" | "Exists"
     var: str
     domain: Optional[Domain]
     body: Spec
+
+    def __str__(self) -> str:
+        return f"{self.kind} {self.var} in {self.domain} . {self.body}"
 
 # Statements
 @dataclass(frozen=True)
