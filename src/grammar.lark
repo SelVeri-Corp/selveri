@@ -31,11 +31,11 @@ stmt_seq: stmt*
 // ------------------ STATEMENTS ------------------
 
 // Statements that MUST end with ';'
-?terminated_stmt: terminated_stmt ";" 
-                | decl
-                | assign
-                | list_assign
-                | "pass"                                               -> pass_stmt
+?terminated_stmt: semicolon_stmt ";"
+?semicolon_stmt: decl
+               | assign
+               | list_assign
+               | "pass"                                               -> pass_stmt
 
 // Statements that MUST NOT end with ';'
 ?unterminated_stmt: if_stmt
