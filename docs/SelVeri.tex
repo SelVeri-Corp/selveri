@@ -15,7 +15,7 @@
 \usepackage{tablefootnote}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 
-\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.3}
+\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.5}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -364,7 +364,8 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 
 \langle \mathit{Param} \rangle
 &::=&
-\langle \mathit{Ident} \rangle\;\texttt{:}\;\langle \mathit{Type} \rangle \\[6pt]
+\langle \mathit{Ident} \rangle\;\texttt{:}\;\langle \mathit{Type} \rangle
+\;\mid\; \mathit{Ident} \rangle\;\texttt{:}\; \mathtt{List[\langle \mathit{Type} \rangle]}\\[6pt]
 
 \langle \mathit{FuncStmtSeq} \rangle
 &::=&
@@ -408,9 +409,11 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 
 \langle \mathit{ReturnStmt} \rangle
 &::=&
-\mathtt{return}\;\langle \mathit{Expr} \rangle
+\mathtt{return}\;\langle \mathit{AExp} \rangle
 \end{array}
 \]
+\paragraph{Return Rule}
+Although not explicitly stated in its grammar, every possible execution \texttt{SelVeri} function body must end with a \texttt{return} statement. Mostly, our operational semantics will ensure that. However, if the user does not put a \texttt{return} statement at the end of the function body; instead of throwing a compilation error, the compiler automatically puts one, returning the default value of the functions return-type. This fact will play an important role in our correctness of compilation proofs, therefore we name it as the \textit{return rule}.
 
 \paragraph{Function Calls}
 \[
@@ -446,7 +449,7 @@ must end with a semicolon. Statements of the form
 \(\mathtt{if}\;\cdots\;\mathtt{fi}\) and
 \(\mathtt{while}\;\cdots\;\mathtt{od}\) must not be followed by a semicolon.
 
-\footnotetext{Although not explicitly stated in its grammar, every \texttt{SelVeri} function body must end with a \texttt{return} statement. However, if the user does not put a \texttt{return} statement at the end of the function body; instead of throwing a compilation error, the compiler automatically puts one, returning the default value of the functions return-type.}
+
 
 
 \newpage
@@ -592,9 +595,11 @@ $\begin{array}{ll}
 
 \mathcal{A}(x, \sigma, s)= \mathcal{L}_{\textbf{List[$t, n$]}}(x) & \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,n \textbf{]} \\
 
-\mathcal{A}(x, \sigma, s)= \sigma(x, s) & \qquad \text{if } x \in \textbf{Var} 
+\mathcal{A}(x, \sigma, s)= \sigma(x, s) & \qquad \text{if } x \in \textbf{Var} \\
 
-\end{array}$ \\
+\mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s)= \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s) & \\ \qquad \text{if $lst \in \textbf{Var}$ and $lst$ is a $m$-dimensional list} 
+
+\end{array}$ \\[5pt]
 
 \(\mathcal{A}(\texttt{len($x$)}, \sigma, s)= \left\{
   \begin{array}{ll}
@@ -642,7 +647,7 @@ $\begin{array}{ll}
 \end{table}
 \footnotetext{If $(a_1 / a_2)$ has no subterm of type \textbf{Float}, then the $/$ symbol represents the integer division; otherwise, it represents the division of the field $\mathbb{R}$.}
 
-\vspace{2.5em}
+\\
 
 Although not explicitly stated in the table above, given any binary operation, operators are required to be of the same type (except for the cases of implicit coercion \footnote{An example is multiplying an integer with a float. In such cases, compiler converts the integer to a float with the same value. Conversion of integers to floats is the only possibility for an implicit coercion, as for the current implementation of \texttt{SelVeri}.} handled by the compiler) and can only be of \textit{basic types} \footnote{The only basic types are \textbf{Int} and \textbf{Float} for the current implementation of \texttt{SelVeri}.}. Otherwise, the result of the evaluation is $\bot$. The same rules apply to the next section (boolean expressions) as well.
 
@@ -734,6 +739,14 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 \([ \text{ass}_{\text{os}} ]\) &
 \(\langle x \;\texttt{:=}\; a, \sigma, s \rangle \rightarrow \sigma[x \mapsto \mathcal{A}(a, \sigma, s)] \quad \text{if } \mathcal{A}(a, \sigma, s) \neq \bot \,\land\, \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(x)} \) \\
 
+
+\([ \text{ass}^{\text{list}}_{\text{os}} ]\) &
+\renewcommand{\arraystretch}{1.2} % Local vertical space for this specific cell
+\(\begin{array}[t]{@{}l@{}}
+\langle lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]} \;\texttt{:=}\; a,\, \sigma,\, s \rangle \rightarrow \sigma[lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)] \\
+\quad \text{if } \mathcal{A}(a, \sigma, s) \neq \bot \,\land\, \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]})} \\
+\end{array}\) \\[2pt]
+
 \([ \text{ass}^{\bot}_{\text{os}} ]\) &
 \(\langle x \;\texttt{:=}\; a, \sigma,  s \rangle \rightarrow \hat{\sigma} \quad \text{if } \mathcal{A}(a, \sigma, s) = \bot \,\lor\, \mathcal{A}(a, \sigma, s) \notin ran\mathcal{L}_{s(x)} \) \\
 
@@ -745,17 +758,16 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
   \langle S_1, \sigma, s \rangle \rightarrow  \langle S_1', \underline{\sigma}', s' \rangle 
 }{
   \langle S_1 ; S_2, \sigma, s \rangle \rightarrow \langle S_1' ; S_2, \underline{\sigma}', s' \rangle
-}\) \\
-
-\([ \text{comp}^2_{\text{os}} ]\) &
-\(\frac{
+} \qquad\qquad
+[ \text{comp}^2_{\text{os}} ] \quad
+\frac{
   \langle S_1, \sigma, s \rangle \rightarrow \underline{\sigma}'
 }{
   \langle S_1 ; S_2, \sigma, s \rangle \rightarrow \langle S_2, \underline{\sigma}', s \rangle
 }\) \\
 
 \([ \text{if}^{1}_{\text{os}} ]\) &
-\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi} \footnotemark, \sigma, s  \rangle \rightarrow \langle S_1, \sigma, s \rangle
+\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi} \sigma, s  \rangle \rightarrow \langle S_1, \sigma, s \rangle
 \quad \text{if } \mathcal{B}(b, \sigma, s) = 1\) \\
 
 \([ \text{if}^{0}_{\text{os}} ]\) &
@@ -781,9 +793,10 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 \([ \text{call}_{\text{os}} ]\) &
 \renewcommand{\arraystretch}{1.2} % Local vertical space for this specific cell
 \(\begin{array}[t]{@{}l@{}}
-\langle \texttt{call}\; f(x_1, \dots, x_n), \sigma, s \rangle \rightarrow \langle x_1 : t_1 \texttt{;} \dots \texttt{;} x_n : t_n \texttt{;} S_f,\, \tilde{\sigma}', \tilde{s}' \rangle \\
-\quad \text{if } \footnotemark t_i = s(x_i) \text{ for } i = 1, 2, \dots, n \\
-\quad \text{where } \Gamma(f) = (((x'_1, t_1), \dots, (x'_n, t_n)), S_f)
+\langle \texttt{call}\; f(a_1, \dots, a_n), \sigma, s \rangle \rightarrow \langle x_1 : t_1 \texttt{;} x_1 \,\texttt{:=}\, v_1\, \texttt{;} \dots \texttt{;} x_n : t_n \texttt{;} x_n \,\texttt{:=}\, v_n\, \texttt{;} S_f,\, \tilde{\sigma}', \tilde{s}' \rangle \\
+\quad \text{if } t_i = s(x_i) \text{ for } i = 1, 2, \dots, n \\
+\quad \text{where } \Gamma(f) = (((x'_1, t_1), \dots, (x'_n, t_n)), S_f) \\
+\quad \text{and } v_j \in \textbf{Imm} \;\land\; \mathcal{A}(v_j, \tilde{\sigma}', \tilde{s}')  = \mathcal{A}(x_j, \sigma, s) \text{ for } j = 1, 2, \dots, n \\
 \end{array}\) \\[2pt]
 
 \([ \text{ret}_{\text{os}} ]\) &
@@ -801,7 +814,11 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 \caption{Small-step operational semantics for statements}
 \label{tab:while-semantics}
 \end{table}
-\footnotetext{For each if-rule, an \texttt{if}-statement without the \texttt{else}-part, namely a statement of the form "\texttt{if} $b$ \texttt{then} $S$ \texttt{fi}" can be treated as "\texttt{if} $b$ \texttt{then} $S$ \texttt{else pass fi}"}
-\footnotetext{Otherwise, the function $f$ is not called an program state is transitioned into $\hat{\sigma}$.}
+
+
+\newpage
+Note that not all possible configurations are included in the table above. In any case which is absent from the table,  program state is transitioned into $\hat{\sigma}$. \\
+
+Moreover, for each if-rule, an \texttt{if}-statement without the \texttt{else}-part, namely a statement of the form "\texttt{if} $b$ \texttt{then} $S$ \texttt{fi}" can be treated as "\texttt{if} $b$ \texttt{then} $S$ \texttt{else pass fi}
 
 \end{document}
