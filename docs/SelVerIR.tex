@@ -21,7 +21,7 @@
 
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 
-\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v0.5}
+\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v0.6}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -102,6 +102,10 @@
 
 && \mid\; \texttt{GOTO} \; \langle int \rangle
 \\[2pt]
+
+&& \mid\; \texttt{CSCOPE} \;\mid\; \texttt{PSCOPE}
+\\[2pt]
+
 
 && \mid\; \texttt{ENV}
 \\[2pt]
@@ -343,6 +347,10 @@ A similar approach will be followed for the boolean expressions in the next sect
 
 \langle \texttt{CALL}\; f : c ,\, e,\, \sigma,\, s,\, pc,\, ras \rangle & \langle P[pc_f:],\, e,\, \sigma,\, s,\, pc_f,\, (pc+1) : ras \rangle \quad \text{if } f \in \textbf{Func} \land \Gamma(f) \neq \emptyset \\
 
+\langle \texttt{CSCOPE} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
+
+\langle \texttt{PSCOPE} : c ,\, e,\, \sigma_c,\, s_c,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
+
 
 \langle \texttt{ENV} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma}',\, \tilde{s}',\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ is of the caller}  \\
 
@@ -402,6 +410,7 @@ $\begin{array}{ll}
 }%
 \end{table}
 
+\newpage
 To ensure consistency, with type compilations and \textit{list flattening}, we need to formalize it:
 
 \[
@@ -551,15 +560,15 @@ $\begin{array}{ll}
 \\[1.5ex]
 
 \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}) = 
-\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP}
+\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP}
 \\[1.5ex]
 
 \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}) = 
-\mathcal{CB}(b) : \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP}
+\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP}
 \\[1.5ex]
 
 \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}) = 
-\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP}
+\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP}
 \\[1.5ex]
 
 \mathcal{C}(\texttt{function}\; f(x_1 : t_1 \dots, x_n : t_n) \,\texttt{->}\, t_r \,\texttt{::}\, S_f) 
@@ -1216,9 +1225,12 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
                   &=\langle \texttt{if } b \texttt{ then } S \texttt{ fi},\, \sigma,\, s \rangle \\
                   &=\langle \texttt{if } b \texttt{ then } S \texttt{ else pass fi},\, \sigma,\, s \rangle 
                   && \text{(semantical equivalance)}\\
-                  &\rightarrow \langle S,\, \sigma ,\, s \rangle
-                  && ([\text{if}^1_{\text{os}}])   \\
-                  &\rightarrow^\ast \langle \underline{\sigma}' ,\, s' \rangle \\
+                  &\rightarrow \langle S\texttt{;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
+                  && [\text{if}^1_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \sigma'_c ,\, s'_c \rangle 
+                  && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \underline{\sigma}' ,\, s' \rangle
+                  && [\text{scope}_{\text{os}}]   \\
                   \end{aligned}
               \]
 
@@ -1228,16 +1240,20 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of $\mathcal{C}$)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
               && \text{(correctness of $\mathcal{CB}$)} \\ 
-              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP} ,\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\ 
-              &\triangleright \langle \mathcal{C}(S) : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\ 
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
               && \text{(operational semantics)} \\
-              &\triangleright^\ast \langle \texttt{NOOP} ,\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 1 \rangle
+              &\triangleright \langle \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{NOOP} ,\, e',\, \sigma_c',\, s_c',\, pc + l_b + l_S + 2 \rangle
               && \text{(induction hypothesis)} \\
-              &\triangleright \langle \epsilon ,\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S +2 \rangle
+              &\triangleright \langle \texttt{NOOP} ,\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 3 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \epsilon ,\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 4 \rangle
               && \text{(operational semantics)} \\ 
               \end{aligned}
           \]
@@ -1253,10 +1269,12 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
                   &=\langle \texttt{if } b \texttt{ then } S \texttt{ fi},\, \sigma,\, s \rangle \\
                   &=\langle \texttt{if } b \texttt{ then } S \texttt{ else pass fi},\, \sigma,\, s \rangle 
                   && \text{(semantical equivalance)}\\
-                  &\rightarrow \langle \texttt{pass},\, \sigma ,\, s \rangle
+                  &\rightarrow \langle \texttt{pass;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
                   && [\text{if}^0_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle 
+                  && ([\text{pass}_{\text{os}}] \,,\, [\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
                   &\rightarrow \langle \sigma ,\, s \rangle
-                  && [\text{pass}_{\text{os}}]   \\
+                  && [\text{scope}_{\text{os}}]   \\
                   \end{aligned}
               \]
 
@@ -1266,11 +1284,11 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of $\mathcal{C}$)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
               && \text{(correctness of $\mathcal{CB}$)} \\ 
-              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{NOOP} ,\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\  
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\  
               &\triangleright \langle \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc_{\texttt{NOOP}} \rangle
               && \text{(operational semantics)} \\
               &\triangleright \langle \epsilon ,\, e,\, \sigma,\, s,\ pc_{\texttt{NOOP}} + 1 \rangle
@@ -1291,9 +1309,12 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
                   \begin{aligned}
                   \langle P,\, \sigma,\, s \rangle
                   &=\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi},\, \sigma,\, s \rangle \\
-                  &\rightarrow \langle S_1,\, \sigma ,\, s \rangle
+                  &\rightarrow \langle S_1\texttt{;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
                   && [\text{if}^1_{\text{os}}]   \\
-                  &\rightarrow^\ast \langle \underline{\sigma}' ,\, s' \rangle \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \sigma'_c ,\, s'_c \rangle 
+                  && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \underline{\sigma}' ,\, s' \rangle
+                  && [\text{scope}_{\text{os}}]   \\
                   \end{aligned}
               \]
 
@@ -1303,14 +1324,18 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of $\mathcal{C}$)} \\
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
               && \text{(correctness of $\mathcal{CB}$)} \\
-              &= \langle \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP},\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
-              &\triangleright \langle \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
+              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
               && \text{(operational semantics)} \\
-              &\triangleright^\ast \langle \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc + l_b + l_{S_1} + 1 \rangle
+              &\triangleright \langle \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \sigma'_c ,\, s'_c,\, pc + l_b + l_{S_1} + 2 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc + l_b + l_{S_1} + 3 \rangle
               && \text{(induction hypothesis)} \\
               &\triangleright \langle \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{NOOP}} \rangle
               && \text{(operational semantics)} \\
@@ -1327,9 +1352,12 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
                   \begin{aligned}
                   \langle P,\, \sigma,\, s \rangle
                   &=\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi},\, \sigma,\, s \rangle \\
-                  &\rightarrow \langle S_2,\, \sigma ,\, s \rangle
-                  && [\text{if}^0_{\text{os}}]   \\
-                  &\rightarrow^\ast \langle \underline{\sigma}' ,\, s' \rangle \\
+                  &\rightarrow \langle S_2\texttt{;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
+                  && [\text{if}^1_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \sigma'_c ,\, s'_c \rangle 
+                  && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \underline{\sigma}' ,\, s' \rangle
+                  && [\text{scope}_{\text{os}}]   \\
                   \end{aligned}
               \]
 
@@ -1339,16 +1367,20 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of $\mathcal{C}$)} \\
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
               && \text{(correctness of $\mathcal{CB}$)} \\
-              &= \langle \texttt{JZ}\; pc_{S_2} : \mathcal{C}(S_1) : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \mathcal{C}(S_2) : \texttt{NOOP},\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
-              &\triangleright \langle \mathcal{C}(S_2) : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc_{S_2} \rangle
+              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc_{\texttt{CSCOPE}_2} \rangle
               && \text{(operational semantics)} \\
-              &\triangleright^\ast \langle \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc_{S_2} + 1 \rangle
+              &\triangleright \langle \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc_{\texttt{CSCOPE}_2} + 1\rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \underline{\sigma_c}' ,\, s'_c,\, pc_{\texttt{CSCOPE}_2} + l_{S_2} + 1 \rangle
               && \text{(induction hypothesis)} \\
-              &\triangleright \langle \epsilon,\, e',\, \underline{\sigma}' ,\, s',\, pc_{S_2} + 2 \rangle
+              &\triangleright \langle \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{CSCOPE}_2} + l_{S_2} + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \epsilon,\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{CSCOPE}_2} + l_{S_2} + 3 \rangle
               && \text{(operational semantics)} \\
               \end{aligned}
           \]
@@ -1377,11 +1409,11 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
               &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of $\mathcal{C}$)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
               && \text{(correctness of $\mathcal{CB}$)} \\
-              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 0 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 0 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
               &\triangleright \langle \texttt{NOOP},\, e,\, \sigma ,\, s,,\, pc_{\texttt{NOOP}} \rangle
               && \text{(operational semantics)} \\
               &\triangleright \langle \epsilon,\, e,\, \sigma ,\, s,,\, pc_{\texttt{NOOP}} + 1 \rangle
@@ -1396,9 +1428,13 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle P,\, \sigma,\, s \rangle
               &=\langle \texttt{while } b \texttt{ do } S \texttt{ od},\, \sigma,\, s \rangle \\
-              &\rightarrow \langle S \texttt{;while } b \texttt{ do } S \texttt{ od},\, \sigma,\, s \rangle
+              &\rightarrow \langle S\texttt{;endscope} \texttt{;while } b \texttt{ do } S \texttt{ od},\, \tilde{\sigma_c},\, \tilde{s_c} \rangle
               && [\text{while}^1_{\text{os}}]   \\
-              &\rightarrow \langle \texttt{while } b \texttt{ do } S \texttt{ od},\, \underline{\sigma}',\, s' \rangle \\
+              &\rightarrow^\ast \langle \texttt{endscope} \texttt{;while } b \texttt{ do } S \texttt{ od},\, \sigma'_c,\, s'_c \rangle
+              && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+              &\rightarrow \langle \texttt{while } b \texttt{ do } S \texttt{ od},\, \underline{\sigma}',\, s' \rangle
+              && ([\text{scope}_{\text{os}}] \,,\, [\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+              &&    \\
               \end{aligned}
           \]
 
@@ -1408,18 +1444,22 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \begin{aligned}
               \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
               &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of $\mathcal{C}$)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
               && \text{(correctness of $\mathcal{CB}$)} \\
-              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
-              &\triangleright \langle \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma ,\, s,\, pc + l_b + 1 \rangle
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b + 1 \rangle
               && \text{(operational semantics)} \\
-              &\triangleright^\ast \langle \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 1 \rangle
+              &\triangleright \langle \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \sigma'_c,\, s'_c,\, pc + l_b + l_S + 2 \rangle
               && \text{(induction hypothesis)} \\
-              &\triangleright \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc_b \rangle
+              &\triangleright \langle \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 3 \rangle
               && \text{(operational semantics)} \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \mathcal{C}(S) : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
+              &\triangleright \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc_b \rangle
+              && \text{(operational semantics)} \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
               \end{aligned}
           \]
@@ -1524,12 +1564,15 @@ Observe that at each case, the resulting program state and scope tuple is the eq
 
 \vspace{1em}
 
+\newpage
 Cautious readers may notice that some (sub)cases including erroneous program states (either as input or output) is omitted in our correctness proofs. One of the following reasons is the justification for this omittance:
 
 \begin{enumerate}
     \item Such a case cannot be encountered in the range of neither $\mathcal{CA}$ nor $\mathcal{CB}$ nor $\mathcal{C}$.
 
     \item Such an erroneous case can be detected during compile-time, therefore no \texttt{SelVerIR} code inheriting the error can be generated.
+
+    \item After a finite number of non-erroneous execution steps, which are proven correct in this section, program reaches an error state; but by section \textbf{2.2.4} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$ the remaining finite execution is also correct.
 \end{enumerate}
 
 No matter the reason, as no statically-correct \texttt{SelVeri} program includes any of the omitted cases, the correctness proofs above are sufficient for establishing the correctness of our implementation. \\

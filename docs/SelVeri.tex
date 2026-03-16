@@ -15,7 +15,7 @@
 \usepackage{tablefootnote}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 
-\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.5}
+\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.6}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -457,7 +457,7 @@ must end with a semicolon. Statements of the form
 \vspace{2em}
 
 \subsection{Important notions for formalizing \texttt{SelVeri}}
-\vspace{0.5em}
+\vspace{2.5em}
 
 \subsubsection{Types}
 
@@ -469,6 +469,7 @@ Let \textbf{Type} be the set of all possible types. For the current implementati
     \item $ \textbf{List}: (\Pi{t} : \textbf{Type} \, . \,  (\Pi{n} : \textbf{$\mathbb{N}^+$} \, . \,  \textbf{Type}))$
 \end{itemize}
 
+\vspace{2.5em}
 \subsubsection{Immediates}
 
 Let \textbf{Imm} be the set of syntactic immediate values supported by \texttt{SelVeri}, e.g. $5$ or  $3.14$. For each type, we need an evaluation function that translates syntactic immediates into the corresponding semantic values.
@@ -491,6 +492,7 @@ where $A$ is the codomain of $\mathcal{L}_t$. The reader should notice that:
 
 For simplicity, we also define $\mathcal{V} := \bigcup_{t \in \textbf{Type}} \mathcal{L}_t$
 
+\newpage
 \subsubsection{Scope}
 
 Let \textbf{Scope} be the set of all scopes and let \textbf{Var} be the infinite set of all syntactic variables. Each scope is a representation  of 'known' variables in a given block of statements including the variables declared until program execution reaches the corresponding block. Formally,
@@ -516,7 +518,7 @@ s(x) = \textbf{List[$t,n$]}
 \]
 We call this implication as \textit{recursive declaration principle}. As \texttt{SelVeri} syntax does not allow identifiers including \texttt{[} or \texttt{]} characters, it is not possible to create any scope contradicting the recursive declaration. \\
 
-Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}, which is the scope of the program block that 'called' the current block. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope.
+Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}. If $s$ is a scope, we denote its immediate child as $s_c$. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope. When a variable is reached by a parent scope, then a change to its type (which is only possible for the special variable \texttt{retvar}, see section \textbf{2.1.5}) then the change is made directly to the parent scope. However, for simplicity, we omit this special case in our configurations.
 
 
 \subsubsection{Program states}
@@ -528,6 +530,11 @@ Let \textbf{State} be the set of all possible program states and \textbf{Val} \f
 \]
 
 Each program starts with an empty state, $\tilde{\sigma}$ in which each declared variable has the default value of this type, e.g. 0 for \textbf{Int}, 0.0 for \textbf{Float} and  [0, 0, 0] for \textbf{List[Int, 3]}. If the specific type is unknown in a given context, the default value of the corresponding type is denoted as \textbf{0}.\\
+
+Also, similar to scopes, program states also have parents. A child program state of $\sigma$ is denoted as $\sigma_c$. When a variable is reached by a parent scope, then its value must be reached by the parent program state. The change must be directly made in the parent program state, in case of an assignment. However, for simplicity, we omit this special case in our configurations.
+
+
+\\
 
 Additionally, each program state carries an \texttt{error\_flag} that is set if and only if an error occurs during the execution of the program. A cause for this can be using a variable before declaring it. In order to embed this misusage as an error into our semantics, we add the following rule to our program states:
 
@@ -589,13 +596,13 @@ Let \textbf{AExp} be the set of all arithmetic expressions. We define the arithm
 \begin{tabular}{l}
 % Internal array to align the first four "ifs"
 $\begin{array}{ll}
-\mathcal{A}(x, \sigma, s)= \mathcal{I}(x) & \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int}\\
+\mathcal{A}(x, \sigma, s)= \mathcal{I}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int}\\
 
-\mathcal{A}(x, \sigma, s)= \mathcal{F}(x) & \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float}\\
+\mathcal{A}(x, \sigma, s)= \mathcal{F}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float}\\
 
-\mathcal{A}(x, \sigma, s)= \mathcal{L}_{\textbf{List[$t, n$]}}(x) & \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,n \textbf{]} \\
+\mathcal{A}(x, \sigma, s)= \mathcal{L}_{\textbf{List[$t, n$]}}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,n \textbf{]} \\
 
-\mathcal{A}(x, \sigma, s)= \sigma(x, s) & \qquad \text{if } x \in \textbf{Var} \\
+\mathcal{A}(x, \sigma, s)= \sigma(x, s) \qquad \text{if } x \in \textbf{Var} \\
 
 \mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s)= \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s) & \\ \qquad \text{if $lst \in \textbf{Var}$ and $lst$ is a $m$-dimensional list} 
 
@@ -766,12 +773,16 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
   \langle S_1 ; S_2, \sigma, s \rangle \rightarrow \langle S_2, \underline{\sigma}', s \rangle
 }\) \\
 
+\([ \text{scope}_{\text{os}} ]\) &
+\(\langle \texttt{endscope}, \sigma_c, s_c \rangle \rightarrow \langle \sigma, s \rangle
+\quad \text{where $\sigma,s$ are parents of $\sigma_c, s_c$} \\
+
 \([ \text{if}^{1}_{\text{os}} ]\) &
-\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi} \sigma, s  \rangle \rightarrow \langle S_1, \sigma, s \rangle
+\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}, \sigma, s  \rangle \rightarrow \langle S_1\texttt{;endscope}, \tilde{\sigma_c}, \tilde{s_c} \rangle
 \quad \text{if } \mathcal{B}(b, \sigma, s) = 1\) \\
 
 \([ \text{if}^{0}_{\text{os}} ]\) &
-\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}, \sigma, s  \rangle \rightarrow \langle S_2, \sigma, s \rangle
+\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}, \sigma, s  \rangle \rightarrow \langle S_2\texttt{;endscope}, \tilde{\sigma_c}, \tilde{s_c} \rangle
 \quad \text{if } \mathcal{B}(b, \sigma, s) = 0\) \\
 
 \([ \text{if}^{\bot}_{\text{os}} ]\) &
@@ -779,7 +790,7 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 \quad \text{if } \mathcal{B}(b, \sigma, s) = \bot\) \\
 
 \([ \text{while}^{1}_{\text{os}} ]\) &
-\(\langle \texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle \rightarrow \langle S;\texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle
+\(\langle \texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle \rightarrow \langle S\texttt{;endscope;}\texttt{while } b \texttt{ do } S \texttt{ od}, \tilde{\sigma_c}, \tilde{s_c} \rangle
 \quad \text{if } \mathcal{B}(b, \sigma, s) = 1\) \\
 
 \([ \text{while}^{0}_{\text{os}} ]\) &
