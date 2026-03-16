@@ -48,15 +48,11 @@ if_stmt: "if" bexp "then" stmt_seq "else" stmt_seq "fi"        -> if_else_stmt
 while_stmt: "while" bexp "do" stmt_seq "od"                        -> while_stmt
 
 decl: IDENT ":" type                                                      -> decl_stmt
-assign: IDENT ":=" expr                                                   -> assign_stmt
-list_assign: IDENT "[" aexp "]" ":=" expr                                  -> list_assign_stmt
+assign: IDENT ":=" aexp                                                   -> assign_stmt
+list_assign: indexed_value ":=" aexp                                      -> list_assign_stmt
 
-// Expr in the paper is AExp | BExp, but BExp includes AExp.
-// To avoid ambiguity in assignments, we use:
-//   expr := aexp | bexp_strict
-// while/if conditions use full bexp.
-?expr: aexp                                                            -> expr_a
-     | bexp_strict                                                     -> expr_b
+?indexed_value: IDENT "[" aexp "]"                                        -> a_index
+              | indexed_value "[" aexp "]"                                -> a_index
 
 // ------------------ TYPES ------------------
 ?type: "Int"                                                              -> type_int
@@ -71,7 +67,7 @@ list_assign: IDENT "[" aexp "]" ":=" expr                                  -> li
 list_lit: "[" [imm ("," imm)*] "]"                                        -> list_lit
 
 // ------------------ ARITHMETIC EXPRESSIONS ------------------
-?aexp: aexp_sum
+aexp: aexp_sum                                                              -> aexp
 
 ?aexp_sum: aexp_sum "+" aexp_term                                         -> add
          | aexp_sum "-" aexp_term                                         -> sub
@@ -87,12 +83,11 @@ list_lit: "[" [imm ("," imm)*] "]"                                        -> lis
 ?aexp_atom: imm
          | IDENT                                                          -> a_var
          | "len" "(" IDENT ")"                                            -> a_len
-         | IDENT "[" aexp "]"                                             -> a_index
+         | indexed_value                                                  
          | "(" aexp ")"
 
 // ------------------ BOOLEAN EXPRESSIONS ------------------
-// BExp includes AExp as truthy (C-like) per the paper.
-?bexp: b_or
+bexp: b_or                                                                -> bexp
 
 ?b_or: b_or "or" b_xor                                                    -> bor
      | b_xor
@@ -113,27 +108,6 @@ list_lit: "[" [imm ("," imm)*] "]"                                        -> lis
       | "(" bexp ")"
 
 comparison: aexp COMP_OP aexp                                             -> compare
-
-// Strict boolean: same, but without "aexp -> truthy".
-// Used in assignments to remove Expr ambiguity.
-?bexp_strict: bs_or
-
-?bs_or: bs_or "or" bs_xor                                                 -> bor
-      | bs_xor
-
-?bs_xor: bs_xor "xor" bs_and                                              -> bxor
-       | bs_and
-
-?bs_and: bs_and "and" bs_not                                              -> band
-       | bs_not
-
-?bs_not: "not" bs_not                                                     -> bnot
-       | bs_atom
-
-?bs_atom: "true"                                                          -> btrue
-        | "false"                                                         -> bfalse
-        | comparison
-        | "(" bexp_strict ")"
 
 // ------------------ SPECIFICATIONS ------------------
 ?spec: spec_imp                                                          

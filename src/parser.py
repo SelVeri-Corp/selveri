@@ -1,4 +1,3 @@
-# selveri_parser.py
 from __future__ import annotations
 
 import argparse
@@ -17,7 +16,6 @@ class Program:
     stmt_seq: List["Stmt"]
 
 class Stmt: pass
-class Expr: pass
 class AExp: pass
 class BExp: pass
 class Spec: pass
@@ -81,8 +79,11 @@ class ALen(AExp):
 
 @dataclass(frozen=True)
 class AIndex(AExp):
-    name: str
+    base: AExp
     index: AExp
+
+    def __str__(self) -> str:
+        return f"{self.base}[{self.index}]"
 
 @dataclass(frozen=True)
 class AUnOp(AExp):
@@ -131,15 +132,6 @@ class BCompare(BExp):
 @dataclass(frozen=True)
 class BTruthy(BExp):
     aexp: AExp
-
-# Expr wrappers
-@dataclass(frozen=True)
-class ExprA(Expr):
-    aexp: AExp
-
-@dataclass(frozen=True)
-class ExprB(Expr):
-    bexp: BExp
 
 # Domains
 @dataclass(frozen=True)
@@ -208,13 +200,12 @@ class Decl(Stmt):
 @dataclass(frozen=True)
 class Assign(Stmt):
     name: str
-    expr: Expr
+    aexp: AExp
 
 @dataclass(frozen=True)
 class ListAssign(Stmt):
-    name: str
-    index: AExp
-    expr: Expr
+    target: AIndex
+    aexp: AExp
 
 @dataclass(frozen=True)
 class Pass(Stmt): pass
@@ -251,7 +242,7 @@ class AstBuilder(Transformer):
     # statements
     def decl_stmt(self, name, type_node): return Decl(str(name), type_node)
     def assign_stmt(self, name, expr): return Assign(str(name), expr)
-    def list_assign_stmt(self, name, index, expr): return ListAssign(str(name), index, expr)
+    def list_assign_stmt(self, target, expr): return ListAssign(target, expr)
     def pass_stmt(self): return Pass()
     def empty_stmt(self): return Pass()
     def while_stmt(self, cond, body_seq): return While(cond=cond, body=body_seq or [Pass()])
@@ -259,26 +250,23 @@ class AstBuilder(Transformer):
     def if_stmt(self, cond, then_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
     def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
 
-    # expr wrappers
-    def expr_a(self, aexp): return ExprA(aexp)
-    def expr_b(self, bexp): return ExprB(bexp)
-
     # types
     def type_int(self): return TypeInt()
     def type_float(self): return TypeFloat()
     def type_list(self, elem, size): return TypeList(elem, size)
 
     # imm/aexp
+    def aexp(self, expr): return expr
     def int_lit(self, tok): return IntLit(int(tok))
     def float_lit(self, tok): return FloatLit(float(tok))
     def list_lit(self, *args):
-        # Grammar: [imm ("," imm)*] - first is imm, then pairs of "," imm
-        if len(args) == 0:
-            return ListLit([])
-        return ListLit([args[i] for i in range(0, len(args), 2)])
+        return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
     def a_len(self, name): return ALen(str(name))
-    def a_index(self, name, idx): return AIndex(str(name), idx)
+    def a_index(self, base, idx):
+        if not isinstance(base, AExp):
+            base = AVar(str(base))
+        return AIndex(base, idx)
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)
@@ -286,6 +274,7 @@ class AstBuilder(Transformer):
     def div(self, l, r): return ABinOp("/", l, r)
 
     # bexp
+    def bexp(self, expr): return expr
     def btrue(self): return BBool(True)
     def bfalse(self): return BBool(False)
     def bnot(self, rhs): return BNot(rhs)

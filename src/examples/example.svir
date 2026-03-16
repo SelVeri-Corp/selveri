@@ -2,7 +2,7 @@
 1: PUSH 1
 2: STORE x
 3: PUSH 1
-4: LOAD x
+4: PUSH x
 5: EQ 
 6: JZ 10
 7: PUSH 2

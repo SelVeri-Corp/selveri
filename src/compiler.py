@@ -9,7 +9,6 @@ from parser import (
     parse_selveri,
     Program,
     Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot,
-    ExprA, ExprB,
     TypeNode, TypeInt, TypeFloat, TypeList,
     AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp,
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
@@ -22,9 +21,9 @@ from errors import CompilerError
 # -----------------------
 @dataclass
 class IRInstr:
-    label: int
-    op: str
-    args: Tuple[Union[str, int, float], ...] = ()
+    label: int # used for the jump indexes
+    op: str # operand
+    args: Tuple[Union[str, int, float], ...] = () # arguments
 
     def render(self) -> str:
         return f"{self.label}: {self.op} " + ", ".join(str(a) for a in self.args)
@@ -35,6 +34,24 @@ class IRInstr:
 @dataclass
 class _PatchRef:
     idx: int  # instruction index to patch
+
+
+@dataclass(frozen=True)
+class _ListInfo:
+    elem_type: TypeNode # the type of the elements in the list
+    shape: Tuple[int, ...] # size of each dimension List[List[Int, 2], 3] has shape (3, 2)
+    strides: Tuple[int, ...] # this can be deducted from shape but kept for clarity and convenience
+    # strides[i] = product of shape[j] for j > i which is used in calculating the flat index
+    # as an example, x[i][j][k] has flat_index = strides[0] * i + strides[1] * j + strides[2] * k
+    flat_size: int # the total number of elements in the list (shape[0] * shape[1] * ... * shape[n-1])
+
+    @property
+    def rank(self) -> int:
+        return len(self.shape)
+
+    @property
+    def top_level_len(self) -> int:
+        return self.shape[0]
 
 
 # Is empty helper
@@ -50,17 +67,15 @@ def is_empty_stmt_seq(s: Optional[List[Stmt]]) -> bool:
 class SelVeriCompiler:
     """
     Compiles SelVeri AST to SelVerIR.
-    - Maintains a scope for compile-time typing to select STORE and iDIV/fDIV.
+    - Maintains one scope for compile-time typing.
     - Emits labeled IR where label == instruction index.
     """
 
     def __init__(self) -> None:
-        # High-level variable types (including list meta)
-        self.scope_hl: Dict[str, TypeNode] = {}
-        # IR-level scalar variables (including lowered list elements)
-        self.scope_ir: Dict[str, TypeNode] = {}
-        # List metadata: name -> (elem_type, size)
-        self.lists: Dict[str, Tuple[TypeNode, int]] = {}
+        # All declared names, including high-level lists and lowered flat elements.
+        self.scope: Dict[str, TypeNode] = {}
+        # List metadata for flattened lowering.
+        self.lists: Dict[str, _ListInfo] = {}
         # IR program being built
         self.code: List[IRInstr] = []
 
@@ -83,8 +98,147 @@ class SelVeriCompiler:
         return f"{base}[{idx}]"
 
     def require_declared(self, name: str) -> None:
-        if name not in self.scope_hl and name not in self.scope_ir:
+        if name not in self.scope:
             raise CompilerError(f"Undeclared variable: {name}")
+
+    def _get_declared_type(self, name: str) -> TypeNode:
+        t = self.scope.get(name)
+        if t is None:
+            raise CompilerError(f"Undeclared variable: {name}")
+        return t
+
+    def _eval_const_int(self, a: AExp) -> int:
+        # evaluates the constant integer value of an AExp at compile time
+        # required for list literal shape matching and flat index calculation
+        if isinstance(a, IntLit):
+            return a.value
+        if isinstance(a, FloatLit):
+            raise CompilerError("Expected compile-time integer expression, found float literal.")
+        if isinstance(a, ALen):
+            info = self.lists.get(a.name)
+            if info is None:
+                raise CompilerError(f"len({a.name}) used but '{a.name}' is not a declared list.")
+            return info.top_level_len # len is calculated at compile time
+        if isinstance(a, AUnOp):
+            if a.op != "-":
+                raise CompilerError(f"Unsupported unary op in compile-time integer expression: {a.op}")
+            return -self._eval_const_int(a.rhs)
+        if isinstance(a, ABinOp):
+            left = self._eval_const_int(a.left)
+            right = self._eval_const_int(a.right)
+            if a.op == "+":
+                return left + right
+            if a.op == "-":
+                return left - right
+            if a.op == "*":
+                return left * right
+            if a.op == "/":
+                if right == 0:
+                    raise CompilerError("Division by zero in compile-time integer expression.")
+                return left // right
+            raise CompilerError(f"Unsupported binary op in compile-time integer expression: {a.op}")
+        raise CompilerError("Expected compile-time integer expression.")
+
+    def _flatten_list_type(self, t: TypeList) -> _ListInfo:
+        shape: List[int] = []
+        elem_t: TypeNode = t
+        while isinstance(elem_t, TypeList):
+            dim = self._eval_const_int(elem_t.size)
+            if dim < 0:
+                raise CompilerError("List size cannot be negative.")
+            shape.append(dim)
+            elem_t = elem_t.elem
+
+        if not isinstance(elem_t, (TypeInt, TypeFloat)):
+            raise CompilerError("Lists must flatten to numeric element types.")
+
+        strides: List[int] = []
+        running = 1 # running product of dimensions
+        for dim in reversed(shape):
+            strides.append(running)
+            running *= dim
+        strides.reverse()
+        flat_size = running # the total number of elements in the list (shape[0] * shape[1] * ... * shape[n-1])
+        return _ListInfo(elem_type=elem_t, shape=tuple(shape), strides=tuple(strides), flat_size=flat_size)
+
+    def _flat_list_decl_type(self, info: _ListInfo) -> TypeList:
+        return TypeList(info.elem_type, IntLit(info.flat_size)) # the type of the list is the type of the elements and the size is the total number of elements
+
+    def _extract_list_access(self, a: AIndex) -> Tuple[str, List[AExp]]:
+        indices: List[AExp] = []
+        cur: AExp = a
+        while isinstance(cur, AIndex):
+            indices.append(cur.index)
+            cur = cur.base
+        if not isinstance(cur, AVar):
+            raise CompilerError("Only direct list variables can be indexed.")
+        indices.reverse()
+        return cur.name, indices
+
+    def _build_flat_index_expr(self, info: _ListInfo, indices: List[AExp]) -> AExp:
+        flat_expr: Optional[AExp] = None
+        for idx_exp, stride in zip(indices, info.strides):
+            term: AExp = idx_exp
+            if stride != 1:
+                term = ABinOp("*", idx_exp, IntLit(stride))
+            flat_expr = term if flat_expr is None else ABinOp("+", flat_expr, term)
+
+        assert flat_expr is not None
+        return flat_expr
+
+    def _resolve_list_access(self, a: AIndex) -> Tuple[_ListInfo, str, List[AExp]]:
+        base_name, indices = self._extract_list_access(a)
+        info = self.lists.get(base_name)
+        if info is None:
+            raise CompilerError(f"Indexing '{base_name}[..]' but '{base_name}' is not a declared list.")
+        if len(indices) > info.rank:
+            raise CompilerError(
+                f"Flattened list '{base_name}' of rank {info.rank} "
+                f"cannot be indexed with {len(indices)} indices."
+            )
+        return info, base_name, indices
+
+    def _get_type_list_access(self, info: _ListInfo, indices: List[AExp]) -> TypeNode:
+        # if fully indexed, we reach the numeric element type
+        if len(indices) == info.rank:
+            return info.elem_type
+        # otherwise, we return a (lower-rank) list type corresponding to the remaining dimensions after the applied indices
+        remaining_shape = info.shape[len(indices):]
+        elem_t: TypeNode = info.elem_type
+        # rebuild nested TypeList from inner-most dimension outwards
+        for dim in reversed(remaining_shape):
+            elem_t = TypeList(elem_t, IntLit(dim))
+        return elem_t # the type of the list after the applied indices
+
+    def _flatten_list_literal(
+        self,
+        literal: Union[ListLit, IntLit, FloatLit],
+        expected_type: TypeNode,
+    ) -> List[Union[int, float]]:
+        if isinstance(expected_type, TypeList):
+            if not isinstance(literal, ListLit):
+                raise CompilerError("Nested list literal shape does not match declared list type.")
+            expected_len = self._eval_const_int(expected_type.size)
+            if len(literal.items) != expected_len:
+                raise CompilerError(
+                    f"List literal length mismatch: expected {expected_len}, got {len(literal.items)}."
+                )
+            flat: List[Union[int, float]] = []
+            for item in literal.items:
+                flat.extend(self._flatten_list_literal(item, expected_type.elem))
+            return flat
+
+        if isinstance(expected_type, TypeInt):
+            if not isinstance(literal, IntLit):
+                raise CompilerError("Int lists require integer literals in list assignments.")
+            return [literal.value]
+
+        if isinstance(expected_type, TypeFloat):
+            if not isinstance(literal, (IntLit, FloatLit)):
+                raise CompilerError("Float lists require numeric literals in list assignments.")
+            return [literal.value]
+
+        raise CompilerError("Unsupported list literal assignment target type.")
 
     # ---------- type checks ----------
     def _type_of_aexp(self, a: AExp) -> TypeNode:
@@ -95,7 +249,7 @@ class SelVeriCompiler:
         if isinstance(a, ListLit):
             raise CompilerError("not supported")
         if isinstance(a, AVar):
-            t = self.scope_hl.get(a.name) or self.scope_ir.get(a.name)
+            t = self.scope.get(a.name)
             if t is None:
                 raise CompilerError(f"Undeclared variable in AExp: {a.name}")
             if isinstance(t, TypeList):
@@ -106,11 +260,8 @@ class SelVeriCompiler:
                 raise CompilerError(f"len({a.name}) used but '{a.name}' is not a declared list.")
             return TypeInt()
         if isinstance(a, AIndex):
-            raise CompilerError("not supported")
-            # if a.name not in self.lists:
-            #     raise CompilerError(f"Indexing '{a.name}[..]' but '{a.name}' is not a declared list.")
-            # elem_t, _n = self.lists[a.name]
-            # return elem_t
+            info, _base_name, indices = self._resolve_list_access(a)
+            return self._get_type_list_access(info, indices)
         if isinstance(a, AUnOp):
             # unary '-' keeps numeric type
             return self._type_of_aexp(a.rhs)
@@ -129,12 +280,7 @@ class SelVeriCompiler:
         return isinstance(t, TypeFloat)
 
     def _type_of_var_for_store(self, name: str) -> TypeNode:
-        t = self.scope_hl.get(name) or self.scope_ir.get(name)
-        if t is None:
-            raise CompilerError(f"Undeclared variable: {name}")
-        if isinstance(t, TypeList):
-            raise CompilerError(f"Cannot store into whole list variable '{name}' (only elements).")
-        return t
+        return self._get_declared_type(name)
 
     # ---------- CA: arithmetic compilation ----------
     def CA(self, a: AExp) -> None:
@@ -149,43 +295,32 @@ class SelVeriCompiler:
         if isinstance(a, ListLit):
             raise CompilerError("not supported")
 
-        # CA(x) = LOAD x if x is Var   (doc says STORE, but IR uses LOAD)
         if isinstance(a, AVar):
             self.require_declared(a.name)
-            # If it's a lowered list element, it's in scope_ir.
-            if a.name in self.scope_ir:
-                self.emit("LOAD", a.name)
-                return
-            # If it's a high-level scalar
-            t = self.scope_hl.get(a.name)
+            t = self.scope[a.name]
             if isinstance(t, TypeList):
                 raise CompilerError(f"Cannot load whole list '{a.name}'. Use indexing.")
             self.emit("PUSH", a.name)
             return
 
         if isinstance(a, ALen):
-            if a.name not in self.lists:
+            info = self.lists.get(a.name)
+            if info is None:
                 raise CompilerError(f"len({a.name}) but '{a.name}' is not a list.")
-            _elem_t, n = self.lists[a.name]
-            self.emit("PUSH", n)
+            self.emit("PUSH", info.top_level_len) # len is resolved at compile time
             return
 
         if isinstance(a, AIndex):
-            raise CompilerError("not supported")
-            # if a.name not in self.lists:
-            #     raise CompilerError(f"Indexing '{a.name}[..]' but '{a.name}' is not a list.")
-            # # Require compile-time constant index due to IR limitations
-            # if not isinstance(a.index, IntLit):
-            #     raise CompilerError(
-            #         f"List index must be an int literal in IR-lowering mode: {a.name}[...]"
-            #     )
-            # idx = a.index.value
-            # _elem_t, n = self.lists[a.name]
-            # if idx < 0 or idx >= n:
-            #     raise CompilerError(f"Index out of bounds at compile time: {a.name}[{idx}], len={n}")
-            # elem_name = self.mangle_list_elem(a.name, idx)
-            # self.emit("LOAD", elem_name)
-            # return
+            info, base_name, indices = self._resolve_list_access(a)
+            if len(indices) != info.rank:
+                raise CompilerError(
+                    f"Cannot load whole list expression '{base_name}[..]' as a numeric value; "
+                    f"provide exactly {info.rank} indices."
+                )
+            flat_index = self._build_flat_index_expr(info, indices)
+            self.CA(flat_index)
+            self.emit("LLOAD", base_name)
+            return
 
         if isinstance(a, AUnOp):
             if a.op != "-":
@@ -308,40 +443,30 @@ class SelVeriCompiler:
 
     def _compile_decl(self, d: Decl) -> None:
         name = d.name
-        if name in self.scope_hl or name in self.scope_ir:
+        if name in self.scope:
             raise CompilerError(f"Duplicate declaration: {name}")
 
         t = d.type_node
-        self.scope_hl[name] = t
+        self.scope[name] = t
 
         if isinstance(t, TypeInt):
-            self.scope_ir[name] = t
             self.emit("DECL", "INT", name)
             return
 
         if isinstance(t, TypeFloat):
-            self.scope_ir[name] = t
             self.emit("DECL", "FLOAT", name)
             return
 
         if isinstance(t, TypeList):
-            # Lower list into scalar variables: name[0] ... name[n-1]
-            # Requires size to be compile-time int literal.
-            if not isinstance(t.size, IntLit):
-                raise CompilerError("List size must be an int literal to lower to IR.")
-            n = t.size.value
-            if n < 0:
-                raise CompilerError("List size cannot be negative.")
-            elem_t = t.elem
-            self.lists[name] = (elem_t, n)
-            self.emit("DECL", t, name)
+            info = self._flatten_list_type(t)
+            self.lists[name] = info
+            self.emit("DECL", self._flat_list_decl_type(info), name)
 
-            # Declare element slots
-            for i in range(n):
+            for i in range(info.flat_size):
                 elem_name = self.mangle_list_elem(name, i)
-                if elem_name in self.scope_ir:
+                if elem_name in self.scope:
                     raise CompilerError(f"Internal: duplicate lowered name: {elem_name}")
-                self.scope_ir[elem_name] = elem_t
+                self.scope[elem_name] = info.elem_type
             return
 
         raise CompilerError(f"Unsupported type in declaration: {type(t).__name__}")
@@ -349,52 +474,82 @@ class SelVeriCompiler:
     def _compile_assign(self, a: Assign) -> None:
         name = a.name
         t = self._type_of_var_for_store(name)
-        # Only numeric assigns supported (ExprA or ExprB are possible from parser).
-        # We allow storing numeric AExp, and also allow storing BExp result as int
-        # (0/1) if the target variable is Int.
-        if isinstance(a.expr, ExprA):
-            self.CA(a.expr.aexp)
-        elif isinstance(a.expr, ExprB):
-            # compile boolean expression to 0/1 on stack
-            if not isinstance(t, TypeInt):
-                raise CompilerError("Storing boolean into Float is not allowed.")
-            self.CB(a.expr.bexp)
-        else:
-            raise CompilerError("Unknown Expr variant.")
+        if isinstance(t, TypeList): # this is the whole list assignment like lst := [1, 2, 3]
+            if not isinstance(a.aexp, ListLit):
+                raise CompilerError(f"Whole-list assignment for '{name}' requires a list literal.")
+            flat_values = self._flatten_list_literal(a.aexp, t)
+            info = self.lists.get(name)
+            if info is None:
+                raise CompilerError(f"Internal: missing list metadata for '{name}'.")
+            if len(flat_values) != info.flat_size:
+                raise CompilerError(
+                    f"Internal: flattened literal size mismatch for '{name}': "
+                    f"{len(flat_values)} != {info.flat_size}"
+                )
+            for idx, value in enumerate(flat_values): # TODO: change this into STORE instructions with mangling names
+                self.emit("PUSH", value)
+                self.emit("PUSH", idx)
+                self.emit("LSTORE", name)
+            return
+
+        # only numeric assigns supported (AExp from parser)
+        self.CA(a.aexp)
 
         if not isinstance(t, (TypeInt, TypeFloat)):
             raise CompilerError(f"Unsupported store target type for {name}: {type(t).__name__}")
         self.emit("STORE", name)
 
-    def _compile_list_assign(self, la: ListAssign) -> None:
-        raise CompilerError("not supported")
-        # base = la.name
-        # if base not in self.lists:
-        #     raise CompilerError(f"List assignment to '{base}[..]' but '{base}' is not a list.")
-        # elem_t, n = self.lists[base]
+    def _compile_list_assign(self, la: ListAssign) -> None: # this is the sub-list assignment like lst[0] := [1, 2, 3] or lst[0][0] := 1
+        elem_info, target, indices = self._resolve_list_access(la.target)
+        remaining_rank = elem_info.rank - len(indices)
+        if remaining_rank < 0:
+            # should be caught earlier in _resolve_list_access
+            raise CompilerError("Too many indices for list assignment.")
 
-        # # Require constant index due to IR limitations
-        # if not isinstance(la.index, IntLit):
-        #     raise CompilerError(f"List assignment index must be an int literal: {base}[...]")
-        # idx = la.index.value
-        # if idx < 0 or idx >= n:
-        #     raise CompilerError(f"Index out of bounds at compile time: {base}[{idx}], len={n}")
+        # case 1: fully indexed element assignment (scalar store)
+        if remaining_rank == 0:
+            flat_index = self._build_flat_index_expr(elem_info, indices)
+            self.CA(la.aexp)
+            self.CA(flat_index) # TODO: if we only use constants, we can use STORE directly instead of LSTORE with mangling names
 
-        # target = self.mangle_list_elem(base, idx)
+            if not isinstance(elem_info.elem_type, (TypeInt, TypeFloat)):
+                raise CompilerError("Nested list elements not supported after flattening.")
+            self.emit("LSTORE", target)
+            return
 
-        # # Compile RHS
-        # if isinstance(la.expr, ExprA):
-        #     self.CA(la.expr.aexp)
-        # elif isinstance(la.expr, ExprB):
-        #     if not isinstance(elem_t, TypeInt):
-        #         raise CompilerError("Storing boolean into Float list element is not allowed.")
-        #     self.CB(la.expr.bexp)
-        # else:
-        #     raise CompilerError("Unknown Expr variant.")
+        # case 2: partial indexing assigning a whole sub-list, e.g., x[0] = [1, 2, 3]
+        if not isinstance(la.aexp, ListLit):
+            raise CompilerError("List sub-assignment requires a list literal on the right-hand side.")
 
-        # if not isinstance(elem_t, (TypeInt, TypeFloat)):
-        #     raise CompilerError("Nested list elements not supported.")
-        # self.emit("STORE", target)
+
+        sub_type = self._get_type_list_access(elem_info, indices)
+        # flatten the RHS literal according to this sub-list type
+        flat_values = self._flatten_list_literal(la.aexp, sub_type)
+        # compute the base flat index for the first element of the sub-list
+        base_flat_expr = self._build_flat_index_expr(elem_info, indices)
+
+        # try to resolve the base index at compile time for efficiency
+        const_base: Optional[int]
+        try:
+            const_base = self._eval_const_int(base_flat_expr)
+        except CompilerError:
+            const_base = None
+
+        # emit stores for each flattened element: index = base_flat_expr + offset
+        for offset, value in enumerate(flat_values):
+            self.emit("PUSH", value)
+            if const_base is not None:
+                # fully compile-time-known index: push the concrete integer
+                self.emit("PUSH", const_base + offset)
+                # TODO: we can use mangling names to directly store the value without using LSTORE in this case
+            else:
+                # fallback: compute index expression at runtime
+                if offset == 0:
+                    index_expr = base_flat_expr
+                else:
+                    index_expr = ABinOp("+", base_flat_expr, IntLit(offset))
+                self.CA(index_expr)
+            self.emit("LSTORE", target)
 
     def _compile_if(self, s: If) -> None:
         self.CB(s.cond) # condition
