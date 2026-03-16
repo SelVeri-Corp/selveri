@@ -159,8 +159,8 @@ class SelVeriCompiler:
             # If it's a high-level scalar
             t = self.scope_hl.get(a.name)
             if isinstance(t, TypeList):
-                raise CompilerError(f"Cannot LOAD whole list '{a.name}'. Use indexing.")
-            self.emit("LOAD", a.name)
+                raise CompilerError(f"Cannot load whole list '{a.name}'. Use indexing.")
+            self.emit("PUSH", a.name)
             return
 
         if isinstance(a, ALen):
@@ -437,9 +437,7 @@ class SelVeriCompiler:
 
     def compile_to_text(self, p: Program) -> str:
         code = self.compile_program(p)
-        lines = [instr.render() for instr in code]
-        print(self.scope_hl)
-        print(self.scope_ir)
+        lines = [instr.render() for instr in code] # converts instruction objects into string representations
         return "\n".join(lines)
 
 
@@ -448,7 +446,6 @@ class SelVeriCompiler:
 # -----------------------
 def compile_selveri_source_to_ir_text(src: str) -> str:
     ast = parse_selveri(src)
-    print(ast)
     return SelVeriCompiler().compile_to_text(ast)
 
 
