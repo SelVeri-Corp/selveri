@@ -13,6 +13,7 @@ from errors import ParserError
 # =========================
 @dataclass(frozen=True)
 class Program:
+    func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
 
 class Stmt: pass
@@ -44,6 +45,15 @@ class TypeList(TypeNode):
     size: IntLit
     def __str__(self) -> str:
         return f"LIST[{self.elem},{self.size}]"
+
+
+@dataclass(frozen=True)
+class TypeListParam(TypeNode):
+    elem: TypeNode
+    size: Optional[IntLit] = None
+
+    def __str__(self) -> str:
+        return f"LIST[{self.elem}{f', {self.size}' if self.size else ''}]"
 
 # Immediates / Arithmetic
 @dataclass(frozen=True)
@@ -225,13 +235,37 @@ class While(Stmt):
     cond: BExp
     body: List[Stmt]
 
+# Functions
+@dataclass(frozen=True)
+class Param:
+    name: str
+    type_node: TypeNode
+
+@dataclass(frozen=True)
+class Return(Stmt):
+    value: AExp
+
+@dataclass(frozen=True)
+class FuncCall(AExp, Stmt):
+    name: str
+    args: List[AExp]
+
+@dataclass(frozen=True)
+class FunctionDecl:
+    name: str
+    params: List[Param]
+    return_type: TypeNode
+    body: List[Stmt]
 
 @v_args(inline=True)
 class AstBuilder(Transformer):
     def start(self, program): return program
 
-    def program(self, stmt_seq=None):
-        return Program(stmt_seq=stmt_seq or [Pass()])
+    def program(self, *children):
+        if not children:
+            return Program(func_decls=[], stmt_seq=[Pass()])
+        *funcs, stmt_seq = children
+        return Program(func_decls=list(funcs), stmt_seq=stmt_seq or [Pass()])
 
     def stmt_seq(self, *stmts):
         return list(stmts) or []
@@ -254,6 +288,13 @@ class AstBuilder(Transformer):
     def type_int(self): return TypeInt()
     def type_float(self): return TypeFloat()
     def type_list(self, elem, size): return TypeList(elem, size)
+
+    # function parameters
+    def param_type(self, name, type_node):
+        return Param(str(name), type_node)
+
+    def param_list_type(self, name, elem_type):
+        return Param(str(name), TypeListParam(elem_type))
 
     # imm/aexp
     def aexp(self, expr): return expr
@@ -314,6 +355,39 @@ class AstBuilder(Transformer):
 
     def sexists(self, var, domopt, body):
         return SpecQuant("Exists", str(var), domopt.domain, body)
+
+    # functions
+    def func_decl(self, name, params, ret_type, body):
+        return FunctionDecl(str(name), params or [], ret_type, body or [])
+
+    def param_list_opt(self, params=None):
+        return params or []
+
+    def param_list(self, *params):
+        return list(params)
+
+    def func_stmt_seq(self, *stmts):
+        return list(stmts) or []
+
+    def func_if_stmt(self, cond, then_seq, else_seq=None):
+        if else_seq is None:
+            return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
+        return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+
+    def func_while_stmt(self, cond, body_seq):
+        return While(cond=cond, body=body_seq or [Pass()])
+
+    def return_stmt(self, expr):
+        return Return(expr)
+
+    def func_call(self, name, args):
+        return FuncCall(str(name), args or [])
+
+    def arg_list_opt(self, args=None):
+        return args or []
+
+    def arg_list(self, *args):
+        return list(args)
 
 
 SELVERI_PARSER = Lark.open(
