@@ -1,0 +1,1592 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath, amssymb, array} % in the preamble
+\usepackage{enumitem}
+\usepackage{amsthm} % In your preamble
+\usepackage{bussproofs}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{tabularx} % Required for adjustable width tables
+\usepackage{array}
+\usepackage{tablefootnote}
+
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v0.6}
+\author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
+
+\begin{document}
+\maketitle
+
+% \begin{abstract}
+% \end{abstract}
+
+\newpage
+\section{Syntax}
+
+\[
+\begin{array}{rcl}
+
+\langle \mathit{IR} \rangle &::=& \{\langle \mathit{label} \rangle\ \langle \mathit{Command} \rangle\} \\[6pt]
+
+\langle \mathit{Command} \rangle
+&::=& \texttt{DECL} \; \langle type \rangle \; , \langle ident \rangle \;\mid\; \texttt{LDECL} \; \langle ldecl\_type \rangle \; , \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{PUSH} \; \langle imm \rangle \;\mid\; \texttt{PUSH} \; \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{STORE} \; \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{ACCESS} \; \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{INSERT} \; \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{ADD}
+\\[2pt]
+
+&& \mid\; \texttt{SUB}
+\\[2pt]
+
+&& \mid\; \texttt{MUL}
+\\[2pt]
+
+&& \mid\; \texttt{iDIV} \mid\; \texttt{fDIV}
+\\[2pt]
+
+&& \mid\; \texttt{LEN} \; \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{EQ}
+\\[2pt]
+
+&& \mid\; \texttt{LT}
+\\[2pt]
+
+&& \mid\; \texttt{LE}
+\\[2pt]
+
+&& \mid\; \texttt{GT}
+\\[2pt]
+
+&& \mid\; \texttt{GE}
+\\[2pt]
+
+&& \mid\; \texttt{NEG}
+\\[2pt]
+
+&& \mid\; \texttt{AND}
+\\[2pt]
+
+&& \mid\; \texttt{OR}
+\\[2pt]
+
+&& \mid\; \texttt{XOR}
+\\[2pt]
+
+
+&& \mid\; \texttt{JZ} \; \langle int \rangle
+\\[2pt]
+
+&& \mid\; \texttt{GOTO} \; \langle int \rangle
+\\[2pt]
+
+&& \mid\; \texttt{CSCOPE} \;\mid\; \texttt{PSCOPE}
+\\[2pt]
+
+
+&& \mid\; \texttt{ENV}
+\\[2pt]
+
+&& \mid\; \texttt{CALL} \; \langle ident \rangle
+\\[2pt]
+
+&& \mid\; \texttt{RET}
+\\[2pt]
+
+&& \mid\; \texttt{NOOP}
+\\[15pt]
+
+\langle \mathit{type} \rangle &::=& \texttt{INT} \;\mid\; \texttt{FLOAT} \;\mid\; \texttt{LIST[INT},\langle \mathit{int} \rangle \texttt{]} \;\mid\; \texttt{LIST[FLOAT},\langle \mathit{int} \rangle \texttt{]}   \\[6pt]
+
+\langle \mathit{ldecl\_type} \rangle &::=& \texttt{LIST[INT]} \;\mid\; \texttt{LIST[FLOAT]}  \\[6pt]
+
+
+\langle \mathit{ident} \rangle &::=& \text{[A-Za-z\_][A-Za-z0-9\_]*} \\[6pt]
+
+\langle \mathit{label} \rangle &::=& [0\texttt{-}9]^+ \texttt{:}\\[6pt]
+
+\langle \mathit{int} \rangle &::=& [0\texttt{-}9]^+ \\[6pt]
+
+\langle \mathit{float} \rangle &::=& [0\texttt{-}9]^+\texttt{.}[0\texttt{-}9]^+ \\[6pt]
+
+\langle \mathit{imm} \rangle &::=& \langle \mathit{int} \rangle \;\mid\; \langle \mathit{float} \rangle \\[6pt]
+
+\end{array}
+\]
+
+\newpage
+\section{Semantics}
+
+\subsection{Mathematical notions}
+
+The \texttt{SelVeri} intermediate representation, \texttt{SelVerIR} is executed on a \textit{stack-based} abstract machine (\textbf{AM}) and aims to be provably correct implementation of the high-level \texttt{SelVeri} language.
+
+\subsubsection{Stack}
+
+At any moment of the execution of a \texttt{SelVerIR} program, its stack, denoted as $e$, is a an ordered finite sequence consisting elements are from \textbf{Val}, which will be used in the flow of the program in the \textit{LIFO} order. As expected, $e$ supports \texttt{PUSH} and (indirectly) \texttt{POP} operations. For convenience, the empty stack is denoted separately, as $\epsilon$.
+
+\subsubsection{Program counter}
+
+Intuitively, one can think of any \texttt{SelverIR} program, $P$ as an ordered list of commands. Program counter, $pc$, represents the index of the command that is to be executed next. Control-flow statements such as \texttt{GOTO} and \texttt{JZ} can alter the program counter in a non-sequential manner.
+
+\subsubsection{Return address}
+
+A return address, $ra$, is the index of the command that is to be executed next, just after current function call ends. Instead of storing one $ra$ at any given time, the abstract machine manages a separate stack called $ras$, containing return addresses in LIFO order, to be able to support nested function calls.
+
+\subsubsection{IR-configuration}
+
+An IR-configuration is the representation of the execution state in the form of a 6-tuple $\langle c,\, e,\, \sigma,\, s,\, pc,\, ras \rangle$ where 
+
+\begin{itemize}
+    \item $c$ is the list of commands representing the remaining part of the program \texttt{SelverIR} program, i.e, $c = P[pc:]$.
+
+    \item $e$ is the stack of the execution state,
+
+    \item $\sigma$ is the program state,
+
+    \item $s$ is the scope,
+
+    \item $pc$ is the program counter.
+
+    \item $ras$ is the return-address-stack.
+    
+\end{itemize}
+
+\newpage
+\subsection{Small-step operational semantics of \texttt{SelverIR} commands}
+Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Note that any configuration which is not explicitly stated in the tables above lead to the erroneous state, $\hat{\sigma}$.
+
+\subsubsection{Small-step operational semantics of state-related commands}
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt} % Remove default padding to use full \textwidth
+\centering
+\renewcommand{\arraystretch}{2.2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\hline\hline
+
+\langle \texttt{DECL}\;t\, x : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
+\begin{cases}
+\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto t],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t \in \textbf{Type} \;\land\; s(x) = \textbf{Void}\\
+\end{cases} \\
+
+\langle \texttt{LDECL}\;t\,x : c ,\, n : e,\, \sigma,\, s,\, pc \rangle & 
+\begin{cases}
+\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto \texttt{LIST[INT, $n$]}],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t \in \texttt{LIST[INT]}]\;\land\; s(x) = \textbf{Void}\\
+
+\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto \texttt{LIST[FLOAT]}],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t \in \texttt{LIST[FLOAT]}]\;\land\; s(x) = \textbf{Void}\\
+
+\langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise}}\\
+\end{cases} \\
+
+
+\langle \texttt{PUSH}\; x : c,\,  e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, \sigma(x,s) : e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) \in \{\texttt{INT}, \texttt{FLOAT}\} \land n=1 \land v_1 \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, \sigma(x\texttt{[0]},s) : \dots : \sigma(x\texttt{[n-1]},s): e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t, n$]} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise} \\[2pt]
+\langle c,\, \mathcal{V}(x) : e,\, \sigma,\, s,\, pc+1 \rangle \qquad \text{if } x \in \textbf{Imm}
+\end{cases} \\
+
+
+\langle \texttt{STORE}\; x : c,\, v_1 : \dots : v_n : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, e,\, \sigma[x \mapsto v_1],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) \in \{\texttt{INT}, \texttt{FLOAT}\} \land n=1 \land v_1 \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, e,\, \sigma[x \mapsto [v_1, \dots, v_n]],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t, m$]}\land m \leq n \land v_1, \dots v_n \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise} \\
+\end{cases}\\
+
+
+\langle \texttt{ACCESS}\;x : c,\, i : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, \sigma(x\texttt{[$i$]}, s) : e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t,n$]} \land 0 \leq i \leq n \land i,v \in \mathbb{N} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise} \\
+\end{cases}\\
+
+
+\langle \texttt{INSERT}\;x : c,\, i : v : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, e,\, \sigma[x\texttt{[$i$]} \mapsto v],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t,n$]} \land 0 \leq i \leq n \land i,v \in \mathbb{N} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise} \\
+\end{cases}\\
+
+
+\hline\hline
+\end{tabular*}
+\caption{Operational semantics of state-related commands}
+\label{tab:am-sos-state}
+\end{table}
+
+\subsubsection{Small-step operational semantics of arithmetic commands}
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt}
+\centering
+\renewcommand{\arraystretch}{2.2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\hline\hline
+
+
+\langle \texttt{ADD} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 + v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{SUB} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 - v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{MUL} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 \cdot v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{iDIV} : c ,\, z_1 : z_2 : e,\, \sigma,\, s,\, pc \rangle & \begin{cases} 
+\langle c,\, \lfloor z_1 / z_2 \rfloor : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } z_1, z_2 \in \mathbb{Z} \land z_2 \neq 0 \\
+\langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc+1 \rangle & \text{otherwise}
+\end{cases} \\
+
+\langle \texttt{fDIV} : c ,\, r_1 : r_2 : e,\, \sigma,\, s,\, pc \rangle & \begin{cases} 
+\langle c,\, r_1 / r_2 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } r_1, r_2 \in \mathbb{R} \land r_2 \neq 0 \\
+\langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc+1 \rangle & \text{otherwise}
+\end{cases} \\
+
+\langle \texttt{LEN}\; x : c ,\, e,\, \sigma,\, s,\, pc \rangle & \begin{cases} 
+\langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } s(x) \in \{\texttt{INT}, \texttt{FLOAT}\} \\
+\langle c,\, n : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } s(x) = \texttt{LIST[t, $n$]} \\
+\langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc+1 \rangle & \text{otherwise}
+\end{cases} \\
+
+
+\hline\hline
+\end{tabular*}
+\caption{Operational semantics of arithmetic commands}
+\label{tab:am-sos-arith}
+\end{table}
+
+\vspace{0.7em}
+
+As one can notice from the table above, we do not have type-specific commands for \texttt{ADD}, \texttt{SUB} and \texttt{MUL} as these operations are closed under $\mathbb{Z}$ \footnote{Although syntactically different in \texttt{SelVeri} high level language; semantically, we do not interpret any integer differently than its real number counterpart.}. However, since this is not the case for division, we have separate instructions for integer and float division, namely \texttt{iDIV} and \texttt{fDIV}.
+A similar approach will be followed for the boolean expressions in the next section.
+
+\newpage
+\subsubsection{Small-step operational semantics of boolean commands}
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt}
+\centering
+\renewcommand{\arraystretch}{2.2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\hline\hline
+
+\langle \texttt{EQ} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 = v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{LE} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 \leq v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{LT} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 < v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{GE} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 \geq v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{GT} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 > v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
+
+\langle \texttt{AND} : c,\, b_1 : b_2 : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, 1 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b_1 = 1 \land b_2 = 1 \\
+\langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b_1 = 0 \lor b_2 = 0
+\end{cases} \\
+
+\langle \texttt{OR} : c,\, b_1 : b_2 : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, 1 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b_1 = 1 \lor b_2 = 1 \\
+\langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b_1 = 0 \land b_2 = 0
+\end{cases} \\
+
+\langle \texttt{XOR} : c,\, b_1 : b_2 : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, 1 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b_1 \neq b_2 \\
+\langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b_1 = b_2
+\end{cases} \\
+
+\langle \texttt{NEG} : c,\, b : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, 1 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b = 0 \\
+\langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b = 1
+\end{cases} \\
+\hline\hline
+\end{tabular*}
+\caption{Operational semantics of boolean commands}
+\label{tab:am-sos-bool}
+\end{table}
+
+\newpage
+\subsubsection{Small-step operational semantics of control-flow commands}
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt}
+\centering
+\renewcommand{\arraystretch}{2.2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\hline\hline
+\langle \texttt{JZ}\; z: c,\, b : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b = 1 \\
+\langle P[\mathcal{I}(z):],\, e,\, \sigma,\, s,\, \mathcal{I}(z) \rangle & \text{if } b = 0 \; \land \; z \in \textbf{Imm $\cap$ Int}
+\end{cases} \\
+
+\langle \texttt{GOTO}\; z : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle P[\mathcal{I}(z):],\, e,\, \sigma,\, s,\, \mathcal{I}(z) \rangle \quad \text{if } z \in \textbf{Imm $\cap$ Int} \\
+
+\langle \texttt{CALL}\; f : c ,\, e,\, \sigma,\, s,\, pc,\, ras \rangle & \langle P[pc_f:],\, e,\, \sigma,\, s,\, pc_f,\, (pc+1) : ras \rangle \quad \text{if } f \in \textbf{Func} \land \Gamma(f) \neq \emptyset \\
+
+\langle \texttt{CSCOPE} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
+
+\langle \texttt{PSCOPE} : c ,\, e,\, \sigma_c,\, s_c,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
+
+
+\langle \texttt{ENV} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma}',\, \tilde{s}',\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ is of the caller}  \\
+
+\langle \texttt{RET} : c ,\, v : e,\, \sigma',\, s',\, pc ,\, ra : ras \rangle & \langle P[ra:],\, e,\, \sigma[\texttt{retvar} \mapsto v],\, s[\texttt{retvar} \mapsto s'(v)],\, ra ,\, ras \rangle \quad \text{where $\sigma$ and $s$ is of the caller} \\
+
+\langle \texttt{NOOP} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \\
+
+\langle i : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \quad \text{where $i$ is any command} \\
+\hline\hline
+\end{tabular*}
+\caption{Operational semantics of control-flow commands}
+\label{tab:am-sos-ctrl}
+\end{table}\\
+
+
+\section{Compilation}
+
+Let \textbf{Code} and \textbf{CodeIR} be the sets of all \texttt{SelVeri} and \texttt{SelVerIR} programs, respectively. Using these sets, we will inductively define a compiler function:
+
+\[
+\mathcal{C}: \textbf{Code} \rightarrow \textbf{CodeIR}
+\]
+
+\vspace{2em}
+
+\subsection{Compilation of types and variables}
+
+Unlike high-level \texttt{SelVeri} language, \texttt{SelVerIR} does not support multi-dimensional lists, too simplify the maintance of stack during program execution. However, as the lists are interpreted as a ‘batch of variables’, we may flatten any multi-dimensional list into a one-dimensional list of its basic type. We call this technique \textit{list flattening} and to mathematically formalize it, we define the following function:
+
+\[
+\mathcal{CT}: \textbf{Type} \rightarrow \textbf{TypeIR}
+\] where \textbf{TypeIR} is the set of all types supported by \texttt{SelVerIR}, e.g. \texttt{INT}, \texttt{FLOAT} and one-dimensional (finite) lists of the former two. Note that $\mathcal{CT}$ omits size if the input list type does not have an explicit size.
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+
+% \resizebox dynamically scales the box to exactly the width of the line.
+\fbox{%
+$\begin{array}{ll}
+\mathcal{CT}(\textbf{Int}) = \texttt{INT}
+\\[1ex]
+
+\mathcal{CT}(\textbf{Float}) = \texttt{FLOAT}
+\\[1ex]
+
+\mathcal{CT}(\textbf{List[$t, n$]}) = 
+\begin{cases}
+\texttt{LIST[INT, $n$]} & \text{if } \mathcal{CT}(t) = \texttt{INT} \\
+\texttt{LIST[FLOAT, $n$]} & \text{if } \mathcal{CT}(t) = \texttt{FLOAT} \\
+\texttt{LIST[INT, $n \times m$]} & \text{if } \mathcal{CT}(t) = \texttt{LIST[INT, $m$]} \\
+\texttt{LIST[FLOAT, $n \times m$]} & \text{if } \mathcal{CT}(t) = \texttt{LIST[FLOAT, $m$]}
+\end{cases}
+\\[1ex]
+
+\end{array}$%
+}%
+\end{table}
+
+\newpage
+To ensure consistency, with type compilations and \textit{list flattening}, we need to formalize it:
+
+\[
+\mathit{I}: \textbf{AExp} \rightarrow \textbf{AExp}
+\]
+
+\[
+\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m) = \sum_{j=1}^{m} i_j \left( \prod_{k=j+1}^{m} n_k \right)
+\]
+
+$\mathcal{CT}$ and $\mathit{I}$ are obviously well-defined, however we need to prove that $\mathit{I}$ is injective on indices as well to ensure that the compilation is correct.
+
+\begin{proof}
+Even though not explicitly stated in its formal definition, all $i_j$ represent indices and $n_k$ represent length of the dimension $k$. As $\mathit{I}$ will solely be used to flatten a valid indexing of an $m$-dimensional list, we assume standard 0-based indexing, meaning each index $i_k$ is bounded by $0 \le i_k < n_k$.
+
+
+Let $W_j = \prod_{k=j+1}^{m} n_k$ represent the weight of the $j$-th dimension. Note that $W_m = 1$, and $W_{j-1} = n_j W_j$.
+
+We can rewrite the index calculation as:
+$$\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)= i_1 W_1 + i_2 W_2 + \dots + i_m W_m$$
+
+To prove injectivity, we must show that if $\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m) = I(i'_1, \dots, i'_m ;n_1,\dots,n_m)$, then $i_j = i'_j$ for all $1 \le j \le m$.
+
+We can prove this by examining the maximum possible value of any suffix sum of the index calculation. The maximum value for the remaining dimensions from $r+1$ to $m$ occurs when every index is at its maximum possible value ($n_j - 1$):
+$$\text{Max Sum} = \sum_{j=r+1}^{m} (n_j - 1) W_j$$
+
+Because $W_{j-1} = n_j W_j$, this sum elegantly telescopes:
+$$\text{Max Sum} = ((n_{r+1} - 1) W_{r+1}) + \dots + ((n_m - 1) W_m)$$
+$$\text{Max Sum} = W_r - W_m = W_r - 1$$
+
+This demonstrates a crucial property: the sum of all lower-dimensional components ($i_{r+1} W_{r+1} + \dots + i_m W_m$) is strictly less than the weight of the current dimension $W_r$.
+
+Because the remainder is strictly smaller than the step size of the current dimension, it is impossible for a change in a lower dimension to overflow and alter a higher dimension. Therefore, two different sets of indices must produce different flat indices, proving that $\mathit{I}$ is injective for $m$-dimensional lists. \\
+\end{proof}
+
+As the well-definedness of $\mathcal{CT}$ and injectivity of $\mathit{I}$ is established, we will omit them to for convenience, except when we explicitly define other compilation functions.
+
+\newpage
+\subsection{Compilation of arithmetic expressions}
+
+In order to formally define the compilation of arithmetic expressions, we define a helper function:
+
+\[
+\mathcal{CA}: \textbf{AExp} \rightarrow \textbf{CodeIR}
+\]
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+
+% \resizebox dynamically scales the box to exactly the width of the line.
+\resizebox{\linewidth}{!}{%
+\fbox{%
+$\begin{array}{ll}
+\mathcal{CA}(x) = \texttt{PUSH}\;x \qquad \text{if } x \in \textbf{Imm} \cap (\textbf{Int} \cup \textbf{Float})\\[1ex]
+
+\mathcal{CA}(x) = \texttt{PUSH}\; x \qquad \text{if } x \in \textbf{Var} \text{ and $x$ is of a basic type} \\[1ex]
+
+\mathcal{CA}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}) = \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) : \texttt{ACCESS}\;x \\ \qquad \text{if $lst$ is an $m$-dimensional list where each dimension $k$ has length $n_k$} \\[1ex]
+
+\mathcal{CA}(a_1 + a_2) = \mathcal{CA}(a_2): \mathcal{CA}(a_1) : \texttt{ADD} & \\[1ex]
+
+\mathcal{CA}(a_1 \ast a_2) = \mathcal{CA}(a_2): \mathcal{CA}(a_1) : \texttt{MUL} & \\[1ex]
+
+\mathcal{CA}(a_1 - a_2) = \mathcal{CA}(a_2): \mathcal{CA}(a_1) : \texttt{SUB} & \\[1ex]
+
+\mathcal{CA}(a_1 / a_2) = \begin{cases}
+\mathcal{CA}(a_2): \mathcal{CA}(a_1) : \texttt{iDIV} & \parbox[t]{0.35\textwidth}{\raggedright  if $(a_1 / a_2)$ has no subterm of type \footnotemark \textbf{Float}} \\[3ex]
+\mathcal{CA}(a_2): \mathcal{CA}(a_1) : \texttt{fDIV} & \parbox[t]{0.35\textwidth}
+{\raggedright  if $(a_1 / a_2)$ has at least one subterm of type \textbf{Float}} \\[1ex]
+\end{cases}
+
+
+\end{array}$%
+}%
+} % <-- closes \resizebox
+\end{table}
+\footnotetext{The types of subterms are determined by the compiler during the compile time.}
+
+
+
+\subsection{Compilation of boolean expressions}
+
+In order to formally define the compilation of boolean expressions, we define a helper function:
+
+\[
+\mathcal{CB}: \textbf{BExp} \rightarrow \textbf{CodeIR}
+\]
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+
+\fbox{%
+$\begin{array}{ll}
+\mathcal{CB}(\texttt{true}) = \texttt{PUSH 1} \\[1ex]
+
+\mathcal{CB}(\texttt{false}) = \texttt{PUSH 0} \\[1ex]
+
+\mathcal{CB}(a) = \mathcal{CA}(a) : \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} 
+\qquad \text{if } a \in \textbf{AExp}
+\\[1ex]
+
+\mathcal{CB}(a_1 \;\texttt{=}\; a_2) = \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{EQ} & \\[1ex]
+
+\mathcal{CB}(a_1 \;\texttt{<=}\; a_2) = \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{LE} & \\[1ex]
+
+\mathcal{CB}(\texttt{not}\; b) = \mathcal{CB}(b) : \texttt{NEG} & \\[1ex]
+
+\mathcal{CB}(b_1 \;\texttt{and}\; b_2) = \mathcal{CB}(b_2) : \mathcal{CB}(b_1) : \texttt{AND} & \\[1ex]
+\end{array}$%
+}
+\end{table}
+
+
+\newpage
+\subsection{Compilation of statements}
+
+Finally, with the help of $\mathcal{CA}$ and $\mathcal{CB}$, we are ready to properly define the compilation function:
+
+\[
+\mathcal{C}: \textbf{Code} \rightarrow \textbf{CodeIR}
+\]
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+
+% \resizebox dynamically scales the box to exactly the width of the line.
+\resizebox{\linewidth}{!}{%
+\fbox{%
+$\begin{array}{ll}
+
+\mathcal{C}(x \;\texttt{:}\; t) = \texttt{DECL}\; \mathcal{CT}(t)\;x
+\\[1.5ex]
+
+\mathcal{C}(x \;\texttt{:=}\; a) = \mathcal{CA}(a) : \texttt{STORE}\;x \qquad \text{if } x \in \textbf{Var} \text{ and $x$ is of a basic type}
+\\[1.5ex]
+
+\mathcal{C}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]} \;\texttt{:=}\; a) = \mathcal{CA}(a) : \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) :  \texttt{INSERT}\;lst \\ \qquad \text{if } lst \in \textbf{Var} \text{ and $lst$ is an $m$-dimensional list where each dimension $k$ has length $n_k$}
+\\[1.5ex]
+
+\mathcal{C}(\texttt{pass}) = \texttt{NOOP}
+\\[1.5ex]
+
+\mathcal{C}(S_1;S_2) = \mathcal{C}(S_1) : \mathcal{C}(S_2)
+\\[1.5ex]
+
+\mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}) = 
+\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP}
+\\[1.5ex]
+
+\mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}) = 
+\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP}
+\\[1.5ex]
+
+\mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}) = 
+\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP}
+\\[1.5ex]
+
+\mathcal{C}(\texttt{function}\; f(x_1 : t_1 \dots, x_n : t_n) \,\texttt{->}\, t_r \,\texttt{::}\, S_f) 
+\\ \quad = \texttt{ENV} : [\texttt{L}]\texttt{DECL}\; \mathcal{CT}(t_1)\;x_1 : \texttt{STORE}\; (x_1) :  \dots : [\texttt{L}]\texttt{DECL}\; \mathcal{CT}(t_n)\;(x_n) : \texttt{STORE}\; x_n : \mathcal{C}(S_f)
+\\[1.5ex]
+
+\mathcal{C}(\texttt{call}\; f(a_1 \dots, a_n)) = 
+\mathcal{CA}(a_n) : [\texttt{LEN}\;a_n :] \dots : \mathcal{CA}(a_1) : [\texttt{LEN}\;a_1 :]  \texttt{CALL}\; f
+\\[1.5ex]
+
+
+\mathcal{C}(\texttt{return}\; a) = 
+\mathcal{CA}(a) : \texttt{RET}
+\\[1.5ex]
+\end{array}$%
+}%
+} % <-- closes \resizebox
+\end{table}
+
+Please note that, during the compilation phase, compiler labels each compiled command with a corresponding program counter, using a simple incrementing counter. Therefore, $pc$ variables seen in the compilation of the control-flow statements are actually replaced with syntactic integer-immediates. \\
+
+Regarding the in-brackets parts of function definition and function call compilations, to give the flexibility of defining functions that accepts lists of any size, we allow declaration of  list parameters without an explicitly stated size. To cover this up, a new instruction called \texttt{LDECL} in introduced, which expects the size of the declared list to be on top of the stack, instead of statically determined by the compiler (or user). The choice between \texttt{DECL} and \texttt{LDECL} depends solely how the function in context is defined, whether the list has an (explicitly stated) static size or a dynamic size. However, since in both cases (with or without in-brackets parts) the resulting program state and scope tuple is trivially equivalent, we omit this distinction.
+
+Additionally, as high-level \texttt{SelVeri} languagae ensures that every possible execution of $S_f$ ends with a \texttt{return}-statement, one can certainly say that $\mathcal{C}(S_f)$ ends with a \texttt{RET} command. This fact will be important for our correctess proof and for convenience, it was named as the \textit{return rule}.
+
+
+
+
+
+\newpage
+\section{Provably Correct Implementation}
+
+Now that the compilation function is explicitly defined, we need to prove the correctness of our implementation; by showing that given any  \texttt{SelVeri} program $P$, we have
+
+\[
+\langle P,\, \tilde{\sigma},\, \tilde{s} \rangle \; \rightarrow^{\ast} \; \underline{\sigma}_f \quad \implies \quad 
+\langle \mathcal{C}(P),\, \epsilon,\, \tilde{\sigma},\, \tilde{s},\, 0 \rangle \; \triangleright^{\ast} \; \underline{\sigma}_f
+\]
+
+\vspace{1em}
+
+\subsection{Correctness of expressions}
+\vspace{0.5em}
+
+\subsubsection{Arithmetic}
+Given any program stack $e$, non-erroneous program state $\sigma$, scope $s$, program counter $pc$, we have:
+\[
+\forall a \in \textbf{AExp} \,\cdot\, \langle \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \; \triangleright^{\ast} \;
+\langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \underline{\sigma},\, s,\, pc + l \rangle
+\] where $l$ is the number of commands in $\mathcal{CA}(a)$.
+
+\begin{proof}
+We will prove this by structural induction on arithmetic expressions.
+
+\begin{itemize}
+    \item \textbf{case 1: } $a = v$ for some $v \in \textbf{Imm} \cap (\textbf{Int} \cup \textbf{Float})$
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(v) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \texttt{PUSH}\;v   : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CA}$)} \\
+        &\triangleright \langle c,\, \mathcal{V}(v) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{A}(v, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(definition of $\mathcal{A}$)} \\
+        &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 2: } $a = x$ for some $x \in \textbf{Var}$ and $x$ is of a basic type
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(x) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \texttt{PUSH}\;x : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CA}$)} \\
+        &\triangleright \langle c,\, \sigma(x, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{A}(x, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(definition of $\mathcal{A}$)} \\
+        &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle \\
+      \end{aligned}
+  \]
+
+  \item \textbf{case 3: } $a = lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}$ for some $m$-dimensional $lst$ where each dimension $k$ has length $n_k$
+
+  Suppose $\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) = j$ for some $j \in \mathbb{N}$ and assume for an induction on the correctness of the compilation of $j$. 
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) : \texttt{ACCESS}\;x : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CA}$)} \\
+        &= \langle \mathcal{CA}(j) : \texttt{ACCESS}\;x : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathit{I}$)} \\
+        &\triangleright^\ast \langle \texttt{ACCESS}\;x : c,\, \mathcal{A}(j, \sigma, s):  e,\, \sigma,\, s,\, pc + l_j \rangle 
+        && \text{(induction hypothesis)} \\
+        &\triangleright \langle c,\, \sigma(lst\texttt{[$\mathcal{A}(j, \sigma, s)$]}, s):  e,\, \sigma,\, s,\, pc + l_j + 1 \rangle
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \sigma(lst\texttt{[$\mathcal{A}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m), \sigma, s)$]}, s):  e,\, \sigma,\, s,\, pc + l_j + 1 \rangle
+        && \text{(definition of $\mathit{I}$)} \\
+        &= \langle c,\, \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(list flattening)} \\
+        &= \langle c,\, \mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle
+        && \text{(definition of $\mathcal{A}$)} \\
+        &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle \\
+      \end{aligned}
+  \]
+
+   \newpage 
+    \item \textbf{case 4: } $a = a_1 + a_2$ for some $a_1, a_2 \in \textbf{AExp}$ \\
+
+    Assume for an induction on the correctness of the compilation of $a_1$ and $a_2$.
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(a_1 + a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{ADD} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CA}$)} \\
+        &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{ADD} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+        && \text{(induction hypothesis 2)} \\
+        &\triangleright^{\ast} \langle \texttt{ADD} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+        && \text{(induction hypothesis 1)} \\
+        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) + \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{A}(a_1 + a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
+        && \text{(definition of $\mathcal{A}$)} \\
+        &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 5: } $a = a_1 \ast a_2$ for some $a_1, a_2 \in \textbf{AExp}$
+
+    Assume for an induction on the correctness of the compilation of $a_1$ and $a_2$.
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(a_1 \ast a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{MUL} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CA}$)} \\
+        &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{MUL} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+        && \text{(induction hypothesis 2)} \\
+        &\triangleright^{\ast} \langle \texttt{MUL} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+        && \text{(induction hypothesis 1)} \\
+        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) \cdot \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{A}(a_1 \ast a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
+        && \text{(definition of $\mathcal{A}$)} \\
+        &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 6: } $a = a_1 - a_2$ for some $a_1, a_2 \in \textbf{AExp}$
+
+    Assume for an induction on the correctness of the compilation of $a_1$ and $a_2$.
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(a_1 - a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{SUB} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CA}$)} \\
+        &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{SUB} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+        && \text{(induction hypothesis 2)} \\
+        &\triangleright^{\ast} \langle \texttt{SUB} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+        && \text{(induction hypothesis 1)} \\
+        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) - \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{A}(a_1 - a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
+        && \text{(definition of $\mathcal{A}$)} \\
+        &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 7.1: } $a = a_1 / a_2$ for some $a_1, a_2 \in \textbf{AExp}$ and $(a_1 / a_2)$ has no subterm of type \textbf{Float}
+
+    Assume for an induction on the correctness of the compilation of $a_1$ and $a_2$.
+
+        \begin{itemize}
+            \item \textbf{subcase 7.1.1: } $\mathcal{A}(a_2, \sigma, s) \neq 0$
+
+                \[
+              \begin{aligned}
+                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+                &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+                && \text{(definition of $\mathcal{CA}$)} \\
+                &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+                && \text{(induction hypothesis 2)} \\
+                &\triangleright^{\ast} \langle \texttt{iDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                && \text{(induction hypothesis 1)} \\
+                &\triangleright \langle c,\, \left\lfloor  \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s)\right\rfloor : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+                && \text{(operational semantics)} \\
+                &= \langle c,\, \mathcal{A}(a_1 / a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
+                && \text{(definition of $\mathcal{A}$)} \\
+                &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+              \end{aligned}
+          \]
+
+            \item \textbf{subcase 7.1.2: } $\mathcal{A}(a_2, \sigma, s) = 0$
+
+            \[
+              \begin{aligned}
+                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+                &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+                && \text{(definition of $\mathcal{CA}$)} \\
+                &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+                && \text{(induction hypothesis 2)} \\
+                &= \langle \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, 0 : e,\, \sigma,\, s,\, pc + l_2 \rangle \\
+                &\triangleright^{\ast} \langle \texttt{iDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : 0 : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                && \text{(induction hypothesis 1)} \\
+                &\triangleright \langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle 
+                && \text{(operational semantics)} \\
+                &= \langle c,\, \mathcal{A}(a_1 / a_2, \sigma, s) : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle
+                && \text{(definition of $\mathcal{A}$)} \\
+                &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+              \end{aligned}
+          \]
+            
+        \end{itemize}
+
+    \item \textbf{case 7.2: } $a = a_1 / a_2$ for some $a_1, a_2 \in \textbf{AExp}$ and $(a_1 / a_2)$ has at least one subterm of type \textbf{Float}
+
+    Assume for an induction on the correctness of the compilation of $a_1$ and $a_2$.
+
+        \begin{itemize}
+            \item \textbf{subcase 7.2.1: } $\mathcal{A}(a_2, \sigma, s) \neq 0.0$
+
+                \[
+              \begin{aligned}
+                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+                &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{fDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+                && \text{(definition of $\mathcal{CA}$)} \\
+                &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{fDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+                && \text{(induction hypothesis 2)} \\
+                &\triangleright^{\ast} \langle \texttt{fDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                && \text{(induction hypothesis 1)} \\
+                &\triangleright \langle c,\, \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+                && \text{(operational semantics)} \\
+                &= \langle c,\, \mathcal{A}(a_1 / a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
+                && \text{(definition of $\mathcal{A}$)} \\
+                &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+              \end{aligned}
+          \]
+
+            \item \textbf{subcase 7.2.2: } $\mathcal{A}(a_2, \sigma, s) = 0.0$
+
+            \[
+              \begin{aligned}
+                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+                &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{fDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
+                && \text{(definition of $\mathcal{CA}$)} \\
+                &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{fDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
+                && \text{(induction hypothesis 2)} \\
+                &= \langle \mathcal{CA}(a_1) : \texttt{fDIV} :  c,\, 0.0 : e,\, \sigma,\, s,\, pc + l_2 \rangle \\
+                &\triangleright^{\ast} \langle \texttt{fDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : 0.0 : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                && \text{(induction hypothesis 1)} \\
+                &\triangleright \langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle 
+                && \text{(operational semantics)} \\
+                &= \langle c,\, \mathcal{A}(a_1 / a_2, \sigma, s) : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle
+                && \text{(definition of $\mathcal{A}$)} \\
+                &= \langle c,\, \mathcal{A}(a, \sigma, s) : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle \\
+              \end{aligned}
+          \]
+            
+        \end{itemize}    
+\end{itemize}
+
+where $l_1$ and $l_2$ are the number of commands in $\mathcal{CA}(a_1)$ and $\mathcal{CA}(a_2)$, respectively.\\
+Observe that, at each case, the increase in $pc$ is exactly equal to the number of commands in $\mathcal{CA}(a)$, as desired.
+
+\end{proof}
+
+\newpage
+\subsubsection{Boolean}
+Given any program stack $e$, non-erroneous program state $\sigma$, scope $s$, program counter $pc$; if $b$ does not have a erroneous subterm:
+\[
+\forall b \in \textbf{BExp} \,\cdot\, \langle \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \; \triangleright^{\ast} \;
+\langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l \rangle
+\] where $l$ is the number of commands in $\mathcal{CB}(b)$.
+
+\begin{proof}
+We will prove this by an induction on the structure of boolean expressions.
+
+\begin{itemize}
+    \item \textbf{case 1: } $b = \texttt{true}$ for some $x \in \textbf{Imm} \cap (\textbf{Int} \cup \textbf{Float})$
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CB}(\texttt{true}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \texttt{PUSH 1}   : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CB}$)} \\
+        &\triangleright \langle c,\, \mathcal{V}(\texttt{1}) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, 1 : e,\, \sigma,\, s,\, pc+1 \rangle 
+        \\
+        &= \langle c,\, \mathcal{B}(\texttt{true}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(definition of $\mathcal{B}$)} \\
+        &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 2: } $b = \texttt{false}$ for some $x \in \textbf{Var}$
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CB}(\texttt{false}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \texttt{PUSH 0}   : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CB}$)} \\
+        &\triangleright \langle c,\, \mathcal{V}(\texttt{0}) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle 
+        \\
+        &= \langle c,\, \mathcal{B}(\texttt{false}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        && \text{(definition of $\mathcal{B}$)} \\
+        &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 3: } $b \in \textbf{AExp}$
+
+     \begin{itemize}
+         \item \textbf{subcase 3.1: } $\mathcal{A}(a, \sigma, s) \neq 0$
+
+         \[
+          \begin{aligned}
+            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &= \langle \mathcal{CB}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+            &= \langle \mathcal{CA}(a) : \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} : c,\, e,\, \sigma,\, s,\, pc \rangle
+            && \text{(definition of $\mathcal{CB}$)} \\
+            &\triangleright^\ast \langle \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} : c,\, \mathcal{A}(a, \sigma, s): e,\, \sigma,\, s,\, pc + l_a \rangle
+            && \text{(correctness of $\mathcal{CA}$)} \\
+            &\triangleright \langle \texttt{EQ} : \texttt{NEG} :  c,\, 0 : \mathcal{A}(a, \sigma, s): e,\, \sigma,\, s,\, pc + l_a + 1 \rangle
+            && \text{(operational semantics)} \\
+            &\triangleright \langle \texttt{NEG} : c,\, (0 = \mathcal{A}(a, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_a + 2 \rangle
+            && \text{(operational semantics)} \\
+            &= \langle \texttt{NEG} : c,\, 0 : e,\, \sigma,\, s,\, pc + l_a + 2 \rangle
+            && \text{(boolean algebra)} \\
+            &\triangleright \langle c,\, 1 : e,\, \sigma,\, s,\, pc + l_a + 3 \rangle
+            && \text{(operational semantics)} \\
+            &= \langle c,\, \mathcal{B}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a + 3 \rangle
+            && \text{(definition of $\mathcal{B}$)} \\
+            &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a + 3 \rangle
+            \\
+          \end{aligned}
+      \]
+
+        \newpage
+         \item \textbf{subcase 3.2: } $\mathcal{A}(a, \sigma, s) = 0$
+
+         \[
+          \begin{aligned}
+            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &= \langle \mathcal{CB}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+            &= \langle \mathcal{CA}(a) : \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} : c,\, e,\, \sigma,\, s,\, pc \rangle
+            && \text{(definition of $\mathcal{CB}$)} \\
+            &\triangleright^\ast \langle \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} : c,\, \mathcal{A}(a, \sigma, s): e,\, \sigma,\, s,\, pc + l_a \rangle
+            && \text{(correctness of $\mathcal{CA}$)} \\
+            &\triangleright \langle \texttt{EQ} : \texttt{NEG} :  c,\, 0 : \mathcal{A}(a, \sigma, s): e,\, \sigma,\, s,\, pc + l_a + 1 \rangle
+            && \text{(operational semantics)} \\
+            &\triangleright \langle \texttt{NEG} : c,\, (0 = \mathcal{A}(a, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_a + 2 \rangle
+            && \text{(operational semantics)} \\
+            &= \langle \texttt{NEG} : c,\, (0 = 0) : e,\, \sigma,\, s,\, pc + l_a + 2 \rangle
+            \\
+            &= \langle \texttt{NEG} : c,\, 1 : e,\, \sigma,\, s,\, pc + l_a + 2 \rangle
+            && \text{(boolean algebra)} \\
+            &\triangleright \langle c,\, 0 : e,\, \sigma,\, s,\, pc + l_a + 3 \rangle
+            && \text{(operational semantics)} \\
+            &= \langle c,\, \mathcal{B}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a + 3 \rangle
+            && \text{(definition of $\mathcal{B}$)} \\
+            &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a + 3 \rangle
+            \\
+          \end{aligned}
+      \]
+         
+     \end{itemize}
+
+    
+
+    \item \textbf{case 4: } $b = (a_1 \;\texttt{=}\; a_2)$ for some $a_1, a_2 \in \textbf{AExp}$
+
+    \begin{itemize}
+        \item \textbf{subcase 4.1: } $\mathcal{A}(a_1, \sigma, s) = \mathcal{A}(a_2, \sigma, s)$
+
+        \[
+          \begin{aligned}
+            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &= \langle \mathcal{CB}(a_1 \;\texttt{=}\; a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+            &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{EQ} : c,\, e,\, \sigma,\, s,\, pc \rangle
+            && \text{(definition of $\mathcal{CB}$)} \\
+            &\triangleright^\ast \langle \mathcal{CA}(a_1) : \texttt{EQ} : c,\, \mathcal{A}(a_2, \sigma, s): e,\, \sigma,\, s,\, pc + l_{a_1} \rangle
+            && \text{(correctness of $\mathcal{CA}$)} \\
+            &\triangleright^\ast \langle \texttt{EQ} : c,\, \mathcal{A}(a_1, \sigma, s) :\mathcal{A}(a_2, \sigma, s): e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} \rangle
+            && \text{(correctness of $\mathcal{CA}$)} \\
+            &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) = \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle
+            && \text{(operational semantics)} \\
+            &= \langle c,\, 1 : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle \\
+            &= \langle c,\, \mathcal{B}(a_1 \;\texttt{=}\; a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle
+            && \text{(definition of $\mathcal{B}$)} \\
+            &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1\rangle
+            \\
+          \end{aligned}
+      \]
+
+        \item \textbf{subcase 4.1: } $\mathcal{A}(a_1, \sigma, s) \neq \mathcal{A}(a_2, \sigma, s)$
+
+        \[
+          \begin{aligned}
+            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &= \langle \mathcal{CB}(a_1 \;\texttt{=}\; a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+            &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{EQ} : c,\, e,\, \sigma,\, s,\, pc \rangle
+            && \text{(definition of $\mathcal{CB}$)} \\
+            &\triangleright^\ast \langle \mathcal{CA}(a_1) : \texttt{EQ} : c,\, \mathcal{A}(a_2, \sigma, s): e,\, \sigma,\, s,\, pc + l_{a_1} \rangle
+            && \text{(correctness of $\mathcal{CA}$)} \\
+            &\triangleright^\ast \langle \texttt{EQ} : c,\, \mathcal{A}(a_1, \sigma, s) :\mathcal{A}(a_2, \sigma, s): e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} \rangle
+            && \text{(correctness of $\mathcal{CA}$)} \\
+            &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) = \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle
+            && \text{(operational semantics)} \\
+            &= \langle c,\, 0 : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle \\
+            &= \langle c,\, \mathcal{B}(a_1 \;\texttt{=}\; a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle
+            && \text{(definition of $\mathcal{B}$)} \\
+            &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{a_1} + l_{a_2} + 1 \rangle
+            \\
+          \end{aligned}
+      \]
+    \end{itemize}
+    
+
+    \item \textbf{case 5: } $b = (\texttt{not}\; b')$ for some $b' \in \textbf{BExp}$
+
+    Assume for an induction on the correctness of the compilation of $b'$.
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CB}(\texttt{not}\; b') : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \mathcal{CB}(b') : \texttt{NEG} : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CB}$)} \\
+        &\triangleright^\ast \langle \texttt{NEG} : c,\, \mathcal{B}(b', \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b'} \rangle 
+        && \text{(induction hypothesis)} \\
+        &\triangleright \langle c,\, \neg\mathcal{B}(b', \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b'} + 1 \rangle 
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{B}(\texttt{not}\; b', \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b'} + 1 \rangle 
+        && \text{(definition of $\mathcal{B}$)} \\
+        &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b'} + 1 \rangle \\
+      \end{aligned}
+  \]
+
+    \item \textbf{case 6: } $b = (b_1 \;\texttt{and}\; b_2)$ for some $b_1, b_2 \in \textbf{BExp}$
+
+    Assume for an induction on the correctness of the compilations of $b_1$ and $b_2$.
+
+    \[
+      \begin{aligned}
+        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CB}(b_1 \;\texttt{and}\; b_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+        &= \langle \mathcal{CB}(b_2) : \mathcal{CB}(b_1) : \texttt{AND} : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        && \text{(definition of $\mathcal{CB}$)} \\
+        &\triangleright^\ast \langle \mathcal{CB}(b_1) : \texttt{AND} : c,\, \mathcal{B}(b_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b_2} \rangle 
+        && \text{(induction hypothesis 2)} \\
+        &\triangleright^\ast \langle \texttt{AND} : c,\, \mathcal{B}(b_1, \sigma, s) : \mathcal{B}(b_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b_2} + l_{b_1} \rangle 
+        && \text{(induction hypothesis 2)} \\
+        &\triangleright \langle c,\, (\mathcal{B}(b_1, \sigma, s) \,\land\, \mathcal{B}(b_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b_2} + l_{b_1} + 1 \rangle
+        && \text{(operational semantics)} \\
+        &= \langle c,\, \mathcal{B}(b_1 \;\texttt{and}\; b_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b_2} + l_{b_1} + 1 \rangle 
+        && \text{(definition of $\mathcal{B}$)} \\
+        &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_{b_2} + l_{b_1} + 1 \rangle \\
+      \end{aligned}
+  \]
+\end{itemize}
+
+where $l_{a'}$ denotes the number of commands in $\mathcal{CA}(a')$ for all $a' \in \textbf{AExp}$ and $l_{b'}$ denotes the number of commands in $\mathcal{CB}(b')$ for all $b' \in \textbf{BExp}$.\\
+Observe that in each case the increase in $pc$ is exactly equal to the number of commands in $\mathcal{CB}(b)$, as desired.
+
+\end{proof}
+
+\vspace{2em}
+
+\subsection{Correctness of the statements}
+
+Now, as the correctness of arithmetic and boolean expressions is proven, we may restate and prove the correctness of our compiler:
+
+\[
+\langle P,\, \underline{\sigma},\, s \rangle \; \rightarrow^{\ast} \; \langle \underline{\sigma}_f,\, s_f \rangle \quad \implies \quad 
+\langle \mathcal{C}(P),\, e,\, \underline{\sigma},\, s,\, pc,\, ras \rangle \; \triangleright^{\ast} \; \langle \underline{\sigma}_f,\, s_f,\, pc + l_P,\, ras \rangle 
+\] where $P$ is any \texttt{SelVeri} program and $l_P$ is the number of commands in $\mathcal{C}(P)$. \\
+
+Observe that the implication above mentions the correctness of only terminating programs. However, we also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct, and we will present our arguments in the \textbf{case 6} of the following proof.
+
+\begin{proof}
+If $\underline{\sigma}$ is an erroneous program state, then by section \textbf{2.2.4} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$, the above implication is obviously true \footnote{Furthermore, $\sigma = \sigma_f$ and $s = s_f$, in this case.}.  Therefore, from now on, we assume that $\underline{\sigma}$ represents a non-erroneous program state and will use $\sigma$ to denote it. \\
+
+We will prove the correctness of $\mathcal{C}$ via a strong induction on the number of execution steps, by utilizing the fact that sub-statements naturally require a lesser number of execution steps. The correctness of declarations and \texttt{pass} statements establish our base case, since their compilation include only one command.
+
+\begin{itemize}
+    \item \textbf{(base) case 1:} $P = (x \;\texttt{:}\; t)$
+
+        \begin{itemize}
+            \item \textbf{subcase 1.1:} $t \in \textbf{Type} \land s(x) = \textbf{Void}$
+
+            \[
+              \begin{aligned}
+              \langle P,\, \sigma,\, s \rangle
+              &=\langle x \;\texttt{:}\; t,\, \sigma,\, s \rangle \\
+              &\rightarrow \langle \sigma[x \mapsto \textbf{0}] ,\, s[x \mapsto t] \rangle
+              && [ \text{decl}_{\text{os}} ] \\   
+              \end{aligned}
+          \]
+          
+          and
+
+          \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(x \;\texttt{:}\; t),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \texttt{DECL t},\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\   
+              &= \langle \epsilon,\, e,\, \sigma[x \mapsto \textbf{0}] ,\, s[x \mapsto t],\, pc+1 \rangle
+              && \text{(operational semantics)} \\ 
+              \end{aligned}
+          \]
+
+            \item \textbf{subcase 1.2:} $t \notin \textbf{Type} \lor s(x) \neq \textbf{Void}$
+
+            \[
+              \begin{aligned}
+              \langle P,\, \sigma,\, s \rangle
+              &=\langle x \;\texttt{:}\; t,\, \sigma,\, s \rangle \\
+              &\rightarrow \hat{\sigma}
+              && [ \text{decl}^\bot_{\text{os}} ] \\   
+              \end{aligned}
+          \]
+
+          and
+
+          \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(x \;\texttt{:}\; t),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \texttt{DECL t},\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\   
+              &= \langle \epsilon,\, e,\, \hat{\sigma} ,\, s,\, pc+1 \rangle
+              && \text{(operational semantics)} \\ 
+              \end{aligned}
+          \]
+            
+        \end{itemize}
+
+    \item \textbf{(base) case 2:} $P =\texttt{pass}$\\
+
+    \[
+      \begin{aligned}
+      \langle P,\, \sigma,\, s \rangle
+      &=\langle \texttt{pass},\, \sigma,\, s \rangle \\
+      &\rightarrow \langle \sigma ,\, s \rangle
+      && [ \text{pass}_{\text{os}} ] \\   
+      \end{aligned}
+  \]
+  
+  and
+
+  \[
+      \begin{aligned}
+      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &= \langle \mathcal{C}(\texttt{pass}),\, e,\, \sigma,\, s,\, pc \rangle \\
+      &= \langle \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+      && \text{(definition of $\mathcal{C}$)} \\   
+      &= \langle \epsilon,\, e,\, \sigma ,\, s,\, pc+1 \rangle
+      && \text{(operational semantics)} \\ 
+      \end{aligned}
+  \]
+
+    \item \textbf{case 3:} $P = (x \;\texttt{:=}\; a)$\\
+
+    Assume that $x$ is of a basic type and $\mathcal{A}(a, \sigma, s) \neq \bot \,\land\, \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(x)}$, then:
+
+    \[
+      \begin{aligned}
+      \langle P,\, \sigma,\, s \rangle
+      &=\langle x \;\texttt{:=}\; a,\, \sigma,\, s \rangle \\
+      &\sigma[x \mapsto \mathcal{A}(a, \sigma, s)]
+      && [ \text{ass}_{\text{os}} ] \\   
+      \end{aligned}
+  \]
+  
+  then
+
+  \[
+      \begin{aligned}
+      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &= \langle \mathcal{C}(x \;\texttt{:=}\; a),\, e,\, \sigma,\, s,\, pc \rangle \\
+      &= \langle \mathcal{CA}(a) : \texttt{STORE}\;x ,\, e,\, \sigma,\, s,\, pc \rangle
+      && \text{(definition of $\mathcal{C}$)} \\   
+      &\triangleright^\ast \langle \texttt{STORE}\;x ,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a \rangle
+      && \text{(correctness of $\mathcal{CA}$)} \\ 
+      &= \langle \epsilon ,\,  e,\, \sigma[x \mapsto \mathcal{A}(a, \sigma, s)],\, s,\, pc + l_a + 1 \rangle
+      && \text{(operational semantics)} \\ 
+      \end{aligned}
+  \]
+  \item \textbf{case 4:} $P = (lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]} \;\texttt{:=}\; a)$\\
+
+    Assume that $lst$ is an $m$-dimensional list where each dimension $k$ has length $n_k$ and and $\mathcal{A}(a, \sigma, s) \neq \bot \,\land\, \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(x)}$, then:
+
+    \[
+      \begin{aligned}
+      \langle P,\, \sigma,\, s \rangle
+      &=\langle lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]} \;\texttt{:=}\; a,\, \sigma,\, s \rangle \\
+      &\sigma[lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)]
+      && [ \text{ass}^{\text{list}}_{\text{os}} ] \\   
+      \end{aligned}
+  \]
+  
+  then
+
+  \[
+      \begin{aligned}
+      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &= \langle \mathcal{C}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]} \;\texttt{:=}\; a),\, e,\, \sigma,\, s,\, pc \rangle \\
+      &= \langle \mathcal{CA}(a) : \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) :  \texttt{INSERT}\;lst ,\, e,\, \sigma,\, s,\, pc \rangle
+      && \text{(definition of $\mathcal{C}$)} \\   
+      &\triangleright^\ast \langle \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) :  \texttt{INSERT}\;lst ,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a \rangle
+      && \text{(correctness of $\mathcal{CA}$)} \\ 
+      &\triangleright^\ast \langle \texttt{INSERT}\;lst ,\, \mathcal{A}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m), \sigma, s) : \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a + l_I \rangle
+      && \text{(correctness of $\mathcal{CA}$)} \\ 
+      &\triangleright \langle \epsilon ,\, e,\, \sigma[lst\texttt{[$\mathcal{A}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m), \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)],\, s,\, pc + l_a + l_I + 1\rangle
+      && \text{(operational semantics)} \\
+      &= \langle \epsilon ,\, e,\, \sigma[lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)],\, s,\, pc + l_a + l_I + 1 \rangle
+      && \text{(list flattening)} \\ 
+      \end{aligned}
+  \]
+    
+
+    \item \textbf{case 5:} $P = (\texttt{if } b \texttt{ then } S \texttt{ fi})$\\
+
+        \begin{itemize}
+            \item \textbf{subcase 5.1:} $\mathcal{B}(b, \sigma, s) = 1$
+
+            Assume
+
+                \[
+                  \begin{aligned}
+                  \langle P,\, \sigma,\, s \rangle
+                  &=\langle \texttt{if } b \texttt{ then } S \texttt{ fi},\, \sigma,\, s \rangle \\
+                  &=\langle \texttt{if } b \texttt{ then } S \texttt{ else pass fi},\, \sigma,\, s \rangle 
+                  && \text{(semantical equivalance)}\\
+                  &\rightarrow \langle S\texttt{;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
+                  && [\text{if}^1_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \sigma'_c ,\, s'_c \rangle 
+                  && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \underline{\sigma}' ,\, s' \rangle
+                  && [\text{scope}_{\text{os}}]   \\
+                  \end{aligned}
+              \]
+
+            and assume for an induction hypothesis, that is, the compilation of $S$ is correct, then
+
+            \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\   
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              && \text{(correctness of $\mathcal{CB}$)} \\ 
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\ 
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{NOOP} ,\, e',\, \sigma_c',\, s_c',\, pc + l_b + l_S + 2 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \texttt{NOOP} ,\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 3 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \epsilon ,\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 4 \rangle
+              && \text{(operational semantics)} \\ 
+              \end{aligned}
+          \]
+
+
+        \item \textbf{subcase 5.2:} $\mathcal{B}(b, \sigma, s) = 0$
+
+            Assume
+
+                \[
+                  \begin{aligned}
+                  \langle P,\, \sigma,\, s \rangle
+                  &=\langle \texttt{if } b \texttt{ then } S \texttt{ fi},\, \sigma,\, s \rangle \\
+                  &=\langle \texttt{if } b \texttt{ then } S \texttt{ else pass fi},\, \sigma,\, s \rangle 
+                  && \text{(semantical equivalance)}\\
+                  &\rightarrow \langle \texttt{pass;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
+                  && [\text{if}^0_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle 
+                  && ([\text{pass}_{\text{os}}] \,,\, [\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \sigma ,\, s \rangle
+                  && [\text{scope}_{\text{os}}]   \\
+                  \end{aligned}
+              \]
+
+            then,
+
+            \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\   
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              && \text{(correctness of $\mathcal{CB}$)} \\ 
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\  
+              &\triangleright \langle \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc_{\texttt{NOOP}} \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \epsilon ,\, e,\, \sigma,\, s,\ pc_{\texttt{NOOP}} + 1 \rangle
+              && \text{(operational semantics)} \\ 
+              \end{aligned}
+          \]
+                
+        \end{itemize}
+
+    \item \textbf{case 6:} $P = (\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi})$\\
+
+    \begin{itemize}
+            \item \textbf{subcase 6.1:} $\mathcal{B}(b, \sigma, s) = 1$
+
+            Assume
+
+                \[
+                  \begin{aligned}
+                  \langle P,\, \sigma,\, s \rangle
+                  &=\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi},\, \sigma,\, s \rangle \\
+                  &\rightarrow \langle S_1\texttt{;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
+                  && [\text{if}^1_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \sigma'_c ,\, s'_c \rangle 
+                  && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \underline{\sigma}' ,\, s' \rangle
+                  && [\text{scope}_{\text{os}}]   \\
+                  \end{aligned}
+              \]
+
+            and assume for an induction hypothesis, that is, the compilation of $S_1$ is correct, then
+
+            \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              && \text{(correctness of $\mathcal{CB}$)} \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \sigma'_c ,\, s'_c,\, pc + l_b + l_{S_1} + 2 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc + l_b + l_{S_1} + 3 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{NOOP}} \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \epsilon,\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{NOOP}} + 1 \rangle
+              && \text{(operational semantics)} \\
+              \end{aligned}
+          \]
+
+        \item \textbf{subcase 6.2:} $\mathcal{B}(b, \sigma, s) = 0$
+
+            Assume
+
+                \[
+                  \begin{aligned}
+                  \langle P,\, \sigma,\, s \rangle
+                  &=\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi},\, \sigma,\, s \rangle \\
+                  &\rightarrow \langle S_2\texttt{;endscope},\, \tilde{\sigma_c} ,\, \tilde{s_c} \rangle
+                  && [\text{if}^1_{\text{os}}]   \\
+                  &\rightarrow^\ast \langle \texttt{endscope},\, \sigma'_c ,\, s'_c \rangle 
+                  && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+                  &\rightarrow \langle \underline{\sigma}' ,\, s' \rangle
+                  && [\text{scope}_{\text{os}}]   \\
+                  \end{aligned}
+              \]
+
+            and assume for an induction hypothesis, that is, the compilation of $S_2$ is correct, then
+
+            \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              && \text{(correctness of $\mathcal{CB}$)} \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc_{\texttt{CSCOPE}_2} \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc_{\texttt{CSCOPE}_2} + 1\rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \underline{\sigma_c}' ,\, s'_c,\, pc_{\texttt{CSCOPE}_2} + l_{S_2} + 1 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{CSCOPE}_2} + l_{S_2} + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \epsilon,\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{CSCOPE}_2} + l_{S_2} + 3 \rangle
+              && \text{(operational semantics)} \\
+              \end{aligned}
+          \]
+                
+        \end{itemize}
+
+    \item \textbf{case 7:} $P = (\texttt{while } b \texttt{ do } S \texttt{ od})$\\
+
+        \begin{itemize}
+            \item \textbf{subcase 7.1:} $\mathcal{B}(b, \sigma, s) = 0$
+
+            Assume
+
+            \[
+                  \begin{aligned}
+                  \langle P,\, \sigma,\, s \rangle
+                  &=\langle \texttt{while } b \texttt{ do } S \texttt{ od},\, \sigma,\, s \rangle \\
+                  &\rightarrow \langle \sigma ,\, s \rangle
+                  && [\text{while}^0_{\text{os}}]   \\
+                  \end{aligned}
+              \]
+
+            then,
+
+            \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\   
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
+              && \text{(correctness of $\mathcal{CB}$)} \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 0 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{NOOP},\, e,\, \sigma ,\, s,,\, pc_{\texttt{NOOP}} \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \epsilon,\, e,\, \sigma ,\, s,,\, pc_{\texttt{NOOP}} + 1 \rangle
+              && \text{(operational semantics)} \\
+              \end{aligned}
+          \]
+
+
+          \item \textbf{subcase 7.2:} $\mathcal{B}(b, \sigma, s) = 1$
+
+          \[
+              \begin{aligned}
+              \langle P,\, \sigma,\, s \rangle
+              &=\langle \texttt{while } b \texttt{ do } S \texttt{ od},\, \sigma,\, s \rangle \\
+              &\rightarrow \langle S\texttt{;endscope} \texttt{;while } b \texttt{ do } S \texttt{ od},\, \tilde{\sigma_c},\, \tilde{s_c} \rangle
+              && [\text{while}^1_{\text{os}}]   \\
+              &\rightarrow^\ast \langle \texttt{endscope} \texttt{;while } b \texttt{ do } S \texttt{ od},\, \sigma'_c,\, s'_c \rangle
+              && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+              &\rightarrow \langle \texttt{while } b \texttt{ do } S \texttt{ od},\, \underline{\sigma}',\, s' \rangle
+              && ([\text{scope}_{\text{os}}] \,,\, [\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+              &&    \\
+              \end{aligned}
+          \]
+
+          and assume for an induction hypothesis, that is, the compilation of $S$ is correct, then
+
+          \[
+              \begin{aligned}
+              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e,\, \sigma,\, s,\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of $\mathcal{C}$)} \\   
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
+              && \text{(correctness of $\mathcal{CB}$)} \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b + 1 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \sigma'_c,\, s'_c,\, pc + l_b + l_S + 2 \rangle
+              && \text{(induction hypothesis)} \\
+              &\triangleright \langle \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 3 \rangle
+              && \text{(operational semantics)} \\
+              &\triangleright \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc_b \rangle
+              && \text{(operational semantics)} \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
+              &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
+              \end{aligned}
+          \]
+        \end{itemize}
+
+        However, the proofs above are not enough to establish the correctness of the compiled \texttt{while}-statements, because they only demonstrate one step of iteration. Nonetheless, with a simple induction, we can generalize this argument to claim that at any step of iteration, the compilation is correct, as the proofs above show that at any given program state and scope, the compilation of one iteration is correct. To put it more explicitly, the cases of 0 iterations (\textbf{subcase 6.1}) and 1 iteration (\textbf{subcase 6.2}) are proven to be correct. Assuming that $i$ iterations are compiled correctly, \textbf{subcase 6.2} also prove that $i+1$ iterations are compiled correctly. Ultimaltely, one can certainly say that any terminating \texttt{SelVeri} loop is compiled correctly.
+
+        Until so far, we have omitted non-terminating programs in our correctness proof. But, the only possible source of non-termination of a \texttt{while}-loop is the semantical value of the boolean guard $b = 1$ being a loop invariant. Although we cannot talk about a terminating program state in such a case; at any execution step, we know that the execution thus far has been correct and will continue to be correct.
+
+
+  \item \textbf{case 8:} $P = \texttt{call}\; f(a_1 \dots, a_n)$
+
+  Assume that $s'(x_i) = t_i$ and $\sigma'(x_i) = \mathcal{A}(a_i, \sigma, s)$ for $i = 1,2,\dots,n$
+
+    \[
+      \begin{aligned}
+      \langle P,\, \sigma,\, s \rangle
+      &=\langle \texttt{call}\; f(a_1 \dots, a_n),\, \sigma,\, s \rangle \\
+      &\rightarrow \langle x_1 : t_1 \texttt{;} x_1 \,\texttt{:=}\, v_1\, \texttt{;} \dots \texttt{;} x_n : t_n \texttt{;} x_n \,\texttt{:=}\, v_n\, \texttt{;} S_f,\, \tilde{\sigma}', \tilde{s}' \rangle
+      && [\text{call}_{\text{os}}]   \\
+      &\rightarrow^\ast \langle S_f,\, \sigma' ,\, s' \rangle
+      && (\text{operational semantics})   \\
+      &\rightarrow^\ast \langle \texttt{return}\; a,\, \sigma'' \footnotemark ,\, s'' \rangle
+      && (\text{operational semantics},\, \textit{return rule})   \\
+      &\rightarrow \langle \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma'', s'')],\; s[\texttt{retvar} \mapsto s''(a)] \rangle
+      && [\text{ret}_{\text{os}}] \\
+      \end{aligned}
+  \]
+
+by the induction hypothesis, the compilation of $S_f$ is correct, since the execution of the function body needs lesser steps than the whole function call; then
+
+\[
+  \begin{aligned}
+  \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc,\, ras \rangle
+  &= \langle \mathcal{C}(\texttt{call}\; f(a_1 \dots, a_n)),\, e,\, \sigma,\, s,\, pc \rangle \\
+  &= \langle \mathcal{CA}(a_n) : \dots : \mathcal{CA}(a_1) : \texttt{CALL}\; f,\, e,\, \sigma,\, s,\, pc,\, ras \rangle
+  && (\text{definition of $\mathcal{C}$})   \\
+  &\triangleright^\ast \langle  \texttt{CALL}\; f,\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc+n,\, ras \rangle
+  && (\text{correctness of $\mathcal{CA}$})   \\
+  &\triangleright \langle  P[pc_f],\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
+  && (\text{operational semantics})   \\
+  &= \langle  \texttt{ENV} : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
+  && (\text{definition of $\mathcal{C}$})   \\
+  &\triangleright \langle  \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \tilde{\sigma}', \tilde{s}',\, pc_f + 1,\, (pc+n+1) : ras \rangle
+  && (\text{operational semantics})   \\
+  &\triangleright^\ast \langle \mathcal{C}(S_f),\, e,\, \sigma',\, s',\, pc_f + 2n+1,\, (pc+n+1) : ras \rangle
+  && (\text{operational semantics})   \\
+  &\triangleright^\ast \langle \mathcal{C}(\texttt{return}\; a),\, e,\, \sigma'',\, s'',\, pc_f + l + 2n+1,\, (pc+n+1) : ras \rangle
+  && (\text{induction hypothesis},\, \textit{return rule})   \\
+  &=\langle \mathcal{CA}(a) : \texttt{RET},\, e,\, \sigma'',\, s'',\, pc_f + l + 2n+1,\, (pc+n+1) : ras \rangle
+  && (\text{definition of $\mathcal{C}$})   \\
+  &\triangleright^\ast \langle \texttt{RET},\, \mathcal{A}(a, \sigma'', s'') : e,\, \sigma'',\, s'',\, pc_f + l' + 2n+1,\, (pc+n+1) : ras \rangle
+  && (\text{correctness of $\mathcal{CA}$})   \\
+  &\triangleright \langle P[pc+n+1:],\, e,\, \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma'', s'')],\; s[\texttt{retvar} \mapsto s''(a)],\, pc+n+1,\, ras \rangle
+  && (\text{operational semantics})   \\
+  
+  \end{aligned}
+\]
+
+Similar to our proof of the correctness of \texttt{while}-statements, this assumes a finite depth of recursion (0, if there is no recursion) as we have assumed termination. Nevertheless, since at each finite step of execution, the correctness of the executed statements is ensured by the proof above, with an argumentation similar to non-terminationg loops, we can conclude that infinite recursive calls of \texttt{SelVeri} are compiled correctly. \\
+
+\footnotetext{Note that we do not cover the case where the execution of $S_f$ leads to an erroneous state, as the last semantic rule in the section \textbf{2.2.4} of this document and [$\text{err}_{\text{os}}$] rule of high-level semantics ensure the correctness of the translation in this case.}
+
+  \item \textbf{case 9:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
+
+    Assume
+
+    \[
+      \begin{aligned}
+      \langle P,\, \sigma,\, s \rangle
+      &=\langle S_1\texttt{;}S_2,\, \sigma,\, s \rangle \\
+      &\rightarrow^\ast \langle S_2,\, \underline{\sigma}' ,\, s' \rangle
+      && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}])   \\
+      &\rightarrow^\ast \langle \underline{\sigma}'' ,\, s'' \rangle
+      && ([\text{comp}^1_{\text{os}}] \,,\, [\text{comp}^2_{\text{os}}]) \\
+      \end{aligned}
+  \]
+  
+  and, assume for an induction, that is the compilation of $S_1$ and $S_2$ are correct, then
+
+  \[
+      \begin{aligned}
+      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &= \langle \mathcal{C}(S_1\texttt{;}S_2),\, e,\, \sigma,\, s,\, pc \rangle \\
+      &= \langle \mathcal{C}(S_1) : \mathcal{C}(S_2) ,\, e,\, \sigma,\, s,\, pc \rangle
+      && \text{(definition of $\mathcal{C}$)} \\   
+      &= \langle \mathcal{C}(S_2) ,\, e',\, \underline{\sigma}' ,\, s',\, pc + l_{S_1} \rangle
+      && \text{(induction hypothesis 1)} \\   
+      &= \langle \epsilon ,\, e'',\, \underline{\sigma}'' ,\, s'',\, pc + l_{S_1} + l_{S_2} \rangle
+      && \text{(induction hypothesis 2)} \\ 
+      \end{aligned}
+  \]
+
+  
+    
+
+\end{itemize}
+
+Observe that at each case, the resulting program state and scope tuple is the equal for \texttt{SelVeri} and \texttt{SelVerIR}, the difference between initial and final program counters are equal to $l_p$ and $ras$ is not altered, therefore concluding \footnote{Note that we need not prove the correctness of \texttt{return}-statements separately; as they are always a part of function calls, case 7 also establishes the correctness of \texttt{return}-statements} the proof.
+\\
+\end{proof}
+
+\vspace{1em}
+
+\newpage
+Cautious readers may notice that some (sub)cases including erroneous program states (either as input or output) is omitted in our correctness proofs. One of the following reasons is the justification for this omittance:
+
+\begin{enumerate}
+    \item Such a case cannot be encountered in the range of neither $\mathcal{CA}$ nor $\mathcal{CB}$ nor $\mathcal{C}$.
+
+    \item Such an erroneous case can be detected during compile-time, therefore no \texttt{SelVerIR} code inheriting the error can be generated.
+
+    \item After a finite number of non-erroneous execution steps, which are proven correct in this section, program reaches an error state; but by section \textbf{2.2.4} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$ the remaining finite execution is also correct.
+\end{enumerate}
+
+No matter the reason, as no statically-correct \texttt{SelVeri} program includes any of the omitted cases, the correctness proofs above are sufficient for establishing the correctness of our implementation. \\
+
+\subsection{Divergent programs}
+
+A non-terminating \texttt{SelVeri} program is called \textit{divergent}.  has two possible conditions for non-termination:
+
+\begin{enumerate}
+    \item Infinite \texttt{while}-loops
+    \item Infinite recursion
+\end{enumerate}
+
+Nonetheless, we have informally argued the correctness of these divergent programs, in the cases 6 and 7 of the proof in section \textbf{4.2}. Thusfore, one can also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct. \\
+
+
+\end{document}

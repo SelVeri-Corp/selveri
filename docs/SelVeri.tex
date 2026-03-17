@@ -1,0 +1,835 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{tablefootnote}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.6}
+\author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
+
+\begin{document}
+\maketitle
+
+% \begin{abstract}
+% \end{abstract}
+
+\newpage
+\section{Syntax}
+
+\subsection{Lexical Categories}
+
+Identifiers must start with a letter or underscore, and continue with letters, digits, or underscores.
+Integer and floating-point literals are given by the following lexical categories:
+\[
+\begin{array}{rcl}
+\langle \mathit{Ident} \rangle &::=& [A\texttt{-}Za\texttt{-}z\_][A\texttt{-}Za\texttt{-}z0\texttt{-}9\_]^* \\
+\langle \mathit{IntLit} \rangle &::=& [0\texttt{-}9]^+ \\
+\langle \mathit{FloatLit} \rangle &::=& [0\texttt{-}9]^+\texttt{.}[0\texttt{-}9]^+
+\end{array}
+\]
+
+\subsection{Types}
+
+All variables and function return values are statically typed.
+\[
+\begin{array}{rcl}
+\langle \mathit{Type} \rangle
+&::=&
+\mathtt{Int}
+\;\mid\;
+\mathtt{Float}
+\;\mid\;
+\mathtt{List}\,[\langle \mathit{Type} \rangle,\langle \mathit{AExp} \rangle]
+\end{array}
+\]
+
+\subsection{Immediates}
+
+\[
+\begin{array}{rcl}
+\langle \mathit{Imm} \rangle
+&::=&
+\langle \mathit{IntLit} \rangle
+\;\mid\;
+\langle \mathit{FloatLit} \rangle
+\;\mid\;
+\langle \mathit{ListLit} \rangle \\[4pt]
+
+\langle \mathit{ListLit} \rangle
+&::=&
+[\,]
+\;\mid\;
+[\,\langle \mathit{Imm} \rangle\;(\texttt{,}\;\langle \mathit{Imm} \rangle)^*\,]
+\end{array}
+\]
+
+\subsection{Expressions}
+
+\paragraph{Arithmetic Expressions} 
+We declare the syntax of arithmetic expressions so that the operator precedence makes sense in the usual manner.
+\[
+\begin{array}{rcl}
+\langle \mathit{AExp} \rangle
+&::=&
+\langle \mathit{ASum} \rangle \\[4pt]
+
+\langle \mathit{ASum} \rangle
+&::=&
+\langle \mathit{ASum} \rangle\;\texttt{+}\;\langle \mathit{ATerm} \rangle
+\;\mid\;
+\langle \mathit{ASum} \rangle\;\texttt{-}\;\langle \mathit{ATerm} \rangle
+\;\mid\;
+\langle \mathit{ATerm} \rangle \\[4pt]
+
+\langle \mathit{ATerm} \rangle
+&::=&
+\langle \mathit{ATerm} \rangle\;\texttt{*}\;\langle \mathit{AFactor} \rangle
+\;\mid\;
+\langle \mathit{ATerm} \rangle\;\texttt{/}\;\langle \mathit{AFactor} \rangle
+\;\mid\;
+\langle \mathit{AFactor} \rangle \\[4pt]
+
+\langle \mathit{AFactor} \rangle
+&::=&
+\texttt{-}\;\langle \mathit{AFactor} \rangle
+\;\mid\;
+\langle \mathit{AAtom} \rangle \\[4pt]
+
+\langle \mathit{AAtom} \rangle
+&::=&
+\langle \mathit{Imm} \rangle
+\;\mid\;
+\langle \mathit{Ident} \rangle
+\;\mid\;
+\mathtt{len}(\langle \mathit{Ident} \rangle)
+\;\mid\;
+\langle \mathit{Ident} \rangle[\langle \mathit{AExp} \rangle]
+\;\mid\;
+(\langle \mathit{AExp} \rangle)
+\end{array}
+\]
+$\mathtt{len}$ keyword defined above semantically gives us the length of a list. In the current implementation, length of a list is fixed, so it can be resolved via a lookup from the scope table. It must not be confused with a function call, as no scope switches happen while resolving this value.
+
+\paragraph{Boolean Expressions}
+Boolean expressions used in guards and specifications include arithmetic expressions as truthy values.
+\[
+\begin{array}{rcl}
+\langle \mathit{BExp} \rangle
+&::=&
+\langle \mathit{BOr} \rangle \\[4pt]
+
+\langle \mathit{BOr} \rangle
+&::=&
+\langle \mathit{BOr} \rangle\;\mathtt{or}\;\langle \mathit{BXor} \rangle
+\;\mid\;
+\langle \mathit{BXor} \rangle \\[4pt]
+
+\langle \mathit{BXor} \rangle
+&::=&
+\langle \mathit{BXor} \rangle\;\mathtt{xor}\;\langle \mathit{BAnd} \rangle
+\;\mid\;
+\langle \mathit{BAnd} \rangle \\[4pt]
+
+\langle \mathit{BAnd} \rangle
+&::=&
+\langle \mathit{BAnd} \rangle\;\mathtt{and}\;\langle \mathit{BNot} \rangle
+\;\mid\;
+\langle \mathit{BNot} \rangle \\[4pt]
+
+\langle \mathit{BNot} \rangle
+&::=&
+\mathtt{not}\;\langle \mathit{BNot} \rangle
+\;\mid\;
+\langle \mathit{BAtom} \rangle \\[4pt]
+
+\langle \mathit{BAtom} \rangle
+&::=&
+\mathtt{true}
+\;\mid\;
+\mathtt{false}
+\;\mid\;
+\langle \mathit{Comparison} \rangle
+\;\mid\;
+\langle \mathit{AExp} \rangle \footnotemark
+\;\mid\;
+(\langle \mathit{BExp} \rangle) \\[4pt]
+
+\langle \mathit{Comparison} \rangle
+&::=&
+\langle \mathit{AExp} \rangle\;\langle \mathit{CompOp} \rangle\;\langle \mathit{AExp} \rangle \\[4pt]
+
+\langle \mathit{CompOp} \rangle
+&::=&
+\texttt{=}
+\;\mid\;
+\texttt{<=}
+\;\mid\;
+\texttt{<}
+\;\mid\;
+\texttt{>=}
+\;\mid\;
+\texttt{>}
+\end{array}
+\]
+
+\footnotetext{We interpret results of arithmetic expressions as boolean values where needed using equality to zero as in other imperative languages like C. This is useful for being able to write statements like while x, where x is an integer variable.}
+
+\subsection{Specifications (Runtime Assertions)}
+Here the syntax is also constructed in a way that establishes operator precedence rules.
+\[
+\begin{array}{rcl}
+\langle \mathit{Spec} \rangle
+&::=&
+\langle \mathit{SpecImp} \rangle \\[4pt]
+
+\langle \mathit{SpecImp} \rangle
+&::=&
+\langle \mathit{SpecOr} \rangle\;\mathtt{=>}\;\langle \mathit{SpecImp} \rangle
+\;\mid\;
+\langle \mathit{SpecOr} \rangle \\[4pt]
+
+\langle \mathit{SpecOr} \rangle
+&::=&
+\langle \mathit{SpecOr} \rangle\;\mathtt{||}\;\langle \mathit{SpecAnd} \rangle
+\;\mid\;
+\langle \mathit{SpecAnd} \rangle \\[4pt]
+
+\langle \mathit{SpecAnd} \rangle
+&::=&
+\langle \mathit{SpecAnd} \rangle\;\mathtt{\&\&}\;\langle \mathit{SpecTemp} \rangle
+\;\mid\;
+\langle \mathit{SpecTemp} \rangle \\[4pt]
+
+\langle \mathit{SpecTemp} \rangle
+&::=&
+\langle \mathit{SpecTemp} \rangle\;\mathtt{Since}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\langle \mathit{SpecTemp} \rangle\;\mathtt{Until}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\langle \mathit{SpecUnary} \rangle \\[4pt]
+
+\langle \mathit{SpecUnary} \rangle
+&::=&
+\mathtt{!}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Previously}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Once}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Historically}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
+&&
+\mid\;
+\mathtt{Next}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Eventually}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Always}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
+&&
+\mid\;
+\mathtt{Forall}\;\langle \mathit{Ident} \rangle\;\langle \mathit{DomainOpt} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle
+\;\mid\;
+\mathtt{Exists}\;\langle \mathit{Ident} \rangle\;\langle \mathit{DomainOpt} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle \\[2pt]
+&&
+\mid\;
+\langle \mathit{BExp} \rangle
+\;\mid\;
+(\langle \mathit{Spec} \rangle) \\[4pt]
+
+\langle \mathit{DomainOpt} \rangle
+&::=&
+\epsilon
+\;\mid\;
+\mathtt{in}\;\langle \mathit{Domain} \rangle \\[4pt]
+
+\langle \mathit{Domain} \rangle
+&::=&
+\langle \mathit{Interval} \rangle
+\;\mid\;
+\langle \mathit{Ident} \rangle
+\;\mid\;
+\langle \mathit{SetLiteral} \rangle
+\;\mid\;
+\langle \mathit{Type} \rangle \\[4pt]
+
+\langle \mathit{Interval} \rangle
+&::=&
+[\langle \mathit{AExp} \rangle,\langle \mathit{AExp} \rangle)
+\;\mid\;
+[\langle \mathit{AExp} \rangle,\langle \mathit{AExp} \rangle] \\[4pt]
+
+\langle \mathit{SetLiteral} \rangle
+&::=&
+\{\langle \mathit{AExpList} \rangle\} \\[4pt]
+
+\langle \mathit{AExpList} \rangle
+&::=&
+\langle \mathit{AExp} \rangle\;(\texttt{,}\;\langle \mathit{AExp} \rangle)^*
+\end{array}
+\]
+
+\subsection{Statements, Functions, and Programs}
+
+\paragraph{Top-Level Statements}
+\[
+\begin{array}{rcl}
+\langle \mathit{StmtSeq} \rangle
+&::=&
+\langle \mathit{Stmt} \rangle^* \\[4pt]
+
+\langle \mathit{Stmt} \rangle
+&::=&
+\langle \mathit{TermStmt} \rangle
+\;\mid\;
+\langle \mathit{IfStmt} \rangle
+\;\mid\;
+\langle \mathit{WhileStmt} \rangle
+\;\mid\;
+\langle \mathit{AssertStmt} \rangle
+\;\mid\;
+\texttt{;} \\[4pt]
+
+\langle \mathit{TermStmt} \rangle
+&::=&
+\langle \mathit{Decl} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{Assign} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{ListAssign} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{FuncCall} \rangle\texttt{;}
+\;\mid\;
+\mathtt{pass}\texttt{;} \\[4pt]
+
+\langle \mathit{IfStmt} \rangle
+&::=&
+\mathtt{if}\;\langle \mathit{BExp} \rangle\;\mathtt{then}\;\langle \mathit{StmtSeq} \rangle\;\mathtt{else}\;\langle \mathit{StmtSeq} \rangle\;\mathtt{fi} \\
+&& \mid\;
+\mathtt{if}\;\langle \mathit{BExp} \rangle\;\mathtt{then}\;\langle \mathit{StmtSeq} \rangle\;\mathtt{fi} \\[4pt]
+
+\langle \mathit{WhileStmt} \rangle
+&::=&
+\mathtt{while}\;\langle \mathit{BExp} \rangle\;\mathtt{do}\;\langle \mathit{StmtSeq} \rangle\;\mathtt{od} \\[4pt]
+
+\langle \mathit{AssertStmt} \rangle
+&::=&
+\{\langle \mathit{Spec} \rangle\}\texttt{;} \\[4pt]
+
+\langle \mathit{Decl} \rangle
+&::=&
+\langle \mathit{Ident} \rangle\;\texttt{:}\;\langle \mathit{Type} \rangle \\[4pt]
+
+\langle \mathit{Assign} \rangle
+&::=&
+\langle \mathit{Ident} \rangle\;\texttt{:=}\;\langle \mathit{AExp} \rangle \\[4pt]
+
+\langle \mathit{ListAssign} \rangle
+&::=&
+\langle \mathit{Ident} \rangle[\langle \mathit{AExp} \rangle]\;\texttt{:=}\;\langle \mathit{AExp} \rangle
+\end{array}
+\]
+
+\paragraph{Functions}
+\[
+\begin{array}{rcl}
+\langle \mathit{FuncDecl} \rangle
+&::=&
+\mathtt{function}\;\langle \mathit{Ident} \rangle
+\texttt{(}\langle \mathit{ParamListOpt} \rangle\texttt{)}
+\;\texttt{->}\;
+\langle \mathit{Type} \rangle\;
+::\;
+\langle \mathit{FuncStmtSeq} \rangle\;
+\mathtt{end} \\[6pt]
+
+\langle \mathit{ParamListOpt} \rangle
+&::=&
+\epsilon
+\;\mid\;
+\langle \mathit{ParamList} \rangle \\[4pt]
+
+\langle \mathit{ParamList} \rangle
+&::=&
+\langle \mathit{Param} \rangle\;(\texttt{,}\;\langle \mathit{Param} \rangle)^* \\[4pt]
+
+\langle \mathit{Param} \rangle
+&::=&
+\langle \mathit{Ident} \rangle\;\texttt{:}\;\langle \mathit{Type} \rangle
+\;\mid\; \mathit{Ident} \rangle\;\texttt{:}\; \mathtt{List[\langle \mathit{Type} \rangle]}\\[6pt]
+
+\langle \mathit{FuncStmtSeq} \rangle
+&::=&
+\langle \mathit{FuncStmt} \rangle^*\footnotemark \\[4pt]
+
+\langle \mathit{FuncStmt} \rangle
+&::=&
+\langle \mathit{FuncTermStmt} \rangle
+\;\mid\;
+\langle \mathit{FuncIfStmt} \rangle
+\;\mid\;
+\langle \mathit{FuncWhileStmt} \rangle
+\;\mid\;
+\langle \mathit{AssertStmt} \rangle
+\;\mid\;
+\texttt{;} \\[4pt]
+
+\langle \mathit{FuncTermStmt} \rangle
+&::=&
+\langle \mathit{Decl} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{Assign} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{ListAssign} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{FuncCall} \rangle\texttt{;}
+\;\mid\;
+\mathtt{pass}\texttt{;}
+\;\mid\;
+\langle \mathit{ReturnStmt} \rangle\texttt{;} \\[4pt]
+
+\langle \mathit{FuncIfStmt} \rangle
+&::=&
+\mathtt{if}\;\langle \mathit{BExp} \rangle\;\mathtt{then}\;\langle \mathit{FuncStmtSeq} \rangle\;\mathtt{else}\;\langle \mathit{FuncStmtSeq} \rangle\;\mathtt{fi} \\
+&& \mid\;
+\mathtt{if}\;\langle \mathit{BExp} \rangle\;\mathtt{then}\;\langle \mathit{FuncStmtSeq} \rangle\;\mathtt{fi} \\[4pt]
+
+\langle \mathit{FuncWhileStmt} \rangle
+&::=&
+\mathtt{while}\;\langle \mathit{BExp} \rangle\;\mathtt{do}\;\langle \mathit{FuncStmtSeq} \rangle\;\mathtt{od} \\[4pt]
+
+\langle \mathit{ReturnStmt} \rangle
+&::=&
+\mathtt{return}\;\langle \mathit{AExp} \rangle
+\end{array}
+\]
+\paragraph{Return Rule}
+Although not explicitly stated in its grammar, every possible execution \texttt{SelVeri} function body must end with a \texttt{return} statement. Mostly, our operational semantics will ensure that. However, if the user does not put a \texttt{return} statement at the end of the function body; instead of throwing a compilation error, the compiler automatically puts one, returning the default value of the functions return-type. This fact will play an important role in our correctness of compilation proofs, therefore we name it as the \textit{return rule}.
+
+\paragraph{Function Calls}
+\[
+\begin{array}{rcl}
+\langle \mathit{FuncCall} \rangle
+&::=&
+\mathtt{call} \langle \mathit{Ident} \rangle\texttt{(}\langle \mathit{ArgListOpt} \rangle\texttt{)} \\[4pt]
+
+\langle \mathit{ArgListOpt} \rangle
+&::=&
+\epsilon
+\;\mid\;
+\langle \mathit{ArgList} \rangle \\[4pt]
+
+\langle \mathit{ArgList} \rangle
+&::=&
+\langle \mathit{AExp} \rangle\;(\texttt{,}\;\langle \mathit{AExp} \rangle)^*
+\end{array}
+\]
+
+\paragraph{Programs}
+\[
+\begin{array}{rcl}
+\langle \mathit{Program} \rangle
+&::=&
+(\langle \mathit{FuncDecl} \rangle)^*\;\langle \mathit{StmtSeq} \rangle
+\end{array}
+\]
+
+\paragraph{Semicolon Discipline}
+Declarations, assignments, list assignments, function-call statements, \texttt{pass}, and \texttt{return}
+must end with a semicolon. Statements of the form
+\(\mathtt{if}\;\cdots\;\mathtt{fi}\) and
+\(\mathtt{while}\;\cdots\;\mathtt{od}\) must not be followed by a semicolon.
+
+
+
+
+\newpage
+\section{Semantics}
+\vspace{2em}
+
+\subsection{Important notions for formalizing \texttt{SelVeri}}
+\vspace{2.5em}
+
+\subsubsection{Types}
+
+Let \textbf{Type} be the set of all possible types. For the current implementation of \texttt{SelVeri}, an element of \textbf{Type} can be either \textbf{Int}, \textbf{Float} or a \textbf{List} of any dimension, including one of the former two, which can be interpreted as a dependent type. More formally:
+
+\begin{itemize}
+    \item $\textbf{Int} : \textbf{Type}$ 
+    \item $\textbf{Float} : \textbf{Type}$ 
+    \item $ \textbf{List}: (\Pi{t} : \textbf{Type} \, . \,  (\Pi{n} : \textbf{$\mathbb{N}^+$} \, . \,  \textbf{Type}))$
+\end{itemize}
+
+\vspace{2.5em}
+\subsubsection{Immediates}
+
+Let \textbf{Imm} be the set of syntactic immediate values supported by \texttt{SelVeri}, e.g. $5$ or  $3.14$. For each type, we need an evaluation function that translates syntactic immediates into the corresponding semantic values.
+
+\[
+\mathcal{I}: \textbf{Imm} \cap \textbf{Int} \rightarrow \mathbb{Z}
+\]
+\[
+\mathcal{F}: \textbf{Imm} \cap \textbf{Float} \rightarrow \mathbb{R}
+\]
+\[
+\mathcal{L}_{\textbf{List[$t, n$]}}: \textbf{Imm} \cap \textbf{List[$t, n$]} \rightarrow A^n 
+\]
+where $A$ is the codomain of $\mathcal{L}_t$. The reader should notice that:
+
+\begin{itemize}
+    \item $\mathcal{L}_\textbf{Int} = \mathcal{I}$
+    \item $\mathcal{L}_\textbf{Float} = \mathcal{F}$
+\end{itemize}
+
+For simplicity, we also define $\mathcal{V} := \bigcup_{t \in \textbf{Type}} \mathcal{L}_t$
+
+\newpage
+\subsubsection{Scope}
+
+Let \textbf{Scope} be the set of all scopes and let \textbf{Var} be the infinite set of all syntactic variables. Each scope is a representation  of 'known' variables in a given block of statements including the variables declared until program execution reaches the corresponding block. Formally,
+
+\[
+\forall s \in \textbf{Scope} \, . \, s: \textbf{Var} \,\cup\, \textbf{Imm}  \rightarrow \textbf{Type}
+\]
+Given any scope, $s$, immediates are mapped to the corresponding types; e.g. $s(5) = \textbf{Int}$, , as expected.\\
+
+Initially, each scope starts its lifetime as an empty scope, denoted as $\tilde{s}$, 
+
+\[
+\forall x \in \textbf{Var} \, . \,\tilde{s}(x) = \textbf{Void}
+\]
+where \textbf{Void} is the empty type.\\
+
+To simplify the formalization of list-types, given any scope $s$, we enforce the following implication:
+
+\[
+s(x) = \textbf{List[$t,n$]}
+\implies
+\forall i \in \{0, \,...\, , n-1\} \,.\, s(x\texttt{[$i$]}) = t
+\]
+We call this implication as \textit{recursive declaration principle}. As \texttt{SelVeri} syntax does not allow identifiers including \texttt{[} or \texttt{]} characters, it is not possible to create any scope contradicting the recursive declaration. \\
+
+Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}. If $s$ is a scope, we denote its immediate child as $s_c$. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope. When a variable is reached by a parent scope, then a change to its type (which is only possible for the special variable \texttt{retvar}, see section \textbf{2.1.5}) then the change is made directly to the parent scope. However, for simplicity, we omit this special case in our configurations.
+
+
+\subsubsection{Program states}
+
+Let \textbf{State} be the set of all possible program states and \textbf{Val} \footnote{The reader can notice that $ran\mathcal{I}$, $ran\mathcal{F}$ and $ran\mathcal{L}$ are all subsets of \textbf{Val}.} be the set of all semantic values. Each state is in fact a map from \textbf{Var} and \textbf{Scope} to \textbf{Val}, representing the value of a given variable in the specified scope. Formally,
+
+\[
+\forall \sigma \in \textbf{State} \, . \, \sigma: \textbf{Var} \times \textbf{Scope} \rightarrow \textbf{Val}
+\]
+
+Each program starts with an empty state, $\tilde{\sigma}$ in which each declared variable has the default value of this type, e.g. 0 for \textbf{Int}, 0.0 for \textbf{Float} and  [0, 0, 0] for \textbf{List[Int, 3]}. If the specific type is unknown in a given context, the default value of the corresponding type is denoted as \textbf{0}.\\
+
+Also, similar to scopes, program states also have parents. A child program state of $\sigma$ is denoted as $\sigma_c$. When a variable is reached by a parent scope, then its value must be reached by the parent program state. The change must be directly made in the parent program state, in case of an assignment. However, for simplicity, we omit this special case in our configurations.
+
+
+\\
+
+Additionally, each program state carries an \texttt{error\_flag} that is set if and only if an error occurs during the execution of the program. A cause for this can be using a variable before declaring it. In order to embed this misusage as an error into our semantics, we add the following rule to our program states:
+
+\[
+\forall \sigma \in \textbf{State} \, . \, \sigma(x,s) = \bot \quad \text{if } s(x) = \textbf{Void}.
+\]
+
+Before moving to the next section, reader should be aware of an abuse of notation we use for convenient representation of erroneous states:
+
+\begin{itemize}
+    \item $\sigma$ represents a program state without any errors.
+    \item $\hat{\sigma}$ represents a program state with an error.
+    \item $\underline{\sigma}$ represents any program state (may be error-free or erroneous).
+\end{itemize}
+
+\subsubsection{Functions}
+
+Let \textbf{Func} be the infinite set of all possible definable \texttt{SelVeri} functions. To store the information of all function definitions in a given program, we introduce the concept of the \textit{function environment}, denoted as $\Gamma$:
+
+\[
+\Gamma : \textbf{Func} \rightarrow (\textbf{Var} \times \textbf{Type})^n \times \textbf{Code}
+\] where $n$ is the arity of the input function and \textbf{Code} is the set of all syntactically-correct \texttt{SelVeri} programs. During the compilation stage, compiler populates $\Gamma$ with a single-pass through the function definitions. \\
+
+For example, if one defines the function \texttt{f} as in the following way:
+\[
+\texttt{function f(x : Int, y : Float, z : List[Float,2]) -> Int ::($S_\textbf{f}$)} 
+\]
+where $S_\textbf{f}$ is some function statement, then 
+\[
+\Gamma(\texttt{f}) = ((\texttt{x},\, \texttt{Int}), (\texttt{y},\, \texttt{Float}),(\texttt{z},\, \texttt{List[Float,2]})),\; S_\textbf{f})
+\]
+
+On the other hand, if \texttt{g} is an undefined function, then $\Gamma(\texttt{g}) = \emptyset$. \\
+
+Moreover, we introduce a special, dynamically-typed variable \texttt{retvar} which holds the return-value of the last called function. Initially, its type is \textbf{Void} and its value is $\bot$. \texttt{retvar} is a reserved keyword in \texttt{SelVeri}, meaning that no user-defined identifier can have this name.  An example usage would be: 
+
+\[
+\texttt{w : Int; call f(5, 3.14, [42, 42]); w := retvar;}
+\] Assuming that, with the inputs above, execution of the body of \texttt{f} does not result in an error state, our operational semantics will ensure that variable \texttt{w} holds the result of the computation of \texttt{f}.
+
+
+\newpage
+\subsection{Semantics of arithmetic expressions}
+
+Let \textbf{AExp} be the set of all arithmetic expressions. We define the arithmetic valuation function $\mathcal{A}$, representing the semantics of the arithmetic expressions in \texttt{SelVeri}.
+
+\[
+\mathcal{A} : \textbf{AExp} \times \textbf{State} \times \textbf{Scope} \rightarrow \textbf{Val} 
+\]
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} % increases vertical space
+\large % increases overall font size in the table
+
+% \makebox forces the oversized box to center perfectly on the page
+\makebox[\textwidth][c]{% 
+\fbox{%
+\begin{tabular}{l}
+% Internal array to align the first four "ifs"
+$\begin{array}{ll}
+\mathcal{A}(x, \sigma, s)= \mathcal{I}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int}\\
+
+\mathcal{A}(x, \sigma, s)= \mathcal{F}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float}\\
+
+\mathcal{A}(x, \sigma, s)= \mathcal{L}_{\textbf{List[$t, n$]}}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,n \textbf{]} \\
+
+\mathcal{A}(x, \sigma, s)= \sigma(x, s) \qquad \text{if } x \in \textbf{Var} \\
+
+\mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s)= \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s) & \\ \qquad \text{if $lst \in \textbf{Var}$ and $lst$ is a $m$-dimensional list} 
+
+\end{array}$ \\[5pt]
+
+\(\mathcal{A}(\texttt{len($x$)}, \sigma, s)= \left\{
+  \begin{array}{ll}
+    0& \text{if } s(x) \in \{\textbf{Int}, \textbf{Float}\} \\
+    n& \text{if } \exists t \in \textbf{Type} \cdot \exists n \in \mathbb{N}^+ \cdot  s(x) = \textbf{List[$t,n$]} \\
+    \bot & \text{otherwise}
+  \end{array}
+\right.\) \\
+
+\(\mathcal{A}(a_1 + a_2, \sigma, s)=  
+\left\{
+  \begin{array}{ll}
+    \mathcal{A}(a_1, \sigma, s)+ \mathcal{A}(a_2, \sigma, s) & \text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+
+\(\mathcal{A}(a_1 \ast a_2, \sigma, s)= \left\{
+  \begin{array}{ll}
+    \mathcal{A}(a_1, \sigma, s)\cdot \mathcal{A}(a_2, \sigma, s)& \text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+
+\(\mathcal{A}(a_1 - a_2, \sigma, s)= \left\{
+  \begin{array}{ll}
+    \mathcal{A}(a_1, \sigma, s)- \mathcal{A}(a_2, \sigma, s)& \text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+
+\(\mathcal{A}(a_1 / a_2, \sigma, s)= \left\{
+  \begin{array}{ll}
+    \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s) \footnotemark & \text{if } \mathcal{A}(a_2, \sigma, s)\neq 0 \land (\mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot) \\
+    \bot & \text{if } \mathcal{A}(a_2, \sigma, s)= 0 \lor (\mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot)  \\
+  \end{array}
+\right.\) \\
+
+\end{tabular}%
+}%
+} % <-- Closing bracket for \makebox
+
+\caption{The semantics of arithmetic expressions}
+\label{tab:arith-semantics}
+\end{table}
+\footnotetext{If $(a_1 / a_2)$ has no subterm of type \textbf{Float}, then the $/$ symbol represents the integer division; otherwise, it represents the division of the field $\mathbb{R}$.}
+
+\\
+
+Although not explicitly stated in the table above, given any binary operation, operators are required to be of the same type (except for the cases of implicit coercion \footnote{An example is multiplying an integer with a float. In such cases, compiler converts the integer to a float with the same value. Conversion of integers to floats is the only possibility for an implicit coercion, as for the current implementation of \texttt{SelVeri}.} handled by the compiler) and can only be of \textit{basic types} \footnote{The only basic types are \textbf{Int} and \textbf{Float} for the current implementation of \texttt{SelVeri}.}. Otherwise, the result of the evaluation is $\bot$. The same rules apply to the next section (boolean expressions) as well.
+
+\newpage
+\subsection{Semantics of boolean expressions}
+
+Let \textbf{BExp} be the set of all boolean expressions. We define the arithmetic valuation function $\mathcal{B}$, representing the semantics of the boolean expressions in \texttt{SelVeri}.
+
+\[
+\mathcal{B} : \textbf{BExp} \times \textbf{State} \times \textbf{Scope} \rightarrow \{0, 1, \bot\} 
+\]
+
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{2.0} % increase vertical spacing
+\large % increase font size
+\fbox{%
+\begin{tabular}{rl}
+\(\mathcal{B}(\texttt{true}, \sigma, s)\) & \(= 1\) \\
+\(\mathcal{B}(\texttt{false}, \sigma, s)\) & \(= 0\)  \\
+
+\(\mathcal{B}(a, \sigma, s)\) \tablefootnote{To have this valuation rule, we need $\textbf{AExp} \subseteq \textbf{BExp}$ which is the case for \texttt{SelVeri}. What this rule means is, every arithmetic expression can also be interpreted as a boolean expression depending on the context and its truth value is determined by an equality to zero check, similar to the \texttt{C} programming language.} & \(= 
+\left\{
+  \begin{array}{ll}
+    1 & \text{if } \mathcal{A}(a, \sigma, s) \neq \textbf{0}\\
+    0 & \text{if } \mathcal{A}(a, \sigma, s) = \textbf{0}\\
+    \bot & \text{if } \mathcal{A}(a, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+
+\(\mathcal{B}(a_1 \;\texttt{=}\; a_2, \sigma, s)\) & \(= 
+\left\{
+  \begin{array}{ll}
+    1 & \text{if } \mathcal{A}(a_1, \sigma, s)= \mathcal{A}(a_2, \sigma, s)\\
+    0 & \text{if } \mathcal{A}(a_1, \sigma, s)\neq \mathcal{A}(a_2, \sigma, s)\\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+\(\mathcal{B}(a_1 \;\texttt{<=}\; a_2, \sigma, s)\) & \(= 
+\left\{
+  \begin{array}{ll}
+    1 & \text{if } \mathcal{A}(a_1, \sigma, s)\leq \mathcal{A}(a_2, \sigma, s)\\
+    0 & \text{if } \mathcal{A}(a_1, \sigma, s)> \mathcal{A}(a_2, \sigma, s)\\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+\(\mathcal{B}(\texttt{not}\; b, \sigma, s)\) & \(= 
+\left\{
+  \begin{array}{ll}
+    1 & \text{if } \mathcal{B}(b, \sigma, s)= 0 \\
+    0 & \text{if } \mathcal{B}(b, \sigma, s)= 1 \\
+    \bot & \text{if } \mathcal{B}(b, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+
+\(\mathcal{B}(b_1 \;\texttt{and}\; b_2, \sigma, s)\) & \(= 
+\left\{
+  \begin{array}{ll}
+    1 & \text{if } \mathcal{B}(b_1, \sigma, s)= 1 \text{ and } \mathcal{B}(b_2, \sigma, s)= 1 \\
+    0 & \text{if } \mathcal{B}(b_1, \sigma, s)= 0 \text{ or } \mathcal{B}(b_2, \sigma, s)= 0 \\
+    \bot & \text{if } \mathcal{B}(b_1, \sigma, s)= \bot \text{ or } \mathcal{B}(b_2, \sigma, s)= \bot
+  \end{array}
+\right.\) \\
+\end{tabular}
+}
+\caption{Semantics of boolean expressions}
+\label{tab:boolean-semantics}
+\end{table}
+
+
+\newpage
+\subsection{Structural operational semantics of the statements}
+
+\begin{table}[!ht]
+\centering
+\renewcommand{\arraystretch}{2.5} % Reduced vertical space so it fits under the heading
+\large % Larger font size 
+\resizebox{\textwidth}{!}{% Requires \usepackage{graphicx} in preamble
+\fbox{%
+\begin{tabular}{rl}
+
+\([ \text{decl}_{\text{os}} ]\) &
+\(\langle x \;\texttt{:}\; t, \sigma, s \rangle \rightarrow \langle \sigma[x \mapsto \textbf{0}] ,\, s[x \mapsto t] \rangle \quad \text{if } t \in \textbf{Type} \land s(x) = \textbf{Void}\) \\
+
+\([ \text{decl}^\bot_{\text{os}} ]\) &
+\(\langle x \;\texttt{:}\; t, \sigma, s \rangle \rightarrow \hat{\sigma} \quad \text{if } t \notin \textbf{Type} \lor s(x) \neq \textbf{Void}\) \\
+
+\([ \text{ass}_{\text{os}} ]\) &
+\(\langle x \;\texttt{:=}\; a, \sigma, s \rangle \rightarrow \sigma[x \mapsto \mathcal{A}(a, \sigma, s)] \quad \text{if } \mathcal{A}(a, \sigma, s) \neq \bot \,\land\, \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(x)} \) \\
+
+
+\([ \text{ass}^{\text{list}}_{\text{os}} ]\) &
+\renewcommand{\arraystretch}{1.2} % Local vertical space for this specific cell
+\(\begin{array}[t]{@{}l@{}}
+\langle lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]} \;\texttt{:=}\; a,\, \sigma,\, s \rangle \rightarrow \sigma[lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)] \\
+\quad \text{if } \mathcal{A}(a, \sigma, s) \neq \bot \,\land\, \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]})} \\
+\end{array}\) \\[2pt]
+
+\([ \text{ass}^{\bot}_{\text{os}} ]\) &
+\(\langle x \;\texttt{:=}\; a, \sigma,  s \rangle \rightarrow \hat{\sigma} \quad \text{if } \mathcal{A}(a, \sigma, s) = \bot \,\lor\, \mathcal{A}(a, \sigma, s) \notin ran\mathcal{L}_{s(x)} \) \\
+
+\([ \text{pass}_{\text{os}} ]\) &
+\(\langle \texttt{pass}, \sigma, s \rangle \rightarrow \sigma\) \\
+
+\([ \text{comp}^1_{\text{os}} ]\) &
+\(\frac{
+  \langle S_1, \sigma, s \rangle \rightarrow  \langle S_1', \underline{\sigma}', s' \rangle 
+}{
+  \langle S_1 ; S_2, \sigma, s \rangle \rightarrow \langle S_1' ; S_2, \underline{\sigma}', s' \rangle
+} \qquad\qquad
+[ \text{comp}^2_{\text{os}} ] \quad
+\frac{
+  \langle S_1, \sigma, s \rangle \rightarrow \underline{\sigma}'
+}{
+  \langle S_1 ; S_2, \sigma, s \rangle \rightarrow \langle S_2, \underline{\sigma}', s \rangle
+}\) \\
+
+\([ \text{scope}_{\text{os}} ]\) &
+\(\langle \texttt{endscope}, \sigma_c, s_c \rangle \rightarrow \langle \sigma, s \rangle
+\quad \text{where $\sigma,s$ are parents of $\sigma_c, s_c$} \\
+
+\([ \text{if}^{1}_{\text{os}} ]\) &
+\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}, \sigma, s  \rangle \rightarrow \langle S_1\texttt{;endscope}, \tilde{\sigma_c}, \tilde{s_c} \rangle
+\quad \text{if } \mathcal{B}(b, \sigma, s) = 1\) \\
+
+\([ \text{if}^{0}_{\text{os}} ]\) &
+\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}, \sigma, s  \rangle \rightarrow \langle S_2\texttt{;endscope}, \tilde{\sigma_c}, \tilde{s_c} \rangle
+\quad \text{if } \mathcal{B}(b, \sigma, s) = 0\) \\
+
+\([ \text{if}^{\bot}_{\text{os}} ]\) &
+\(\langle \texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}, \sigma, s  \rangle \rightarrow \hat{\sigma}
+\quad \text{if } \mathcal{B}(b, \sigma, s) = \bot\) \\
+
+\([ \text{while}^{1}_{\text{os}} ]\) &
+\(\langle \texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle \rightarrow \langle S\texttt{;endscope;}\texttt{while } b \texttt{ do } S \texttt{ od}, \tilde{\sigma_c}, \tilde{s_c} \rangle
+\quad \text{if } \mathcal{B}(b, \sigma, s) = 1\) \\
+
+\([ \text{while}^{0}_{\text{os}} ]\) &
+\(\langle \texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle \rightarrow \sigma
+\quad \text{if } \mathcal{B}(b, \sigma, s) = 0\) \\
+
+\([ \text{while}^{\bot}_{\text{os}} ]\) &
+\(\langle \texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle \rightarrow \hat{\sigma}
+\quad \text{if } \mathcal{B}(b, \sigma, s) = \bot\) \\[2pt]
+
+\([ \text{call}_{\text{os}} ]\) &
+\renewcommand{\arraystretch}{1.2} % Local vertical space for this specific cell
+\(\begin{array}[t]{@{}l@{}}
+\langle \texttt{call}\; f(a_1, \dots, a_n), \sigma, s \rangle \rightarrow \langle x_1 : t_1 \texttt{;} x_1 \,\texttt{:=}\, v_1\, \texttt{;} \dots \texttt{;} x_n : t_n \texttt{;} x_n \,\texttt{:=}\, v_n\, \texttt{;} S_f,\, \tilde{\sigma}', \tilde{s}' \rangle \\
+\quad \text{if } t_i = s(x_i) \text{ for } i = 1, 2, \dots, n \\
+\quad \text{where } \Gamma(f) = (((x'_1, t_1), \dots, (x'_n, t_n)), S_f) \\
+\quad \text{and } v_j \in \textbf{Imm} \;\land\; \mathcal{A}(v_j, \tilde{\sigma}', \tilde{s}')  = \mathcal{A}(x_j, \sigma, s) \text{ for } j = 1, 2, \dots, n \\
+\end{array}\) \\[2pt]
+
+\([ \text{ret}_{\text{os}} ]\) &
+\renewcommand{\arraystretch}{1.2} % Local vertical space for this specific cell
+\(\begin{array}[t]{@{}l@{}}
+\langle \texttt{return}\; a, \sigma', s' \rangle \rightarrow \langle \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma', s')],\; s[\texttt{retvar} \mapsto s'(a)] \rangle \\
+\quad \text{where } \sigma \text{ and } s \text{ are of returning function's caller.}
+\end{array}\) \\[2pt]
+
+\([ \text{err}_{\text{os}} ]\) &
+\(\langle S, \hat{\sigma}, s \rangle \rightarrow \hat{\sigma}\) \\
+\end{tabular}
+}% End of fbox
+}% End of resizebox
+\caption{Small-step operational semantics for statements}
+\label{tab:while-semantics}
+\end{table}
+
+
+\newpage
+Note that not all possible configurations are included in the table above. In any case which is absent from the table,  program state is transitioned into $\hat{\sigma}$. \\
+
+Moreover, for each if-rule, an \texttt{if}-statement without the \texttt{else}-part, namely a statement of the form "\texttt{if} $b$ \texttt{then} $S$ \texttt{fi}" can be treated as "\texttt{if} $b$ \texttt{then} $S$ \texttt{else pass fi}
+
+\end{document}

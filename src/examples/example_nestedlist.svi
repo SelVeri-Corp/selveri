@@ -9,6 +9,7 @@ j := 0;
 sum : Int;
 sum := 0;
 while i < 3 do
+    j := 0;
     while j < 2 do
         sum := sum + x[i][j];
         j := j + 1;
