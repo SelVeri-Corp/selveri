@@ -13,3 +13,6 @@ class VerificationError(Exception):
 class IRRuntimeError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__("IR runtime error: " + message)
+
+class IRParseError(Exception):
+    pass
