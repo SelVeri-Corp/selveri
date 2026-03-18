@@ -140,9 +140,13 @@
 \newpage
 \section{Semantics}
 
+\vspace{2.5em}
+
 \subsection{Mathematical notions}
 
 The \texttt{SelVeri} intermediate representation, \texttt{SelVerIR} is executed on a \textit{stack-based} abstract machine (\textbf{AM}) and aims to be provably correct implementation of the high-level \texttt{SelVeri} language.
+
+\vspace{1em}
 
 \subsubsection{Stack}
 
@@ -469,7 +473,7 @@ $\begin{array}{ll}
 
 \mathcal{CA}(x) = \texttt{PUSH}\; x \qquad \text{if } x \in \textbf{Var} \text{ and $x$ is of a basic type} \\[1ex]
 
-\mathcal{CA}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}) = \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) : \texttt{ACCESS}\;x \\ \qquad \text{if $lst$ is an $m$-dimensional list where each dimension $k$ has length $n_k$} \\[1ex]
+\mathcal{CA}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}) = \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) : \texttt{ACCESS}\;lst \\ \qquad \text{if $lst$ is an $m$-dimensional list where each dimension $k$ has length $n_k$} \\[1ex]
 
 \mathcal{CA}(a_1 + a_2) = \mathcal{CA}(a_2): \mathcal{CA}(a_1) : \texttt{ADD} & \\[1ex]
 
@@ -664,11 +668,11 @@ We will prove this by structural induction on arithmetic expressions.
       \begin{aligned}
         \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
         &= \langle \mathcal{CA}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
-        &= \langle \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) : \texttt{ACCESS}\;x : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(\mathit{I}(i_1, \dots, i_m ;n_1,\dots,n_m)) : \texttt{ACCESS}\;lst : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of $\mathcal{CA}$)} \\
-        &= \langle \mathcal{CA}(j) : \texttt{ACCESS}\;x : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &= \langle \mathcal{CA}(j) : \texttt{ACCESS}\;lst : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of $\mathit{I}$)} \\
-        &\triangleright^\ast \langle \texttt{ACCESS}\;x : c,\, \mathcal{A}(j, \sigma, s):  e,\, \sigma,\, s,\, pc + l_j \rangle 
+        &\triangleright^\ast \langle \texttt{ACCESS}\;lst : c,\, \mathcal{A}(j, \sigma, s):  e,\, \sigma,\, s,\, pc + l_j \rangle 
         && \text{(induction hypothesis)} \\
         &\triangleright \langle c,\, \sigma(lst\texttt{[$\mathcal{A}(j, \sigma, s)$]}, s):  e,\, \sigma,\, s,\, pc + l_j + 1 \rangle
         && \text{(operational semantics)} \\
@@ -1067,7 +1071,7 @@ Now, as the correctness of arithmetic and boolean expressions is proven, we may 
 \langle \mathcal{C}(P),\, e,\, \underline{\sigma},\, s,\, pc,\, ras \rangle \; \triangleright^{\ast} \; \langle \underline{\sigma}_f,\, s_f,\, pc + l_P,\, ras \rangle 
 \] where $P$ is any \texttt{SelVeri} program and $l_P$ is the number of commands in $\mathcal{C}(P)$. \\
 
-Observe that the implication above mentions the correctness of only terminating programs. However, we also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct, and we will present our arguments in the \textbf{case 6} of the following proof.
+Observe that the implication above mentions the correctness of only terminating programs. However, we also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct, and we will present our arguments in \textbf{section 5}.
 
 \begin{proof}
 If $\underline{\sigma}$ is an erroneous program state, then by section \textbf{2.2.4} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$, the above implication is obviously true \footnote{Furthermore, $\sigma = \sigma_f$ and $s = s_f$, in this case.}.  Therefore, from now on, we assume that $\underline{\sigma}$ represents a non-erroneous program state and will use $\sigma$ to denote it. \\
@@ -1465,9 +1469,7 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
           \]
         \end{itemize}
 
-        However, the proofs above are not enough to establish the correctness of the compiled \texttt{while}-statements, because they only demonstrate one step of iteration. Nonetheless, with a simple induction, we can generalize this argument to claim that at any step of iteration, the compilation is correct, as the proofs above show that at any given program state and scope, the compilation of one iteration is correct. To put it more explicitly, the cases of 0 iterations (\textbf{subcase 6.1}) and 1 iteration (\textbf{subcase 6.2}) are proven to be correct. Assuming that $i$ iterations are compiled correctly, \textbf{subcase 6.2} also prove that $i+1$ iterations are compiled correctly. Ultimaltely, one can certainly say that any terminating \texttt{SelVeri} loop is compiled correctly.
-
-        Until so far, we have omitted non-terminating programs in our correctness proof. But, the only possible source of non-termination of a \texttt{while}-loop is the semantical value of the boolean guard $b = 1$ being a loop invariant. Although we cannot talk about a terminating program state in such a case; at any execution step, we know that the execution thus far has been correct and will continue to be correct.
+        However, the proofs above are not enough to establish the correctness of the compiled \texttt{while}-statements, because they only demonstrate one step of iteration. Nonetheless, with a simple induction, we can generalize this argument to claim that at any step of iteration, the compilation is correct, as the proofs above show that at any given program state and scope, the compilation of one iteration is correct. To put it more explicitly, the cases of 0 iterations (\textbf{subcase 6.1}) and 1 iteration (\textbf{subcase 6.2}) are proven to be correct. Assuming that $i$ iterations are compiled correctly, \textbf{subcase 6.2} also prove that $i+1$ iterations are compiled correctly. Ultimately, one can certainly say that any terminating \texttt{SelVeri} loop is compiled correctly.
 
 
   \item \textbf{case 8:} $P = \texttt{call}\; f(a_1 \dots, a_n)$
@@ -1519,7 +1521,7 @@ by the induction hypothesis, the compilation of $S_f$ is correct, since the exec
   \end{aligned}
 \]
 
-Similar to our proof of the correctness of \texttt{while}-statements, this assumes a finite depth of recursion (0, if there is no recursion) as we have assumed termination. Nevertheless, since at each finite step of execution, the correctness of the executed statements is ensured by the proof above, with an argumentation similar to non-terminationg loops, we can conclude that infinite recursive calls of \texttt{SelVeri} are compiled correctly. \\
+Similar to our proof of the correctness of \texttt{while}-statements, this assumes a finite depth of recursion (0, if there is no recursion) as we have assumed termination. \\
 
 \footnotetext{Note that we do not cover the case where the execution of $S_f$ leads to an erroneous state, as the last semantic rule in the section \textbf{2.2.4} of this document and [$\text{err}_{\text{os}}$] rule of high-level semantics ensure the correctness of the translation in this case.}
 
@@ -1577,16 +1579,72 @@ Cautious readers may notice that some (sub)cases including erroneous program sta
 
 No matter the reason, as no statically-correct \texttt{SelVeri} program includes any of the omitted cases, the correctness proofs above are sufficient for establishing the correctness of our implementation. \\
 
-\subsection{Divergent programs}
+\vspace{1.5em}
+\section{Divergent programs}
 
-A non-terminating \texttt{SelVeri} program is called \textit{divergent}.  has two possible conditions for non-termination:
+If a \texttt{SelVeri} program $P$ terminates after a finite number a steps, it is called \textit{convergent}; otherwise, a non-terminating $P$ is called \textit{divergent}. \texttt{SelVeri} has two possible conditions for non-termination:
 
 \begin{enumerate}
     \item Infinite \texttt{while}-loops
     \item Infinite recursion
 \end{enumerate}
 
-Nonetheless, we have informally argued the correctness of these divergent programs, in the cases 6 and 7 of the proof in section \textbf{4.2}. Thusfore, one can also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct. \\
+Therefore any infinite program, after the execution of a finite subprogram, is an infinite repetition of a (possibly compositional) statement, which is either a loop body, function body or a composition of function bodies; whose execution takes a finite number of steps. We call this fact as the \textit{decomposition lemma}, which will play a very important role for our correctness proof for divergent programs. Nonetheless, our formalization so far is not capable of speaking about infinite execution traces, therefore an extension is ultimately necessary \footnote{Note that we will not be considering erroneous programs in this section, as they are finite by their nature.}. We will be utilizing ordinal numbers for this purpose.\\
 
+\subsection{Ordinal program states}
+
+Let $\alpha$ be an (possibly infinite) ordinal number; then, given any configuration, we have:
+
+\[
+\langle P,\, \sigma,\, s \rangle \rightarrow^\alpha \langle P',\, \sigma^P_\alpha,\, s^P_\alpha \rangle
+\] where $\rightarrow^\alpha$ means execution of the program $\alpha$-many steps. \\
+
+If $\alpha$ is a finite ordinal (i.e. a natural number), then we have already formalized what the transition above means. In the infinite ordinal case, $\sigma^P_\alpha$ is defined as follows:
+
+\[
+\sigma^P_\alpha(x, s^P_\alpha)  = 
+\begin{cases}
+    v & \text{if $v \in \textbf{Val} \;\land\; \exists \beta < \alpha .\; \forall \gamma .\; \beta < \gamma < \alpha \implies \sigma^P_\gamma(x, s^P_\gamma) = v$} \\
+    \mu & \text{otherwise} \\
+\end{cases}
+\] where $\mu$ is a special constant, denoting the value \textit{unknown}. A reason for having the value unknown may be oscillation or indefinite growth/decrease. If the value of any variable $x$ is \textit{known} after executing $\alpha$-many steps, then we say that $x$, \textit{$\alpha$-stabilizes}. \\
+
+Moreover, since \texttt{SelVeri} allows a variable to be declared only once in a non-erroneous program, we need not extend the formalization of scopes. Throughout this section, we will restrict our attention on how the program states behave under infinite traces.
+
+\newpage
+\subsection{Transfinite correctness of divergent programs}
+
+Now, as our formalization enhanced, we can attempt to prove the correctness of divergent \texttt{SelVeri} programs. More formally, we need to show that; given any configuration and an ordinal $\alpha$ 
+\[
+\langle P,\, \sigma,\, s \rangle \; \rightarrow^\alpha \; \langle P',\, \sigma^P_\alpha,\, s^P_\alpha \rangle \quad \implies \quad 
+\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc,\, ras \rangle \; \triangleright^\beta \; \langle \mathcal{C}(P'),\, e',\, \sigma^P_\alpha,\, s^P_\alpha,\, pc',\, ras' \rangle 
+\] where $\beta = k  \cdot \alpha$ \footnote{Because the compilation function $\mathcal{C}$ emits a finite number of commands per high-level statements.} for some constant non-zero $k \in \mathbb{N}$. 
+
+\begin{proof} We will prove this by a transfinite induction on $\alpha$. But before starting the proof; observe that the small-step operational semantics of \texttt{SelVeri} and \texttt{SelVerIR} are defined exclusively via successor transition relations, meaning that any execution trace is a sequence strictly indexed by the natural numbers, $\mathbb{N}$. Consequently, the execution trace of any divergent program has an exact ordinal length of $\omega$, as the semantics do not define limit-ordinal transitions. Hence, we limit our attention to the ordinals that are lesser or equal to $\omega$ \footnote{We are not interested in hypercomputation here.}. We call this fact as \textit{$\omega$-bound of computation}.
+
+    \begin{itemize}
+        \item \textbf{The Base Case:} $\alpha = 0$. \\
+        Zero steps taken, the states are trivially identical.
+
+        \item \textbf{The Successor Case:} Assume that theorem holds for some ordinal $\gamma$ and let $\alpha = \gamma^+$. \\
+        \textbf{Section 4} exactly proves the successor case. Note that, the proof in the \textbf{section 4} trivially implies the prefix correctness via the semantics of compositional statements.
+
+        \item \textbf{The Limit Case:} Let $\alpha$ be a limit ordinal and assume that the theorem holds for all ordinals $\gamma < \alpha$. \\ By the \textit{$\omega$-bound of computation}, we have $\alpha = \beta = \omega$. This also means our induction hypothesis is equivalent to the correctness of convergent programs, which is already proven. Additionally, because the only reasons of divergence in a \texttt{SelVeri} program are infinite loops or recursions, after a finite number of steps, say $M$; by the decomposition lemma there must be an indefinitely executed statement $S_r$  whose longest possible execution takes a finite number of steps, say $m$. Given any variable $x$, consider two cases:
+
+        \begin{enumerate}
+            \item $x$ $\omega$-stabilizes. \\\\
+            Then by the definition of stabilization, $\sigma^P_\omega(x, s^P_\omega) = v$ for some $v \in \textbf{Val}$, meaning that there exists a natural number $N$ such that for all natural numbers $n > N$, we have $\sigma^P_n(x, s^P_n) = v$. Now, let $K = \textit{max}(N, M)$ and observe that for all $k$ such that $K < k < \omega$, we have $\sigma^P_k(x, s^Pk) = v$ since $x$ is $\omega$-stabilizing. Also, by our choice, the $k^\text{th}$ step exactly lies in the indefinite repetition of $S_r$. This means that, after the step $K$; $S_r$ (or any sub-statement of $S_r$) either never assigns any value to $x$ or if it assigns, the value is strictly equal to $v$; otherwise the stabilization of $x$ would be violated. In other words, we have reached to the fixed-point \footnote{We are slightly drifting into the denotational semantics region.} of the value of $x$, under the semantics of $S_r$. \\
+            Acknowledging the fact that $S_r$ by itself is a finite program, $\mathcal{C}(S_r)$ does not modify the value of $x$ after some step $K'$ which is greater than $K$ but still finite, as any compiled statement executes more (but still finite) steps than its high-level counterpart, by the correctness of finite compilation. This means that $x$ is also an $\omega$-stabilizing variable under the execution of $\mathcal{C}(P)$.
+
+            \newpage
+            \item $x$ does not $\omega$-stabilize. ($\sigma^P_\omega(x, s^P_\omega) = \mu$) \\\\
+            Then, for an arbitrary finite step $N > M$, there exists some future step $n > N$ such that $\sigma^P_N(x, s^P_N) \neq \sigma^P_n(x, s^P_n)$. Let $i = \lceil (n- N)/m \rceil$ and let $S^N_r$ be the composition of $S_r$ by itself $i$-many times. (Similar to $S_r$, $S^N_r$ is also executed indefinitely.) Then by construction, both the $N^\text{th}$ and $n^\text{th}$ steps of execution exactly lie in some indefinite repetition of $S^N_r$, meaning that $S^N_r$ does not preserve the value of the variable $x$. By its definition, one execution of $S^N_r$ takes at most $i\cdot m$ steps, which is finite. By correctness of finite compilations (i.e. the induction hypothesis), $\mathcal{C}(S^N_r)$ also does not preserve the value of $x$. \\
+            Observe that with the exact same manner, for any sufficiently large $N'$, we can    construct a statement $S^{N'}_r$ (therefore a $\mathcal{C}(S^{N'}_r)$ in the intermediate representation)  that does not preserve the value of $x$, hence $x$ also does not $\omega$-stabilize under the execution of $\mathcal{C}(P)$, i.e. the value of $x$ is $\mu$ in the IR counterpart as well.      
+        \end{enumerate}
+
+        These both cases ensure that the resulting program states after executing $P$ and $\mathcal{C}(P)$ for $\omega$-steps, are exactly equal; establishing the correctness of the compilation of divergent \texttt{SelVeri} programs.
+        
+    \end{itemize}
+\end{proof}
 
 \end{document}
