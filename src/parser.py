@@ -358,13 +358,13 @@ class AstBuilder(Transformer):
 
     # functions
     def func_decl(self, name, params, ret_type, body):
-        return FunctionDecl(str(name), params or [], ret_type, body or [])
-
-    def param_list_opt(self, params=None):
-        return params or []
-
-    def param_list(self, *params):
-        return list(params)
+        if params is None:
+            normalized_params = []
+        elif isinstance(params, (Param, TypeListParam)): # single parameter case
+            normalized_params = [params]
+        else:
+            normalized_params = list(params)
+        return FunctionDecl(str(name), normalized_params, ret_type, body or [])
 
     def func_stmt_seq(self, *stmts):
         return list(stmts) or []
