@@ -1,0 +1,29 @@
+function sumFiveElements(lst: List[Int, 5]) -> Int ::
+    i : Int;
+    i := 0;
+    sum : Int;
+    sum := 0;
+    while i < 5 do
+        sum := sum + lst[i];
+        i := i + 1;
+    od
+    return sum;
+end
+
+function sum(lst: List[Int]) -> Int ::
+    i : Int;
+    i := 0;
+    sum : Int;
+    sum := 0;
+    while i < len(lst) do
+        sum := sum + lst[i];
+        i := i + 1;
+    od
+    return sum;
+end
+
+lst : List[Int, 5];
+lst := [1, 2, 3, 4, 5];
+result : Int;
+call sumFiveElements(lst);
+result := retvar;

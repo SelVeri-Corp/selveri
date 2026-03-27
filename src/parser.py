@@ -1,4 +1,3 @@
-# selveri_parser.py
 from __future__ import annotations
 
 import argparse
@@ -14,37 +13,61 @@ from errors import ParserError
 # =========================
 @dataclass(frozen=True)
 class Program:
+    func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
 
 class Stmt: pass
-class Expr: pass
 class AExp: pass
 class BExp: pass
 class Spec: pass
-class TypeNode: pass
+class TypeNode: 
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
 class Domain: pass
-class Imm: pass
+class Imm:
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
 
 # Types
 @dataclass(frozen=True)
-class TypeInt(TypeNode): pass
+class TypeInt(TypeNode):
+    def __str__(self) -> str:
+        return "INT"
 
 @dataclass(frozen=True)
-class TypeFloat(TypeNode): pass
+class TypeFloat(TypeNode):
+    def __str__(self) -> str:
+        return "FLOAT"
 
 @dataclass(frozen=True)
 class TypeList(TypeNode):
     elem: TypeNode
-    size: AExp
+    size: IntLit
+    def __str__(self) -> str:
+        return f"LIST[{self.elem},{self.size}]"
+
+
+@dataclass(frozen=True)
+class TypeListParam(TypeNode):
+    elem: TypeNode
+    size: Optional[IntLit] = None
+
+    def __str__(self) -> str:
+        return f"LIST[{self.elem}{f', {self.size}' if self.size else ''}]"
 
 # Immediates / Arithmetic
 @dataclass(frozen=True)
 class IntLit(Imm, AExp):
     value: int
 
+    def __str__(self) -> str:
+        return str(self.value)
+
 @dataclass(frozen=True)
 class FloatLit(Imm, AExp):
     value: float
+    def __str__(self) -> str:
+        return str(self.value)
 
 @dataclass(frozen=True)
 class ListLit(Imm, AExp):
@@ -54,14 +77,23 @@ class ListLit(Imm, AExp):
 class AVar(AExp):
     name: str
 
+    def __str__(self) -> str:
+        return self.name
+
 @dataclass(frozen=True)
 class ALen(AExp):
     name: str
 
+    def __str__(self) -> str:
+        return f"len({self.name})"
+
 @dataclass(frozen=True)
 class AIndex(AExp):
-    name: str
+    base: AExp
     index: AExp
+
+    def __str__(self) -> str:
+        return f"{self.base}[{self.index}]"
 
 @dataclass(frozen=True)
 class AUnOp(AExp):
@@ -79,9 +111,15 @@ class ABinOp(AExp):
 class BBool(BExp):
     value: bool
 
+    def __str__(self) -> str:
+        return "true" if self.value else "false"
+
 @dataclass(frozen=True)
 class BNot(BExp):
     rhs: BExp
+
+    def __str__(self) -> str:
+        return f"!{self.rhs}"
 
 @dataclass(frozen=True)
 class BBinOp(BExp):
@@ -89,24 +127,21 @@ class BBinOp(BExp):
     left: BExp
     right: BExp
 
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
+
 @dataclass(frozen=True)
 class BCompare(BExp):
     op: str
     left: AExp
     right: AExp
 
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
+
 @dataclass(frozen=True)
 class BTruthy(BExp):
     aexp: AExp
-
-# Expr wrappers
-@dataclass(frozen=True)
-class ExprA(Expr):
-    aexp: AExp
-
-@dataclass(frozen=True)
-class ExprB(Expr):
-    bexp: BExp
 
 # Domains
 @dataclass(frozen=True)
@@ -127,6 +162,9 @@ class DomainInterval(Domain):
     hi: AExp
     right_open: bool
 
+    def __str__(self) -> str:
+        return f"[{self.lo}, {self.hi})" if self.right_open else f"[{self.lo}, {self.hi}]"
+
 @dataclass(frozen=True)
 class DomainOpt:
     domain: Optional[Domain]
@@ -135,6 +173,9 @@ class DomainOpt:
 @dataclass(frozen=True)
 class SpecFromBExp(Spec):
     bexp: BExp
+
+    def __str__(self) -> str:
+        return str(self.bexp)
 
 @dataclass(frozen=True)
 class SpecUnOp(Spec):
@@ -147,12 +188,18 @@ class SpecBinOp(Spec):
     left: Spec
     right: Spec
 
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
+
 @dataclass(frozen=True)
 class SpecQuant(Spec):
     kind: str          # "Forall" | "Exists"
     var: str
     domain: Optional[Domain]
     body: Spec
+
+    def __str__(self) -> str:
+        return f"{self.kind} {self.var} in {self.domain} . {self.body}"
 
 # Statements
 @dataclass(frozen=True)
@@ -163,13 +210,12 @@ class Decl(Stmt):
 @dataclass(frozen=True)
 class Assign(Stmt):
     name: str
-    expr: Expr
+    aexp: AExp
 
 @dataclass(frozen=True)
 class ListAssign(Stmt):
-    name: str
-    index: AExp
-    expr: Expr
+    target: AIndex
+    aexp: AExp
 
 @dataclass(frozen=True)
 class Pass(Stmt): pass
@@ -189,13 +235,37 @@ class While(Stmt):
     cond: BExp
     body: List[Stmt]
 
+# Functions
+@dataclass(frozen=True)
+class Param:
+    name: str
+    type_node: TypeNode
+
+@dataclass(frozen=True)
+class Return(Stmt):
+    value: AExp
+
+@dataclass(frozen=True)
+class FuncCall(AExp, Stmt):
+    name: str
+    args: List[AExp]
+
+@dataclass(frozen=True)
+class FunctionDecl:
+    name: str
+    params: List[Param]
+    return_type: TypeNode
+    body: List[Stmt]
 
 @v_args(inline=True)
 class AstBuilder(Transformer):
     def start(self, program): return program
 
-    def program(self, stmt_seq=None):
-        return Program(stmt_seq=stmt_seq or [Pass()])
+    def program(self, *children):
+        if not children:
+            return Program(func_decls=[], stmt_seq=[Pass()])
+        *funcs, stmt_seq = children
+        return Program(func_decls=list(funcs), stmt_seq=stmt_seq or [Pass()])
 
     def stmt_seq(self, *stmts):
         return list(stmts) or []
@@ -206,7 +276,7 @@ class AstBuilder(Transformer):
     # statements
     def decl_stmt(self, name, type_node): return Decl(str(name), type_node)
     def assign_stmt(self, name, expr): return Assign(str(name), expr)
-    def list_assign_stmt(self, name, index, expr): return ListAssign(str(name), index, expr)
+    def list_assign_stmt(self, target, expr): return ListAssign(target, expr)
     def pass_stmt(self): return Pass()
     def empty_stmt(self): return Pass()
     def while_stmt(self, cond, body_seq): return While(cond=cond, body=body_seq or [Pass()])
@@ -214,26 +284,30 @@ class AstBuilder(Transformer):
     def if_stmt(self, cond, then_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
     def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
 
-    # expr wrappers
-    def expr_a(self, aexp): return ExprA(aexp)
-    def expr_b(self, bexp): return ExprB(bexp)
-
     # types
     def type_int(self): return TypeInt()
     def type_float(self): return TypeFloat()
     def type_list(self, elem, size): return TypeList(elem, size)
 
+    # function parameters
+    def param_type(self, name, type_node):
+        return Param(str(name), type_node)
+
+    def param_list_type(self, name, elem_type):
+        return Param(str(name), TypeListParam(elem_type))
+
     # imm/aexp
+    def aexp(self, expr): return expr
     def int_lit(self, tok): return IntLit(int(tok))
     def float_lit(self, tok): return FloatLit(float(tok))
     def list_lit(self, *args):
-        # Grammar: [imm ("," imm)*] - first is imm, then pairs of "," imm
-        if len(args) == 0:
-            return ListLit([])
-        return ListLit([args[i] for i in range(0, len(args), 2)])
+        return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
     def a_len(self, name): return ALen(str(name))
-    def a_index(self, name, idx): return AIndex(str(name), idx)
+    def a_index(self, base, idx):
+        if not isinstance(base, AExp):
+            base = AVar(str(base))
+        return AIndex(base, idx)
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)
@@ -241,6 +315,7 @@ class AstBuilder(Transformer):
     def div(self, l, r): return ABinOp("/", l, r)
 
     # bexp
+    def bexp(self, expr): return expr
     def btrue(self): return BBool(True)
     def bfalse(self): return BBool(False)
     def bnot(self, rhs): return BNot(rhs)
@@ -280,6 +355,39 @@ class AstBuilder(Transformer):
 
     def sexists(self, var, domopt, body):
         return SpecQuant("Exists", str(var), domopt.domain, body)
+
+    # functions
+    def func_decl(self, name, params, ret_type, body):
+        if params is None:
+            normalized_params = []
+        elif isinstance(params, (Param, TypeListParam)): # single parameter case
+            normalized_params = [params]
+        else:
+            normalized_params = list(params)
+        return FunctionDecl(str(name), normalized_params, ret_type, body or [])
+
+    def func_stmt_seq(self, *stmts):
+        return list(stmts) or []
+
+    def func_if_stmt(self, cond, then_seq, else_seq=None):
+        if else_seq is None:
+            return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
+        return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+
+    def func_while_stmt(self, cond, body_seq):
+        return While(cond=cond, body=body_seq or [Pass()])
+
+    def return_stmt(self, expr):
+        return Return(expr)
+
+    def func_call(self, name, args):
+        return FuncCall(str(name), args or [])
+
+    def arg_list_opt(self, args=None):
+        return args or []
+
+    def arg_list(self, *args):
+        return list(args)
 
 
 SELVERI_PARSER = Lark.open(

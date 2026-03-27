@@ -1,0 +1,21 @@
+0: DECL INT, i
+1: PUSH 0
+2: STORE i
+3: DECL INT, sum
+4: PUSH 0
+5: STORE sum
+6: PUSH 10
+7: PUSH i
+8: LT 
+9: JZ 20
+10: DECL INT, square
+11: PUSH i
+12: PUSH i
+13: MUL 
+14: STORE square
+15: PUSH square
+16: PUSH sum
+17: ADD 
+18: STORE sum
+19: GOTO 6
+20: NOOP 
