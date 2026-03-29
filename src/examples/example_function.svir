@@ -1,0 +1,77 @@
+0: ENV 
+1: DECL LIST[INT,5], lst
+2: STORE lst
+3: DECL INT, i
+4: PUSH 0
+5: STORE i
+6: DECL INT, sum
+7: PUSH 0
+8: STORE sum
+9: PUSH 5
+10: LOAD i
+11: LT 
+12: JZ 25
+13: CSCOPE 
+14: LOAD i
+15: LLOAD lst
+16: LOAD sum
+17: ADD 
+18: STORE sum
+19: PUSH 1
+20: LOAD i
+21: ADD 
+22: STORE i
+23: PSCOPE 
+24: GOTO 9
+25: NOOP 
+26: LOAD sum
+27: RET 
+28: ENV 
+29: LDECL LIST[INT], lst
+30: STORE lst
+31: DECL INT, i
+32: PUSH 0
+33: STORE i
+34: DECL INT, sum
+35: PUSH 0
+36: STORE sum
+37: LEN lst
+38: LOAD i
+39: LT 
+40: JZ 53
+41: CSCOPE 
+42: LOAD i
+43: LLOAD lst
+44: LOAD sum
+45: ADD 
+46: STORE sum
+47: PUSH 1
+48: LOAD i
+49: ADD 
+50: STORE i
+51: PSCOPE 
+52: GOTO 37
+53: NOOP 
+54: LOAD sum
+55: RET 
+56: DECL LIST[INT,5], lst
+57: PUSH 1
+58: PUSH 0
+59: LSTORE lst
+60: PUSH 2
+61: PUSH 1
+62: LSTORE lst
+63: PUSH 3
+64: PUSH 2
+65: LSTORE lst
+66: PUSH 4
+67: PUSH 3
+68: LSTORE lst
+69: PUSH 5
+70: PUSH 4
+71: LSTORE lst
+72: DECL INT, result
+73: PUSH lst
+74: CALL sumFiveElements
+75: LOAD retvar
+76: STORE result

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from parser import (
     parse_selveri,
     Program,
-    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot,
-    TypeNode, TypeInt, TypeFloat, TypeList,
-    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp,
+    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
+    TypeNode, TypeInt, TypeFloat, TypeList, TypeListParam,
+    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, FuncCall,
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
+    FunctionDecl,
 )
 
 from errors import CompilerError
@@ -46,15 +47,56 @@ class _ListInfo:
     flat_size: int # the total number of elements in the list (shape[0] * shape[1] * ... * shape[n-1])
 
     @property
-    def rank(self) -> int:
+    def dimension(self) -> int:
         return len(self.shape)
 
     @property
-    def top_level_len(self) -> int:
+    def top_level_len(self) -> Optional[int]:
+        if not self.shape:
+            return 0
         return self.shape[0]
 
+    @property
+    def is_dynamic(self) -> bool:
+        return self.flat_size is None or any(dim is None for dim in self.shape)
 
-# Is empty helper
+
+@dataclass
+class _ScopeFrame:
+    parent: Optional["_ScopeFrame"] = None
+    caller: Optional["_ScopeFrame"] = None
+    bindings: Dict[str, Optional[TypeNode]] = field(default_factory=dict)
+    lists: Dict[str, _ListInfo] = field(default_factory=dict)
+
+    def find_binding_owner(self, name: str) -> Optional["_ScopeFrame"]:
+        cur: Optional[_ScopeFrame] = self
+        while cur is not None:
+            if name in cur.bindings and cur.bindings[name] is not None:
+                return cur
+            cur = cur.parent
+        return None
+
+    def get_binding(self, name: str) -> Optional[TypeNode]:
+        owner = self.find_binding_owner(name)
+        if owner is None:
+            return None
+        return owner.bindings[name]
+
+    def find_list_owner(self, name: str) -> Optional["_ScopeFrame"]:
+        cur: Optional[_ScopeFrame] = self
+        while cur is not None:
+            if name in cur.lists:
+                return cur
+            cur = cur.parent
+        return None
+
+    def get_list(self, name: str) -> Optional[_ListInfo]:
+        owner = self.find_list_owner(name)
+        if owner is None:
+            return None
+        return owner.lists[name]
+
+
 def is_empty_stmt_seq(s: Optional[List[Stmt]]) -> bool:
     if s is None:
         return True
@@ -67,15 +109,17 @@ def is_empty_stmt_seq(s: Optional[List[Stmt]]) -> bool:
 class SelVeriCompiler:
     """
     Compiles SelVeri AST to SelVerIR.
-    - Maintains one scope for compile-time typing.
+    - Tracks compile-time scopes as a parent-linked chain.
+    - Keeps retvar in each scope and updates it after calls.
     - Emits labeled IR where label == instruction index.
     """
 
     def __init__(self) -> None:
-        # All declared names, including high-level lists and lowered flat elements.
-        self.scope: Dict[str, TypeNode] = {}
-        # List metadata for flattened lowering.
-        self.lists: Dict[str, _ListInfo] = {}
+        # starting scope with retvar
+        self.scope = _ScopeFrame() # parent scope
+        self.scope.bindings["retvar"] = None
+        # functions to be compiled (declaration object, pc, scope)
+        self.functions: Dict[str, Tuple[FunctionDecl, int, _ScopeFrame]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
 
@@ -97,15 +141,61 @@ class SelVeriCompiler:
         # Stable mangling for list elements
         return f"{base}[{idx}]"
 
-    def require_declared(self, name: str) -> None:
-        if name not in self.scope:
+    def _create_scope(self, is_env: bool = False) -> None:
+        if is_env:
+            self.scope = _ScopeFrame()
+        else:
+            self.scope = _ScopeFrame(parent=self.scope)
+        self.scope.bindings["retvar"] = None
+
+    def _parent_scope(self) -> None:
+        self.scope = self.scope.parent
+        if self.scope is None:
+            raise CompilerError("Internal: cannot leave the root scope.")
+
+    def _get_binding_owner(self, name: str) -> _ScopeFrame:
+        owner = self.scope.find_binding_owner(name)
+        if owner is None:
             raise CompilerError(f"Undeclared variable: {name}")
+        return owner
+
+    def require_declared(self, name: str) -> None:
+        self._get_declared_type(name)
 
     def _get_declared_type(self, name: str) -> TypeNode:
-        t = self.scope.get(name)
-        if t is None:
-            raise CompilerError(f"Undeclared variable: {name}")
-        return t
+        type_node = self.scope.get_binding(name)
+        if type_node is None:
+            if name == "retvar":
+                raise CompilerError("retvar has no type until a function call returns.")
+            raise CompilerError(f"Internal: unbound variable: {name}")
+        return type_node
+
+    def _declare_local(
+        self,
+        name: str,
+        type_node: Optional[TypeNode],
+        list_info: Optional[_ListInfo] = None,
+    ) -> None:
+        if name == "retvar":
+            raise CompilerError("retvar is reserved and cannot be declared by the user.")
+        if name in self.scope.bindings:
+            raise CompilerError(f"Duplicate declaration: {name}")
+        self.scope.bindings[name] = type_node
+        if list_info is not None:
+            self.scope.lists[name] = list_info
+
+    def _declare_lowered_list_elems(self, base: str, info: _ListInfo) -> None:
+        for idx in range(info.flat_size):
+            elem_name = self.mangle_list_elem(base, idx)
+            if elem_name in self.scope.bindings:
+                raise CompilerError(f"Internal: duplicate lowered name: {elem_name}")
+            self.scope.bindings[elem_name] = info.elem_type
+
+    def _get_list_info(self, name: str) -> _ListInfo:
+        info = self.scope.get_list(name)
+        if info is None:
+            raise CompilerError(f"'{name}' is not a declared list.")
+        return info
 
     def _eval_const_int(self, a: AExp) -> int:
         # evaluates the constant integer value of an AExp at compile time
@@ -115,10 +205,10 @@ class SelVeriCompiler:
         if isinstance(a, FloatLit):
             raise CompilerError("Expected compile-time integer expression, found float literal.")
         if isinstance(a, ALen):
-            info = self.lists.get(a.name)
-            if info is None:
-                raise CompilerError(f"len({a.name}) used but '{a.name}' is not a declared list.")
-            return info.top_level_len # len is calculated at compile time
+            info = self._get_list_info(a.name)
+            if info.top_level_len is None:
+                raise CompilerError(f"len({a.name}) is not known at compile time.")
+            return info.top_level_len
         if isinstance(a, AUnOp):
             if a.op != "-":
                 raise CompilerError(f"Unsupported unary op in compile-time integer expression: {a.op}")
@@ -140,7 +230,7 @@ class SelVeriCompiler:
         raise CompilerError("Expected compile-time integer expression.")
 
     def _flatten_list_type(self, t: TypeList) -> _ListInfo:
-        shape: List[int] = []
+        shape: List[Optional[int]] = []
         elem_t: TypeNode = t
         while isinstance(elem_t, TypeList):
             dim = self._eval_const_int(elem_t.size)
@@ -155,14 +245,47 @@ class SelVeriCompiler:
         strides: List[int] = []
         running = 1 # running product of dimensions
         for dim in reversed(shape):
+            assert dim is not None
             strides.append(running)
             running *= dim
         strides.reverse()
-        flat_size = running # the total number of elements in the list (shape[0] * shape[1] * ... * shape[n-1])
-        return _ListInfo(elem_type=elem_t, shape=tuple(shape), strides=tuple(strides), flat_size=flat_size)
+        return _ListInfo(
+            elem_type=elem_t,
+            shape=tuple(shape),
+            strides=tuple(strides),
+            flat_size=running,
+        )
+
+    def _flatten_param_list_type(self, t: TypeListParam) -> _ListInfo:
+        if isinstance(t.elem, TypeList):
+            inner = self._flatten_list_type(t.elem)
+            return _ListInfo(
+                elem_type=inner.elem_type,
+                shape=(None, *inner.shape),
+                strides=(inner.flat_size or 1, *inner.strides),
+                flat_size=None,
+            )
+        if isinstance(t.elem, (TypeInt, TypeFloat)):
+            return _ListInfo(elem_type=t.elem, shape=(None,), strides=(1,), flat_size=None)
+        raise CompilerError("Dynamic list parameters must ultimately contain numeric elements.")
 
     def _flat_list_decl_type(self, info: _ListInfo) -> TypeList:
-        return TypeList(info.elem_type, IntLit(info.flat_size)) # the type of the list is the type of the elements and the size is the total number of elements
+        if info.flat_size is None:
+            raise CompilerError("Internal: cannot emit static DECL for a dynamic list.")
+        return TypeList(info.elem_type, IntLit(info.flat_size))
+
+    def _type_from_static_shape(
+        self,
+        elem_type: TypeNode,
+        shape: Tuple[Optional[int], ...],
+    ) -> TypeNode:
+        if any(dim is None for dim in shape):
+            raise CompilerError("Internal: cannot reconstruct a type from a dynamic shape.")
+        built: TypeNode = elem_type
+        for dim in reversed(shape):
+            assert dim is not None
+            built = TypeList(built, IntLit(dim))
+        return built
 
     def _extract_list_access(self, a: AIndex) -> Tuple[str, List[AExp]]:
         indices: List[AExp] = []
@@ -188,27 +311,25 @@ class SelVeriCompiler:
 
     def _resolve_list_access(self, a: AIndex) -> Tuple[_ListInfo, str, List[AExp]]:
         base_name, indices = self._extract_list_access(a)
-        info = self.lists.get(base_name)
-        if info is None:
-            raise CompilerError(f"Indexing '{base_name}[..]' but '{base_name}' is not a declared list.")
-        if len(indices) > info.rank:
+        info = self._get_list_info(base_name)
+        if len(indices) > info.dimension:
             raise CompilerError(
-                f"Flattened list '{base_name}' of rank {info.rank} "
+                f"Flattened list '{base_name}' of rank {info.dimension} "
                 f"cannot be indexed with {len(indices)} indices."
             )
         return info, base_name, indices
 
     def _get_type_list_access(self, info: _ListInfo, indices: List[AExp]) -> TypeNode:
-        # if fully indexed, we reach the numeric element type
-        if len(indices) == info.rank:
+        if len(indices) == info.dimension:
             return info.elem_type
-        # otherwise, we return a (lower-rank) list type corresponding to the remaining dimensions after the applied indices
         remaining_shape = info.shape[len(indices):]
+        if any(dim is None for dim in remaining_shape):
+            raise CompilerError("Cannot use a dynamically-sized sub-list as a first-class value.")
         elem_t: TypeNode = info.elem_type
-        # rebuild nested TypeList from inner-most dimension outwards
         for dim in reversed(remaining_shape):
+            assert dim is not None
             elem_t = TypeList(elem_t, IntLit(dim))
-        return elem_t # the type of the list after the applied indices
+        return elem_t
 
     def _flatten_list_literal(
         self,
@@ -240,24 +361,31 @@ class SelVeriCompiler:
 
         raise CompilerError("Unsupported list literal assignment target type.")
 
-    # ---------- type checks ----------
+    def _default_value_expr(self, type_node: TypeNode) -> AExp:
+        if isinstance(type_node, TypeInt):
+            return IntLit(0)
+        if isinstance(type_node, TypeFloat):
+            return FloatLit(0.0)
+        if isinstance(type_node, TypeList):
+            size = self._eval_const_int(type_node.size)
+            items = [self._default_value_expr(type_node.elem) for _ in range(size)]
+            return ListLit(items)
+        raise CompilerError("Unsupported function return type for the return rule.")
+
     def _type_of_aexp(self, a: AExp) -> TypeNode:
         if isinstance(a, IntLit):
             return TypeInt()
         if isinstance(a, FloatLit):
             return TypeFloat()
         if isinstance(a, ListLit):
-            raise CompilerError("not supported")
+            raise CompilerError("List literals are not first-class arithmetic expressions.")
         if isinstance(a, AVar):
-            t = self.scope.get(a.name)
-            if t is None:
-                raise CompilerError(f"Undeclared variable in AExp: {a.name}")
-            if isinstance(t, TypeList):
+            t = self._get_declared_type(a.name)
+            if isinstance(t, (TypeList, TypeListParam)):
                 raise CompilerError(f"Using list variable '{a.name}' as numeric is not supported.")
             return t
         if isinstance(a, ALen):
-            if a.name not in self.lists:
-                raise CompilerError(f"len({a.name}) used but '{a.name}' is not a declared list.")
+            self._get_list_info(a.name)
             return TypeInt()
         if isinstance(a, AIndex):
             info, _base_name, indices = self._resolve_list_access(a)
@@ -282,9 +410,83 @@ class SelVeriCompiler:
     def _type_of_var_for_store(self, name: str) -> TypeNode:
         return self._get_declared_type(name)
 
+    def _ct_type(self, t: TypeNode) -> str:
+        if isinstance(t, TypeInt):
+            return "INT"
+        if isinstance(t, TypeFloat):
+            return "FLOAT"
+        if isinstance(t, TypeList):
+            info = self._flatten_list_type(t)
+            elem_ir = self._ct_type(info.elem_type)
+            return f"LIST[{elem_ir},{info.flat_size}]"
+        raise CompilerError(f"Unsupported type for CT: {type(t).__name__}")
+
+    def _are_list_types_compatible(self, actual: _ListInfo, expected: _ListInfo) -> bool:
+        """
+        Checks if the actual list type is compatible with the expected list type.
+
+        Example:
+        List[Int, 5] is compatible with List[Int]
+        List[Int, 5] is not compatible with List[Int, 6]
+        List[Int, 5] is not compatible with List[Float, 5]
+        """
+        if actual.elem_type != expected.elem_type:
+            return False
+        if actual.dimension != expected.dimension:
+            return False
+        for actual_dim, expected_dim in zip(actual.shape, expected.shape):
+            if expected_dim is None:
+                continue
+            if actual_dim is None:
+                return False
+            if actual_dim != expected_dim:
+                return False
+        return True
+
+    def _list_arg_info(self, arg: AExp) -> _ListInfo:
+        if isinstance(arg, AVar):
+            t = self._get_declared_type(arg.name)
+            if not isinstance(t, (TypeList, TypeListParam)):
+                raise CompilerError(f"Argument '{arg.name}' is not a list.")
+            return self._get_list_info(arg.name)
+        raise CompilerError("Only whole-list variables or list literals can be passed as list arguments.")
+
+    def _compile_list_argument(self, arg: AExp, expected: _ListInfo, dynamic_len: bool) -> None:
+        if isinstance(arg, AVar):
+            actual = self._list_arg_info(arg)
+            if not self._are_list_types_compatible(actual, expected):
+                raise CompilerError(f"List argument '{arg.name}' does not match parameter type.")
+            self.emit("LOAD", arg.name)
+            if dynamic_len:
+                top_len = actual.top_level_len
+                if top_len is None:
+                    self.emit("LEN", arg.name)
+                else:
+                    self.emit("PUSH", top_len)
+            return
+
+        if isinstance(arg, ListLit):
+            if dynamic_len:
+                literal_shape = (len(arg.items), *expected.shape[1:])
+                literal_type = self._type_from_static_shape(expected.elem_type, literal_shape)
+                flat_values = self._flatten_list_literal(arg, literal_type)
+                top_level_len = len(arg.items)
+            else:
+                if not expected.shape or expected.shape[0] is None:
+                    raise CompilerError("Internal: static list parameter is missing its shape.")
+                literal_type = self._type_from_static_shape(expected.elem_type, expected.shape)
+                flat_values = self._flatten_list_literal(arg, literal_type)
+                top_level_len = expected.shape[0]
+            for value in reversed(flat_values):
+                self.emit("PUSH", value)
+            if dynamic_len:
+                self.emit("PUSH", top_level_len)
+            return
+
+        raise CompilerError("Only whole-list variables or list literals can be passed as list arguments.")
+
     # ---------- CA: arithmetic compilation ----------
     def CA(self, a: AExp) -> None:
-        # CA(x) = PUSH x if x is Imm
         if isinstance(a, IntLit):
             self.emit("PUSH", a.value)
             return
@@ -293,29 +495,31 @@ class SelVeriCompiler:
             return
 
         if isinstance(a, ListLit):
-            raise CompilerError("not supported")
+            raise CompilerError("List literals are not first-class arithmetic expressions.")
 
         if isinstance(a, AVar):
-            self.require_declared(a.name)
-            t = self.scope[a.name]
-            if isinstance(t, TypeList):
-                raise CompilerError(f"Cannot load whole list '{a.name}'. Use indexing.")
-            self.emit("PUSH", a.name)
+            t = self._get_declared_type(a.name)
+            if isinstance(t, (TypeList, TypeListParam)):
+                raise CompilerError(f"Cannot load whole list '{a.name}' as a numeric value.")
+            self.emit("LOAD", a.name)
             return
 
         if isinstance(a, ALen):
-            info = self.lists.get(a.name)
-            if info is None:
-                raise CompilerError(f"len({a.name}) but '{a.name}' is not a list.")
-            self.emit("PUSH", info.top_level_len) # len is resolved at compile time
+            info = self._get_list_info(a.name)
+            # if the list is dynamic, we need to emit a LEN instruction
+            if info.top_level_len is None:
+                self.emit("LEN", a.name)
+            else:
+                # if size is known, resolve at compile time
+                self.emit("PUSH", info.top_level_len)
             return
 
         if isinstance(a, AIndex):
             info, base_name, indices = self._resolve_list_access(a)
-            if len(indices) != info.rank:
+            if len(indices) != info.dimension:
                 raise CompilerError(
                     f"Cannot load whole list expression '{base_name}[..]' as a numeric value; "
-                    f"provide exactly {info.rank} indices."
+                    f"provide exactly {info.dimension} indices."
                 )
             flat_index = self._build_flat_index_expr(info, indices)
             self.CA(flat_index)
@@ -439,34 +643,34 @@ class SelVeriCompiler:
             self._compile_while(s)
             return
 
+        if isinstance(s, Return):
+            self._compile_return(s)
+            return
+            
+        if isinstance(s, FuncCall):
+            self._compile_call(s)
+            return
         raise CompilerError(f"Unsupported statement: {type(s).__name__}")
 
     def _compile_decl(self, d: Decl) -> None:
         name = d.name
-        if name in self.scope:
-            raise CompilerError(f"Duplicate declaration: {name}")
-
         t = d.type_node
-        self.scope[name] = t
 
         if isinstance(t, TypeInt):
+            self._declare_local(name, t)
             self.emit("DECL", "INT", name)
             return
 
         if isinstance(t, TypeFloat):
+            self._declare_local(name, t)
             self.emit("DECL", "FLOAT", name)
             return
 
         if isinstance(t, TypeList):
             info = self._flatten_list_type(t)
-            self.lists[name] = info
+            self._declare_local(name, t, info)
+            self._declare_lowered_list_elems(name, info)
             self.emit("DECL", self._flat_list_decl_type(info), name)
-
-            for i in range(info.flat_size):
-                elem_name = self.mangle_list_elem(name, i)
-                if elem_name in self.scope:
-                    raise CompilerError(f"Internal: duplicate lowered name: {elem_name}")
-                self.scope[elem_name] = info.elem_type
             return
 
         raise CompilerError(f"Unsupported type in declaration: {type(t).__name__}")
@@ -474,19 +678,18 @@ class SelVeriCompiler:
     def _compile_assign(self, a: Assign) -> None:
         name = a.name
         t = self._type_of_var_for_store(name)
-        if isinstance(t, TypeList): # this is the whole list assignment like lst := [1, 2, 3]
+
+        if isinstance(t, TypeListParam):
+            raise CompilerError(f"Whole-list assignment for dynamic list '{name}' is not supported.")
+
+        if isinstance(t, TypeList):
             if not isinstance(a.aexp, ListLit):
                 raise CompilerError(f"Whole-list assignment for '{name}' requires a list literal.")
             flat_values = self._flatten_list_literal(a.aexp, t)
-            info = self.lists.get(name)
-            if info is None:
-                raise CompilerError(f"Internal: missing list metadata for '{name}'.")
-            if len(flat_values) != info.flat_size:
-                raise CompilerError(
-                    f"Internal: flattened literal size mismatch for '{name}': "
-                    f"{len(flat_values)} != {info.flat_size}"
-                )
-            for idx, value in enumerate(flat_values): # TODO: change this into STORE instructions with mangling names
+            info = self._get_list_info(name)
+            if info.flat_size is None or len(flat_values) != info.flat_size:
+                raise CompilerError(f"Internal: flattened literal size mismatch for '{name}'.")
+            for idx, value in enumerate(flat_values):
                 self.emit("PUSH", value)
                 self.emit("PUSH", idx)
                 self.emit("LSTORE", name)
@@ -501,13 +704,13 @@ class SelVeriCompiler:
 
     def _compile_list_assign(self, la: ListAssign) -> None: # this is the sub-list assignment like lst[0] := [1, 2, 3] or lst[0][0] := 1
         elem_info, target, indices = self._resolve_list_access(la.target)
-        remaining_rank = elem_info.rank - len(indices)
-        if remaining_rank < 0:
+        remaining_dimension = elem_info.dimension - len(indices)
+        if remaining_dimension < 0:
             # should be caught earlier in _resolve_list_access
             raise CompilerError("Too many indices for list assignment.")
 
         # case 1: fully indexed element assignment (scalar store)
-        if remaining_rank == 0:
+        if remaining_dimension == 0:
             flat_index = self._build_flat_index_expr(elem_info, indices)
             self.CA(la.aexp)
             self.CA(flat_index) # TODO: if we only use constants, we can use STORE directly instead of LSTORE with mangling names
@@ -551,44 +754,126 @@ class SelVeriCompiler:
                 self.CA(index_expr)
             self.emit("LSTORE", target)
 
-    def _compile_if(self, s: If) -> None:
-        self.CB(s.cond) # condition
-        jz_patch = _PatchRef(self.emit("JZ", -1))  # placeholder
+    def _compile_block(self, stmts: List[Stmt]) -> None:
+        self.emit("CSCOPE")
+        self._create_scope()
+        self.C_stmt_seq(stmts)
+        self._parent_scope()
+        self.emit("PSCOPE")
 
-        # then
-        self.C_stmt_seq(s.then_s) # then body
+    def _compile_if(self, s: If) -> None:
+        self.CB(s.cond)
+        jz_patch = _PatchRef(self.emit("JZ", -1))
+
+        self._compile_block(s.then_s)
 
         if is_empty_stmt_seq(s.else_s):
             noop_pc = self.emit("NOOP")
             self.patch_jump(jz_patch, noop_pc)
             return
 
-        goto_patch = _PatchRef(self.emit("GOTO", -1))  # placeholder to skip else
+        goto_after_else = _PatchRef(self.emit("GOTO", -1))
         else_start_pc = self.pc()
-        self.C_stmt_seq(s.else_s) # else body
+        self._compile_block(s.else_s or [])
         noop_pc = self.emit("NOOP")
 
         self.patch_jump(jz_patch, else_start_pc)
-        self.patch_jump(goto_patch, noop_pc)
+        self.patch_jump(goto_after_else, noop_pc)
 
     def _compile_while(self, s: While) -> None:
-        # C(while b do S od) = CB(b) : JZ pcNOOP : C(S) : GOTO pcb : NOOP
         pcb = self.pc()
         self.CB(s.cond)
-        jz_patch = _PatchRef(self.emit("JZ", -1))  # to NOOP at end
-        self.C_stmt_seq(s.body)
+        jz_patch = _PatchRef(self.emit("JZ", -1))
+
+        self._compile_block(s.body)
+
         self.emit("GOTO", pcb)
         noop_pc = self.emit("NOOP")
         self.patch_jump(jz_patch, noop_pc)
+
+    def _compile_return(self, r: Return) -> None:
+        self.CA(r.value)
+        self.emit("RET")
+
+    def _compile_call(self, call: FuncCall) -> None:
+        func_info = self.functions.get(call.name)
+        if func_info is None:
+            raise CompilerError(f"Undefined function: {call.name}")
+        func_decl, _entry_pc, _scope = func_info
+
+        if len(call.args) != len(func_decl.params):
+            raise CompilerError(
+                f"Function '{call.name}' expects {len(func_decl.params)} arguments, got {len(call.args)}."
+            )
+
+        for param, arg in reversed(list(zip(func_decl.params, call.args))):
+            if isinstance(param.type_node, TypeListParam):
+                expected = self._flatten_param_list_type(param.type_node)
+                self._compile_list_argument(arg, expected, dynamic_len=True)
+            elif isinstance(param.type_node, TypeList):
+                expected = self._flatten_list_type(param.type_node)
+                self._compile_list_argument(arg, expected, dynamic_len=False)
+            else:
+                self.CA(arg)
+
+        self.emit("CALL", call.name)
+        self.scope.bindings["retvar"] = func_decl.return_type # no scope changes required in compile-time
 
     # ---------- program ----------
     def C_stmt_seq(self, s: List[Stmt]) -> None:
         for stmt in s:
             self.C_stmt(stmt)
 
+    def _register_functions(self, p: Program) -> None:
+        for func in p.func_decls:
+            if func.name in self.functions:
+                raise CompilerError(f"Duplicate function declaration: {func.name}")
+            self.functions[func.name] = (func, -1, None)
+
     def compile_program(self, p: Program) -> List[IRInstr]:
+        self._register_functions(p) # order of function declarations is not important
+        # any function can call any other function regardless of the order of declarations
+
+        for func in p.func_decls:
+            self._compile_function_decl(func)
+
         self.C_stmt_seq(p.stmt_seq)
         return self.code
+
+    def _compile_function_decl(self, f: FunctionDecl) -> None:
+        old_scope = self.scope
+        new_scope = _ScopeFrame()
+        self.functions[f.name] = (f, self.pc(), new_scope) # update pc and scope of the record
+
+        self.emit("ENV")
+        self.scope = new_scope
+        for param in f.params:
+            name = param.name
+            t = param.type_node
+            if name == "retvar":
+                raise CompilerError("retvar is reserved and cannot be used as a parameter name.")
+
+            if isinstance(t, TypeListParam):
+                info = self._flatten_param_list_type(t)
+                elem_ir = self._ct_type(info.elem_type)
+                self._declare_local(name, t, info)
+                self.emit("LDECL", f"LIST[{elem_ir}]", name)
+            elif isinstance(t, TypeList):
+                info = self._flatten_list_type(t)
+                self._declare_local(name, t, info)
+                self._declare_lowered_list_elems(name, info)
+                self.emit("DECL", self._ct_type(t), name)
+            else:
+                self._declare_local(name, t)
+                self.emit("DECL", self._ct_type(t), name)
+            self.emit("STORE", name) # used to fetch the parameter value from the stack
+
+        # function body must end with a return statement
+        if not f.body or not isinstance(f.body[-1], Return):
+            f.body.append(Return(self._default_value_expr(f.return_type)))
+
+        self.C_stmt_seq(f.body)
+        self.scope = old_scope # restore the original scope
 
     def compile_to_text(self, p: Program) -> str:
         code = self.compile_program(p)
