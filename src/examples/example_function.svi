@@ -1,4 +1,4 @@
-function sumFiveElements(lst: List[Int, 5]) -> Int ::
+function sumFiveElements(lst: List[Int, 1, 5]) -> Int ::
     i : Int;
     i := 0;
     sum : Int;
@@ -10,7 +10,7 @@ function sumFiveElements(lst: List[Int, 5]) -> Int ::
     return sum;
 end
 
-function sum(lst: List[Int]) -> Int ::
+function sum(lst: List[Int, 1]) -> Int ::
     i : Int;
     i := 0;
     sum : Int;
@@ -22,7 +22,7 @@ function sum(lst: List[Int]) -> Int ::
     return sum;
 end
 
-lst : List[Int, 5];
+lst : List[Int, 1, 5];
 lst := [1, 2, 3, 4, 5];
 result : Int;
 call sumFiveElements(lst);

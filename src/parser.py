@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List
 
@@ -23,37 +23,53 @@ class Spec: pass
 class TypeNode: 
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
+class ConcreteType(TypeNode):
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
 class Domain: pass
 class Imm:
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
 
 # Types
+class BasicType(ConcreteType):
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
+
 @dataclass(frozen=True)
-class TypeInt(TypeNode):
+class TypeInt(BasicType):
     def __str__(self) -> str:
         return "INT"
 
 @dataclass(frozen=True)
-class TypeFloat(TypeNode):
+class TypeFloat(BasicType):
     def __str__(self) -> str:
         return "FLOAT"
 
 @dataclass(frozen=True)
-class TypeList(TypeNode):
-    elem: TypeNode
-    size: IntLit
-    def __str__(self) -> str:
-        return f"LIST[{self.elem},{self.size}]"
+class TypeList(ConcreteType):
+    elem: BasicType
+    dimension: IntLit
+    shape: List[AExp] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if self.dimension.value != len(self.shape):
+            raise ParserError(
+                f"List type dimension ({self.dimension.value}) does not match "
+                f"declared shape count ({len(self.shape)})."
+            )
+
+    def __str__(self) -> str:
+        return f"LIST[{self.elem},{self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 @dataclass(frozen=True)
 class TypeListParam(TypeNode):
-    elem: TypeNode
-    size: Optional[IntLit] = None
+    elem: BasicType
+    dimension: IntLit
+    shape: List[Optional[AExp]] = field(default_factory=list)
 
     def __str__(self) -> str:
-        return f"LIST[{self.elem}{f', {self.size}' if self.size else ''}]"
+        return f"LIST[{self.elem}, {self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 # Immediates / Arithmetic
 @dataclass(frozen=True)
@@ -287,14 +303,14 @@ class AstBuilder(Transformer):
     # types
     def type_int(self): return TypeInt()
     def type_float(self): return TypeFloat()
-    def type_list(self, elem, size): return TypeList(elem, size)
+    def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
 
     # function parameters
     def param_type(self, name, type_node):
         return Param(str(name), type_node)
 
-    def param_list_type(self, name, elem_type):
-        return Param(str(name), TypeListParam(elem_type))
+    def param_list_type(self, name, elem_type, dimension, *shape):
+        return Param(str(name), TypeListParam(elem_type, IntLit(int(dimension)), list(shape)))
 
     # imm/aexp
     def aexp(self, expr): return expr
@@ -391,7 +407,7 @@ class AstBuilder(Transformer):
 
 
 SELVERI_PARSER = Lark.open(
-    "grammar.lark",
+    str(Path(__file__).with_name("grammar.lark")),
     parser="lalr",
     lexer="contextual",
     maybe_placeholders=False,
