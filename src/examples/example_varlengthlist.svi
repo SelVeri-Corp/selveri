@@ -8,4 +8,5 @@ val := 2;
 while i < len(lst) do
     lst[i] := val;
     val := val * 2;
+    i := i + 1;
 od

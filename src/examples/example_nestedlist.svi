@@ -4,11 +4,10 @@ x[1] := [3, 10];
 x[2][1] := 8;
 i : Int;
 i := 0;
-j : Int;
-j := 0;
 sum : Int;
 sum := 0;
 while i < 3 do
+    j : Int;
     j := 0;
     while j < 2 do
         sum := sum + x[i][j];
