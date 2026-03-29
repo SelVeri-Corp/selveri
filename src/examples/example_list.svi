@@ -1,4 +1,4 @@
-x : List[Int, 5];
+x : List[Int, 1, 5];
 x := [1, 2, 3, 4, 5];
 i : Int;
 i := 0;

@@ -2,13 +2,17 @@
 1: PUSH 1
 2: STORE x
 3: PUSH 1
-4: PUSH x
-5: EQ 
-6: JZ 10
-7: PUSH 2
-8: STORE x
-9: GOTO 12
-10: PUSH 3
-11: STORE x
-12: NOOP 
-13: VERI Forall i in [0, 3) . x = 1 && true
+4: LOAD x
+5: EQ
+6: JZ 12
+7: CSCOPE
+8: PUSH 2
+9: STORE x
+10: PSCOPE
+11: GOTO 16
+12: CSCOPE
+13: PUSH 3
+14: STORE x
+15: PSCOPE
+16: NOOP
+17: VERI Forall i in [0, 3) . x = 1 && true

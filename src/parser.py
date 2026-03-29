@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List
 
@@ -13,6 +13,7 @@ from errors import ParserError
 # =========================
 @dataclass(frozen=True)
 class Program:
+    func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
 
 class Stmt: pass
@@ -22,28 +23,53 @@ class Spec: pass
 class TypeNode: 
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
+class ConcreteType(TypeNode):
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
 class Domain: pass
 class Imm:
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
 
 # Types
+class BasicType(ConcreteType):
+    def __str__(self) -> str:
+        raise NotImplementedError("Subclasses must implement __str__")
+
 @dataclass(frozen=True)
-class TypeInt(TypeNode):
+class TypeInt(BasicType):
     def __str__(self) -> str:
         return "INT"
 
 @dataclass(frozen=True)
-class TypeFloat(TypeNode):
+class TypeFloat(BasicType):
     def __str__(self) -> str:
         return "FLOAT"
 
 @dataclass(frozen=True)
-class TypeList(TypeNode):
-    elem: TypeNode
-    size: IntLit
+class TypeList(ConcreteType):
+    elem: BasicType
+    dimension: IntLit
+    shape: List[AExp] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.dimension.value != len(self.shape):
+            raise ParserError(
+                f"List type dimension ({self.dimension.value}) does not match "
+                f"declared shape count ({len(self.shape)})."
+            )
+
     def __str__(self) -> str:
-        return f"LIST[{self.elem},{self.size}]"
+        return f"LIST[{self.elem},{self.dimension}{f', {self.shape}' if self.shape else ''}]"
+
+@dataclass(frozen=True)
+class TypeListParam(TypeNode):
+    elem: BasicType
+    dimension: IntLit
+    shape: List[Optional[AExp]] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        return f"LIST[{self.elem}, {self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 # Immediates / Arithmetic
 @dataclass(frozen=True)
@@ -225,13 +251,37 @@ class While(Stmt):
     cond: BExp
     body: List[Stmt]
 
+# Functions
+@dataclass(frozen=True)
+class Param:
+    name: str
+    type_node: TypeNode
+
+@dataclass(frozen=True)
+class Return(Stmt):
+    value: AExp
+
+@dataclass(frozen=True)
+class FuncCall(AExp, Stmt):
+    name: str
+    args: List[AExp]
+
+@dataclass(frozen=True)
+class FunctionDecl:
+    name: str
+    params: List[Param]
+    return_type: TypeNode
+    body: List[Stmt]
 
 @v_args(inline=True)
 class AstBuilder(Transformer):
     def start(self, program): return program
 
-    def program(self, stmt_seq=None):
-        return Program(stmt_seq=stmt_seq or [Pass()])
+    def program(self, *children):
+        if not children:
+            return Program(func_decls=[], stmt_seq=[Pass()])
+        *funcs, stmt_seq = children
+        return Program(func_decls=list(funcs), stmt_seq=stmt_seq or [Pass()])
 
     def stmt_seq(self, *stmts):
         return list(stmts) or []
@@ -253,7 +303,14 @@ class AstBuilder(Transformer):
     # types
     def type_int(self): return TypeInt()
     def type_float(self): return TypeFloat()
-    def type_list(self, elem, size): return TypeList(elem, size)
+    def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
+
+    # function parameters
+    def param_type(self, name, type_node):
+        return Param(str(name), type_node)
+
+    def param_list_type(self, name, elem_type, dimension, *shape):
+        return Param(str(name), TypeListParam(elem_type, IntLit(int(dimension)), list(shape)))
 
     # imm/aexp
     def aexp(self, expr): return expr
@@ -315,9 +372,42 @@ class AstBuilder(Transformer):
     def sexists(self, var, domopt, body):
         return SpecQuant("Exists", str(var), domopt.domain, body)
 
+    # functions
+    def func_decl(self, name, params, ret_type, body):
+        if params is None:
+            normalized_params = []
+        elif isinstance(params, (Param, TypeListParam)): # single parameter case
+            normalized_params = [params]
+        else:
+            normalized_params = list(params)
+        return FunctionDecl(str(name), normalized_params, ret_type, body or [])
+
+    def func_stmt_seq(self, *stmts):
+        return list(stmts) or []
+
+    def func_if_stmt(self, cond, then_seq, else_seq=None):
+        if else_seq is None:
+            return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
+        return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+
+    def func_while_stmt(self, cond, body_seq):
+        return While(cond=cond, body=body_seq or [Pass()])
+
+    def return_stmt(self, expr):
+        return Return(expr)
+
+    def func_call(self, name, args):
+        return FuncCall(str(name), args or [])
+
+    def arg_list_opt(self, args=None):
+        return args or []
+
+    def arg_list(self, *args):
+        return list(args)
+
 
 SELVERI_PARSER = Lark.open(
-    "grammar.lark",
+    str(Path(__file__).with_name("grammar.lark")),
     parser="lalr",
     lexer="contextual",
     maybe_placeholders=False,

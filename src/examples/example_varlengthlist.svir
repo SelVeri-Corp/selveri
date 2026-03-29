@@ -1,0 +1,35 @@
+0: DECL INT, x
+1: PUSH 5
+2: STORE x
+3: DECL INT, _lst_len_1
+4: LOAD x
+5: STORE _lst_len_1
+6: LOAD x
+7: PUSH 1
+8: MUL
+9: LDECL LIST[INT], lst
+10: DECL INT, i
+11: PUSH 0
+12: STORE i
+13: DECL INT, val
+14: PUSH 2
+15: STORE val
+16: LEN lst
+17: LOAD i
+18: LT
+19: JZ 34
+20: CSCOPE
+21: LOAD val
+22: LOAD i
+23: LSTORE lst
+24: PUSH 2
+25: LOAD val
+26: MUL
+27: STORE val
+28: PUSH 1
+29: LOAD i
+30: ADD
+31: STORE i
+32: PSCOPE
+33: GOTO 16
+34: NOOP

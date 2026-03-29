@@ -15,7 +15,7 @@ COMP_OP: "=" | "<=" | "<" | ">=" | ">"
 
 // ================== PARSER ==================
 start: program
-program: stmt_seq
+program: func_decl* stmt_seq
 
 // A sequence is zero or more contracts.
 // Semicolon policy is enforced by the contract forms below.
@@ -36,6 +36,7 @@ stmt_seq: stmt*
                | assign
                | list_assign
                | "pass"                                               -> pass_stmt
+               | func_call
 
 // Statements that MUST NOT end with ';'
 ?unterminated_stmt: if_stmt
@@ -55,9 +56,12 @@ list_assign: indexed_value ":=" aexp                                      -> lis
               | indexed_value "[" aexp "]"                                -> a_index
 
 // ------------------ TYPES ------------------
-?type: "Int"                                                              -> type_int
-     | "Float"                                                            -> type_float
-     | "List" "[" type "," aexp "]"                                       -> type_list
+?basic_type: "Int"                                                              -> type_int
+           | "Float"                                                            -> type_float
+?type: basic_type
+     | "List" "[" basic_type "," INT_LIT "," aexp_list "]"                  -> type_list
+
+aexp_list: aexp ("," aexp)*                                               -> aexp_list
 
 // ------------------ IMMEDIATES ------------------
 ?imm: INT_LIT                                                             -> int_lit
@@ -149,4 +153,39 @@ interval: "[" aexp "," aexp ")"                                           -> int
         | "[" aexp "," aexp "]"                                           -> interval_closed
 
 set_lit: "{" aexp_list "}"                                                -> set_lit
-aexp_list: aexp ("," aexp)*                                               -> aexp_list
+
+// ------------------ FUNCTIONS ------------------
+func_decl: "function" IDENT "(" param_list? ")" "->" type "::" func_stmt_seq "end" -> func_decl
+
+?param_list: param ("," param)*
+?param:  IDENT ":" type                                                   -> param_type
+       | IDENT ":" "List" "[" basic_type "," INT_LIT "]"                  -> param_list_type
+
+func_stmt_seq: func_stmt*
+?func_stmt:  func_terminated_stmt
+           | func_unterminated_stmt
+           | spec_annot                                                 -> spec_annot
+           | ";"                                                          -> empty_stmt
+
+?func_terminated_stmt: func_semicolon_stmt ";"
+?func_semicolon_stmt: decl
+                    | assign
+                    | list_assign
+                    | func_call
+                    | "pass"                                                 -> pass_stmt
+                    | return_stmt
+
+?func_unterminated_stmt: func_if_stmt
+                        | func_while_stmt
+
+func_if_stmt: "if" bexp "then" func_stmt_seq "else" func_stmt_seq "fi"        -> func_if_else_stmt
+             | "if" bexp "then" func_stmt_seq "fi"                              -> func_if_stmt
+
+func_while_stmt: "while" bexp "do" func_stmt_seq "od"                          -> func_while_stmt
+
+return_stmt: "return" aexp                                                    -> return_stmt
+
+// Calls
+func_call: "call" IDENT "(" arg_list_opt ")"                                  -> func_call
+?arg_list_opt: arg_list?
+?arg_list: aexp ("," aexp)* -> arg_list

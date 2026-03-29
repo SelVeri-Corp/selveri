@@ -1,0 +1,12 @@
+x : Int;
+x := 5;
+lst : List[Int, 1, x];
+i : Int;
+i := 0;
+val : Int;
+val := 2;
+while i < len(lst) do
+    lst[i] := val;
+    val := val * 2;
+    i := i + 1;
+od
