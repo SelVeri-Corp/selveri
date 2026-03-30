@@ -1,0 +1,10 @@
+x : List[Int, 1, 5];
+x := [1, 2, 3, 4, 5];
+i : Int;
+i := 0;
+sum : Int;
+sum := 0;
+while i < 5 do
+    sum := sum + x[i];
+    i := i + 1;
+od

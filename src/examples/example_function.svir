@@ -1,0 +1,84 @@
+0: GOTO 65
+1: ENV
+2: DECL INT, _lst_len_1
+3: PUSH 5
+4: STORE _lst_len_1
+5: PUSH 5
+6: LDECL LIST[INT], lst
+7: STORE lst
+8: DECL INT, i
+9: PUSH 0
+10: STORE i
+11: DECL INT, sum
+12: PUSH 0
+13: STORE sum
+14: PUSH 5
+15: LOAD i
+16: LT
+17: JZ 30
+18: CSCOPE
+19: LOAD i
+20: LLOAD lst
+21: LOAD sum
+22: ADD
+23: STORE sum
+24: PUSH 1
+25: LOAD i
+26: ADD
+27: STORE i
+28: PSCOPE
+29: GOTO 14
+30: NOOP
+31: LOAD sum
+32: RET
+33: ENV
+34: DECL INT, _lst_len_1
+35: STORE _lst_len_1
+36: LOAD _lst_len_1
+37: LDECL LIST[INT], lst
+38: LOAD _lst_len_1
+39: STORE lst
+40: DECL INT, i
+41: PUSH 0
+42: STORE i
+43: DECL INT, sum
+44: PUSH 0
+45: STORE sum
+46: LEN lst
+47: LOAD i
+48: LT
+49: JZ 62
+50: CSCOPE
+51: LOAD i
+52: LLOAD lst
+53: LOAD sum
+54: ADD
+55: STORE sum
+56: PUSH 1
+57: LOAD i
+58: ADD
+59: STORE i
+60: PSCOPE
+61: GOTO 46
+62: NOOP
+63: LOAD sum
+64: RET
+65: DECL INT, _lst_len_1
+66: PUSH 5
+67: STORE _lst_len_1
+68: PUSH 5
+69: PUSH 1
+70: MUL
+71: LDECL LIST[INT], lst
+72: PUSH 5
+73: PUSH 4
+74: PUSH 3
+75: PUSH 2
+76: PUSH 1
+77: PUSH 5
+78: STORE lst
+79: DECL INT, result
+80: LOAD lst
+81: CALL 1
+82: LOAD retvar
+83: STORE result

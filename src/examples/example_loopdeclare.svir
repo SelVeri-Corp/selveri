@@ -1,0 +1,23 @@
+0: DECL INT, i
+1: PUSH 0
+2: STORE i
+3: DECL INT, sum
+4: PUSH 0
+5: STORE sum
+6: PUSH 10
+7: LOAD i
+8: LT
+9: JZ 22
+10: CSCOPE
+11: DECL INT, square
+12: LOAD i
+13: LOAD i
+14: MUL
+15: STORE square
+16: LOAD square
+17: LOAD sum
+18: ADD
+19: STORE sum
+20: PSCOPE
+21: GOTO 6
+22: NOOP
