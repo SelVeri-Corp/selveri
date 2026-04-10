@@ -1,5 +1,5 @@
 0: GOTO 65
-1: ENV
+1: FUNCENV INT
 2: DECL INT, _lst_len_1
 3: PUSH 5
 4: STORE _lst_len_1
@@ -31,7 +31,7 @@
 30: NOOP
 31: LOAD sum
 32: RET
-33: ENV
+33: FUNCENV INT
 34: DECL INT, _lst_len_1
 35: STORE _lst_len_1
 36: LOAD _lst_len_1

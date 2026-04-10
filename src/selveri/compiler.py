@@ -892,14 +892,14 @@ class SelVeriCompiler:
             if not self._are_list_types_compatible(actual, expected):
                 raise CompilerError("Returned list value does not match the declared function return type.")
             self._compile_list_value(stmt.value, expected)
-            self.emit("RET", 1)
+            self.emit("RET")
             return
 
         actual_type = self._type_of_aexp(stmt.value)
         if not self._basic_types_compatible(actual_type, expected_type):
             raise CompilerError("Returned value does not match the declared function return type.")
         self.CA(stmt.value)
-        self.emit("RET", 0)
+        self.emit("RET")
 
     def _compile_call(self, call: FuncCall) -> None:
         func_info = self.functions.get(call.name)
@@ -977,7 +977,7 @@ class SelVeriCompiler:
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
-        self.emit("ENV")
+        self.emit("FUNCENV", f"{func.return_type}")
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
         self.current_return_type = func.return_type

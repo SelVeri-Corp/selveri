@@ -1,5 +1,5 @@
 0: GOTO 239
-1: ENV
+1: FUNCENV LIST[INT, 1]
 2: DECL INT, _lst_len_1
 3: STORE _lst_len_1
 4: LOAD _lst_len_1
@@ -42,8 +42,8 @@
 41: LEN lst
 42: LSTORE res
 43: LOAD res
-44: RET 1
-45: ENV
+44: RET
+45: FUNCENV LIST[INT, 1]
 46: DECL INT, _lst_len_1
 47: STORE _lst_len_1
 48: LOAD _lst_len_1
@@ -83,8 +83,8 @@
 82: GOTO 66
 83: NOOP
 84: LOAD res
-85: RET 1
-86: ENV
+85: RET
+86: FUNCENV LIST[INT, 1]
 87: DECL INT, _lst_len_1
 88: STORE _lst_len_1
 89: LOAD _lst_len_1
@@ -163,8 +163,8 @@
 162: LOAD lst
 163: CALL 1
 164: LOAD retvar
-165: RET 1
-166: ENV
+165: RET
+166: FUNCENV LIST[INT, 1]
 167: DECL INT, _lst_len_1
 168: STORE _lst_len_1
 169: LOAD _lst_len_1
@@ -229,12 +229,12 @@
 228: LOAD retvar
 229: STORE clean
 230: LOAD clean
-231: RET 1
+231: RET
 232: PSCOPE
 233: GOTO 238
 234: CSCOPE
 235: LOAD lst
-236: RET 1
+236: RET
 237: PSCOPE
 238: NOOP
 239: DECL INT, _lst_len_1

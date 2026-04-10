@@ -41,6 +41,7 @@ class RuntimeScope:
 class CallFrame:
     return_pc: int
     scopes: Tuple[RuntimeScope, ...]
+    return_type: Optional[DeclType] = None
 
 
 # -----------------------
@@ -232,6 +233,29 @@ def _type_from_object(obj: Any) -> DeclType:
 
     raise IRParseError(f"Unknown declaration type object: {obj!r}")
 
+
+def _type_from_funcenv_arg(obj: Any) -> DeclType:
+    if isinstance(obj, str):
+        s = obj.strip()
+
+        if s == "INT":
+            return DeclType("INT", None, None)
+
+        if s == "FLOAT":
+            return DeclType("FLOAT", None, None)
+
+        if s.upper().startswith("LIST"):
+            elem_match = re.search(r"LIST\s*\[\s*(INT|FLOAT)\b", s, re.IGNORECASE)
+            if elem_match:
+                return DeclType("LIST", elem_match.group(1).upper(), None)
+
+        raise IRParseError(f"Unknown FUNCENV return type: {obj}")
+
+    decl_type = _type_from_object(obj)
+    if decl_type.kind == "LIST":
+        return DeclType("LIST", decl_type.elem_kind, None)
+    return decl_type
+
 # type casting
 def _coerce_value(value: Any, decl_type: DeclType) -> Any:
     if decl_type.kind == "INT":
@@ -393,10 +417,16 @@ class SelVerIRInterpreter:
             return DeclType("LIST", elem_kind, len(value))
         raise IRRuntimeError(f"Unsupported runtime value: {value!r}")
 
-    def _set_retvar(self, value: Any) -> None:
+    def _set_retvar(self, value: Any, decl_type: Optional[DeclType] = None) -> None:
         scope = self.scopes[-1]
-        scope.values["retvar"] = copy.deepcopy(value)
-        scope.types["retvar"] = self._infer_decl_type_from_value(value)
+        if decl_type is None:
+            scope.values["retvar"] = copy.deepcopy(value)
+            scope.types["retvar"] = self._infer_decl_type_from_value(value)
+            return
+
+        coerced_value = _coerce_value(value, decl_type)
+        scope.values["retvar"] = copy.deepcopy(coerced_value)
+        scope.types["retvar"] = decl_type
 
     def _push_list_packet(self, values: List[Any]) -> None:
         for item in reversed(values):
@@ -627,9 +657,18 @@ class SelVerIRInterpreter:
             self.pc += 1
             return
 
-        if op == "ENV":
+        if op == "FUNCENV":
             if not self.call_stack:
-                raise IRRuntimeError("ENV requires an active call frame.")
+                raise IRRuntimeError(f"{op} requires an active call frame.")
+            if len(instr.args) > 1:
+                raise IRRuntimeError("FUNCENV expects at most one argument.")
+            return_type = _type_from_funcenv_arg(instr.args[0]) if instr.args else None
+            frame = self.call_stack[-1]
+            self.call_stack[-1] = CallFrame(
+                return_pc=frame.return_pc,
+                scopes=frame.scopes,
+                return_type=return_type,
+            )
             self.scopes = [self._fresh_scope()]
             self.pc += 1
             return
@@ -811,27 +850,18 @@ class SelVerIRInterpreter:
         self.call_stack.append(CallFrame(return_pc=self.pc + 1, scopes=tuple(self.scopes)))
         self._jump_to_label(target)
 
-    def _exec_ret(self, args: Tuple[Any, ...]) -> None:
+    def _exec_ret(self, _args: Tuple[Any, ...]) -> None:
         if not self.call_stack:
             raise IRRuntimeError("RET requires an active call frame.")
         if not self.stack:
             raise IRRuntimeError("RET requires a value on the stack.")
 
-        # return kind flags
-        # return 0 => leaves stack as 0
-        # return [] => leaves stack as a list packet with the size on the top so 0 again
-        if len(args) > 1:
-            raise IRRuntimeError("RET expects at most one return-kind flag.")
+        frame = self.call_stack[-1]
+        return_type = frame.return_type
 
-        return_kind = None
-        if args:
-            return_kind = int(args[0])
-            if return_kind not in (0, 1):
-                raise IRRuntimeError("RET return-kind flag must be 0 or 1.")
-
-        if return_kind == 1:
-            return_value = self._pop_list_packet()
-        elif return_kind == 0:
+        if return_type is not None and return_type.kind == "LIST":
+            return_value = self._pop_list_packet(expected_size=return_type.size)
+        elif return_type is not None:
             return_value = self._pop()
         elif len(self.stack) == 1:
             return_value = self._pop()
@@ -843,7 +873,7 @@ class SelVerIRInterpreter:
 
         frame = self.call_stack.pop()
         self.scopes = list(frame.scopes)
-        self._set_retvar(return_value)
+        self._set_retvar(return_value, return_type)
         self.pc = frame.return_pc
 
 
