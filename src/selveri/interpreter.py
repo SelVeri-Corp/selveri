@@ -452,14 +452,8 @@ class SelVerIRInterpreter:
     def run(
         self,
         program: Iterable[IRInstr],
-        initial_state: Optional[Dict[str, Any]] = None,
     ) -> ExecutionResult:
         self.load(program) # load the program into the interpreter
-
-        if initial_state:
-            for k, v in initial_state.items():
-                self.scopes[0].values[k] = copy.deepcopy(v)
-        self._refresh_public_views()
 
         while 0 <= self.pc < len(self.code):
             if self.steps >= self.max_steps:
@@ -829,8 +823,7 @@ class SelVerIRInterpreter:
         decl_type = self._get_decl_type(name)
 
         if decl_type.kind in {"INT", "FLOAT"}:
-            self._push(0) # TODO: decide if this should throw an error or not
-            return
+            raise IRRuntimeError("LEN expects a list target.")
 
         if decl_type.kind == "LIST":
             len_name = f"_{name}_len_1"
@@ -859,17 +852,13 @@ class SelVerIRInterpreter:
         frame = self.call_stack[-1]
         return_type = frame.return_type
 
-        if return_type is not None and return_type.kind == "LIST":
+        if return_type is None:
+            raise IRRuntimeError("Internal: return type of current function is None.")
+
+        if return_type.kind == "LIST":
             return_value = self._pop_list_packet(expected_size=return_type.size)
-        elif return_type is not None:
-            return_value = self._pop()
-        elif len(self.stack) == 1:
-            return_value = self._pop()
         else:
-            top = self.stack[-1]
-            if not isinstance(top, int) or top < 0:
-                raise IRRuntimeError("Malformed list return packet.")
-            return_value = self._pop_list_packet()
+            return_value = self._pop()
 
         frame = self.call_stack.pop()
         self.scopes = list(frame.scopes)
@@ -882,48 +871,26 @@ class SelVerIRInterpreter:
 # -----------------------
 def interpret_ir_text(
     text: str,
-    initial_state: Optional[Dict[str, Any]] = None,
     verifier: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
     program = parse_ir_text(text)
-    return interpret_ir_code(program, initial_state=initial_state, verifier=verifier, max_steps=max_steps)
+    return interpret_ir_code(program, verifier=verifier, max_steps=max_steps)
 
 def interpret_ir_code(
     code: Iterable[IRInstr],
-    initial_state: Optional[Dict[str, Any]] = None,
     verifier: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
-    return SelVerIRInterpreter(verifier=verifier, max_steps=max_steps).run(
-        program=code,
-        initial_state=initial_state,
-    )
+    return SelVerIRInterpreter(verifier=verifier, max_steps=max_steps).run(program=code)
 
 # -----------------------
 # CLI for flexibility
 # -----------------------
-def _parse_initial_state(text: Optional[str]) -> Optional[Dict[str, Any]]:
-    if text is None:
-        return None
-    try:
-        value = ast.literal_eval(text)
-    except Exception as exc:
-        raise IRParseError(f"Could not parse --state literal: {exc}") from exc
-    if not isinstance(value, dict):
-        raise IRParseError("--state must evaluate to a dict.")
-    return value
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Interpret SelVerIR concretely.")
     parser.add_argument("input", type=Path, help="Path to the .svir file")
-    parser.add_argument(
-        "--state",
-        type=str,
-        default=None,
-        help="Optional initial state as a Python dict literal, e.g. '{\"x\": 3}'",
-    )
     parser.add_argument(
         "--max-steps",
         type=int,
@@ -935,10 +902,8 @@ def main() -> None:
     with open(args.input, "r", encoding="utf-8") as f:
         text = f.read()
 
-    initial_state = _parse_initial_state(args.state)
     result = interpret_ir_text(
         text,
-        initial_state=initial_state,
         verifier=None,
         max_steps=args.max_steps,
     )
