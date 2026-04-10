@@ -1,0 +1,260 @@
+0: GOTO 239
+1: ENV
+2: DECL INT, _lst_len_1
+3: STORE _lst_len_1
+4: LOAD _lst_len_1
+5: LDECL LIST[INT], lst
+6: LOAD _lst_len_1
+7: STORE lst
+8: DECL INT, element
+9: STORE element
+10: DECL INT, _res_len_1
+11: PUSH 1
+12: LEN lst
+13: ADD
+14: STORE _res_len_1
+15: PUSH 1
+16: LEN lst
+17: ADD
+18: PUSH 1
+19: MUL
+20: LDECL LIST[INT], res
+21: DECL INT, i
+22: PUSH 0
+23: STORE i
+24: LEN lst
+25: LOAD i
+26: LT
+27: JZ 39
+28: CSCOPE
+29: LOAD i
+30: LLOAD lst
+31: LOAD i
+32: LSTORE res
+33: PUSH 1
+34: LOAD i
+35: ADD
+36: STORE i
+37: PSCOPE
+38: GOTO 24
+39: NOOP
+40: LOAD element
+41: LEN lst
+42: LSTORE res
+43: LOAD res
+44: RET 1
+45: ENV
+46: DECL INT, _lst_len_1
+47: STORE _lst_len_1
+48: LOAD _lst_len_1
+49: LDECL LIST[INT], lst
+50: LOAD _lst_len_1
+51: STORE lst
+52: DECL INT, _res_len_1
+53: PUSH 1
+54: LEN lst
+55: SUB
+56: STORE _res_len_1
+57: PUSH 1
+58: LEN lst
+59: SUB
+60: PUSH 1
+61: MUL
+62: LDECL LIST[INT], res
+63: DECL INT, i
+64: PUSH 0
+65: STORE i
+66: PUSH 1
+67: LEN lst
+68: SUB
+69: LOAD i
+70: LT
+71: JZ 83
+72: CSCOPE
+73: LOAD i
+74: LLOAD lst
+75: LOAD i
+76: LSTORE res
+77: PUSH 1
+78: LOAD i
+79: ADD
+80: STORE i
+81: PSCOPE
+82: GOTO 66
+83: NOOP
+84: LOAD res
+85: RET 1
+86: ENV
+87: DECL INT, _lst_len_1
+88: STORE _lst_len_1
+89: LOAD _lst_len_1
+90: LDECL LIST[INT], lst
+91: LOAD _lst_len_1
+92: STORE lst
+93: DECL INT, low
+94: STORE low
+95: DECL INT, high
+96: STORE high
+97: DECL INT, pivot
+98: LOAD high
+99: LLOAD lst
+100: STORE pivot
+101: DECL INT, i
+102: PUSH 1
+103: LOAD low
+104: SUB
+105: STORE i
+106: DECL INT, j
+107: LOAD low
+108: STORE j
+109: LOAD high
+110: LOAD j
+111: LT
+112: JZ 143
+113: CSCOPE
+114: LOAD pivot
+115: LOAD j
+116: LLOAD lst
+117: LT
+118: JZ 136
+119: CSCOPE
+120: PUSH 1
+121: LOAD i
+122: ADD
+123: STORE i
+124: DECL INT, temp
+125: LOAD j
+126: LLOAD lst
+127: STORE temp
+128: LOAD i
+129: LLOAD lst
+130: LOAD j
+131: LSTORE lst
+132: LOAD temp
+133: LOAD i
+134: LSTORE lst
+135: PSCOPE
+136: NOOP
+137: PUSH 1
+138: LOAD j
+139: ADD
+140: STORE j
+141: PSCOPE
+142: GOTO 109
+143: NOOP
+144: DECL INT, temp
+145: LOAD high
+146: LLOAD lst
+147: STORE temp
+148: PUSH 1
+149: LOAD i
+150: ADD
+151: LLOAD lst
+152: LOAD high
+153: LSTORE lst
+154: LOAD temp
+155: PUSH 1
+156: LOAD i
+157: ADD
+158: LSTORE lst
+159: PUSH 1
+160: LOAD i
+161: ADD
+162: LOAD lst
+163: CALL 1
+164: LOAD retvar
+165: RET 1
+166: ENV
+167: DECL INT, _lst_len_1
+168: STORE _lst_len_1
+169: LOAD _lst_len_1
+170: LDECL LIST[INT], lst
+171: LOAD _lst_len_1
+172: STORE lst
+173: DECL INT, low
+174: STORE low
+175: DECL INT, high
+176: STORE high
+177: LOAD high
+178: LOAD low
+179: LT
+180: JZ 234
+181: CSCOPE
+182: DECL INT, _encoded_len_1
+183: PUSH 1
+184: LEN lst
+185: ADD
+186: STORE _encoded_len_1
+187: PUSH 1
+188: LEN lst
+189: ADD
+190: PUSH 1
+191: MUL
+192: LDECL LIST[INT], encoded
+193: DECL INT, _clean_len_1
+194: LEN lst
+195: STORE _clean_len_1
+196: LEN lst
+197: PUSH 1
+198: MUL
+199: LDECL LIST[INT], clean
+200: DECL INT, pi
+201: LOAD high
+202: LOAD low
+203: LOAD lst
+204: CALL 86
+205: LOAD retvar
+206: STORE encoded
+207: LEN lst
+208: LLOAD encoded
+209: STORE pi
+210: LOAD encoded
+211: CALL 45
+212: LOAD retvar
+213: STORE clean
+214: PUSH 1
+215: LOAD pi
+216: SUB
+217: LOAD low
+218: LOAD clean
+219: CALL 166
+220: LOAD retvar
+221: STORE clean
+222: LOAD high
+223: PUSH 1
+224: LOAD pi
+225: ADD
+226: LOAD clean
+227: CALL 166
+228: LOAD retvar
+229: STORE clean
+230: LOAD clean
+231: RET 1
+232: PSCOPE
+233: GOTO 238
+234: CSCOPE
+235: LOAD lst
+236: RET 1
+237: PSCOPE
+238: NOOP
+239: DECL INT, _lst_len_1
+240: PUSH 6
+241: STORE _lst_len_1
+242: PUSH 6
+243: PUSH 1
+244: MUL
+245: LDECL LIST[INT], lst
+246: PUSH 5
+247: PUSH 1
+248: PUSH 9
+249: PUSH 8
+250: PUSH 7
+251: PUSH 10
+252: PUSH 6
+253: STORE lst
+254: PUSH 5
+255: PUSH 0
+256: LOAD lst
+257: CALL 166
+258: LOAD retvar
+259: STORE lst

@@ -1,4 +1,4 @@
-i: Int;
+i : Int;
 i := 0;
 sum: Int;
 sum := 0;
@@ -6,4 +6,5 @@ while i < 10 do
     square: Int;
     square := i * i;
     sum := sum + square;
+    i := i + 1;
 od

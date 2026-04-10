@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
-from errors import IRRuntimeError, IRParseError
-from compiler import IRInstr
+from .errors import IRRuntimeError, IRParseError
+from .compiler import IRInstr
 
 @dataclass(frozen=True)
 class DeclType:
@@ -28,6 +28,21 @@ class ExecutionResult:
     halted: bool
 
 
+_UNSET = object()
+
+
+@dataclass
+class RuntimeScope:
+    values: Dict[str, Any]
+    types: Dict[str, Optional[DeclType]]
+
+
+@dataclass(frozen=True)
+class CallFrame:
+    return_pc: int
+    scopes: Tuple[RuntimeScope, ...]
+
+
 # -----------------------
 # IR Parser
 # -----------------------
@@ -40,9 +55,11 @@ _FLOAT_RE = re.compile(r"^[+-]?(?:\d+\.\d*|\d*\.\d+)$")
 # parse list type List[INT|FLOAT[, size]]
 _LIST_TEXT_RE = re.compile(r"^LIST\s*\[\s*(INT|FLOAT)\s*(?:,\s*([+-]?\d+)\s*)?\]$", re.IGNORECASE)
 
-# this function splits the arguments into a list of strings by commas
-# however as list literals also use commas, we implement depth tracking to handle nested lists correctly
 def _split_top_level_commas(s: str) -> List[str]:
+    """
+    Splits the arguments into a list of strings by commas.
+    However as list literals also use commas, nested depth tracking is implemented to handle nested lists correctly.
+    """
     parts: List[str] = []
     cur: List[str] = []
     depth_par = 0
@@ -177,7 +194,7 @@ def _type_from_object(obj: Any) -> DeclType:
     if cls_name == "TypeFloat":
         return DeclType("FLOAT", None, None)
 
-    if cls_name == "TypeList":
+    if cls_name in {"TypeList", "TypeDynamicList", "TypeListParam"}:
         elem_obj = None
         if hasattr(obj, "elem"):
             elem_obj = getattr(obj, "elem")
@@ -191,15 +208,25 @@ def _type_from_object(obj: Any) -> DeclType:
         if elem_type.kind != "INT" and elem_type.kind != "FLOAT":
             raise IRParseError(f"Only flat numeric lists are supported at runtime, got: {obj}")
 
-        size_obj = getattr(obj, "size", None)
         size: Optional[int] = None
-        if size_obj is not None:
-            if isinstance(size_obj, int):
-                size = size_obj
-            elif hasattr(size_obj, "value"):
-                size = int(getattr(size_obj, "value"))
-            elif isinstance(size_obj, str) and _INT_RE.fullmatch(size_obj.strip()):
-                size = int(size_obj.strip())
+        shape_obj = getattr(obj, "shape", None)
+        if shape_obj:
+            first_dim = shape_obj[0]
+            if isinstance(first_dim, int):
+                size = first_dim
+            elif hasattr(first_dim, "value"):
+                size = int(getattr(first_dim, "value"))
+            elif isinstance(first_dim, str) and _INT_RE.fullmatch(first_dim.strip()):
+                size = int(first_dim.strip())
+        else:
+            size_obj = getattr(obj, "size", None)
+            if size_obj is not None:
+                if isinstance(size_obj, int):
+                    size = size_obj
+                elif hasattr(size_obj, "value"):
+                    size = int(getattr(size_obj, "value"))
+                elif isinstance(size_obj, str) and _INT_RE.fullmatch(size_obj.strip()):
+                    size = int(size_obj.strip())
 
         return DeclType("LIST", elem_type.kind, size)
 
@@ -257,6 +284,8 @@ class SelVerIRInterpreter:
         self.state: Dict[str, Any] = {}
         self.types: Dict[str, DeclType] = {}
         self.stack: List[Union[int, float]] = []
+        self.scopes: List[RuntimeScope] = []
+        self.call_stack: List[CallFrame] = []
 
         self.pc: int = 0
         self.steps: int = 0
@@ -268,11 +297,12 @@ class SelVerIRInterpreter:
         self.reset_runtime() # reset the runtime state
 
     def reset_runtime(self) -> None:
-        self.state = {} # clear the state
-        self.types = {} # clear the types
         self.stack = [] # clear the stack
+        self.scopes = [self._fresh_scope()]
+        self.call_stack = []
         self.pc = 0 # reset the program counter
         self.steps = 0 # reset the steps
+        self._refresh_public_views()
 
     # ---------- stack ----------
     def _push(self, value: Any) -> None:
@@ -284,13 +314,104 @@ class SelVerIRInterpreter:
         return self.stack.pop()
 
     # ---------- lookup ----------
+    def _fresh_scope(self) -> RuntimeScope:
+        return RuntimeScope(values={"retvar": _UNSET}, types={"retvar": None})
+
+    def _refresh_public_views(self) -> None:
+        visible_state: Dict[str, Any] = {}
+        visible_types: Dict[str, DeclType] = {}
+
+        for scope in self.scopes:
+            for name, value in scope.values.items():
+                if value is not _UNSET:
+                    visible_state[name] = value
+            for name, decl_type in scope.types.items():
+                if decl_type is not None:
+                    visible_types[name] = decl_type
+
+        self.state = visible_state
+        self.types = visible_types
+
+    def _find_scope_with_type(self, name: str) -> Optional[RuntimeScope]:
+        for scope in reversed(self.scopes):
+            if name in scope.types:
+                return scope
+        return None
+
+    def _find_scope_with_value(self, name: str) -> Optional[RuntimeScope]:
+        for scope in reversed(self.scopes):
+            if name in scope.values:
+                return scope
+        return None
+
     def _require_declared(self, name: str) -> None:
-        if name not in self.types:
+        if self._find_scope_with_type(name) is None:
             raise IRRuntimeError(f"Undeclared variable: {name}")
 
     def _get_decl_type(self, name: str) -> DeclType:
         self._require_declared(name)
-        return self.types[name]
+        scope = self._find_scope_with_type(name)
+        assert scope is not None
+        decl_type = scope.types[name]
+        if decl_type is None:
+            raise IRRuntimeError(f"{name} has no runtime type.")
+        return decl_type
+
+    def _get_value(self, name: str) -> Any:
+        scope = self._find_scope_with_value(name)
+        if scope is None:
+            raise IRRuntimeError(f"Undeclared variable: {name}")
+        value = scope.values[name]
+        if value is _UNSET:
+            raise IRRuntimeError(f"Uninitialized variable: {name}")
+        return value
+
+    def _set_value(self, name: str, value: Any) -> None:
+        scope = self._find_scope_with_type(name)
+        if scope is None:
+            raise IRRuntimeError(f"Undeclared variable: {name}")
+        scope.values[name] = value
+
+    def _declare(self, name: str, decl_type: DeclType, value: Any) -> None:
+        scope = self.scopes[-1]
+        if name in scope.types and name != "retvar":
+            raise IRRuntimeError(f"{name} has already been declared.")
+        scope.types[name] = decl_type
+        scope.values[name] = value
+
+    def _infer_decl_type_from_value(self, value: Any) -> DeclType:
+        if isinstance(value, bool):
+            return DeclType("INT", None, None)
+        if isinstance(value, int):
+            return DeclType("INT", None, None)
+        if isinstance(value, float):
+            return DeclType("FLOAT", None, None)
+        if isinstance(value, list):
+            elem_kind = "INT"
+            if any(isinstance(item, float) for item in value):
+                elem_kind = "FLOAT"
+            return DeclType("LIST", elem_kind, len(value))
+        raise IRRuntimeError(f"Unsupported runtime value: {value!r}")
+
+    def _set_retvar(self, value: Any) -> None:
+        scope = self.scopes[-1]
+        scope.values["retvar"] = copy.deepcopy(value)
+        scope.types["retvar"] = self._infer_decl_type_from_value(value)
+
+    def _push_list_packet(self, values: List[Any]) -> None:
+        for item in reversed(values):
+            self._push(item)
+        self._push(len(values))
+
+    def _pop_list_packet(self, expected_size: Optional[int] = None) -> List[Any]:
+        size = int(self._pop())
+        if size < 0:
+            raise IRRuntimeError("List size cannot be negative.")
+        if expected_size is not None and size != expected_size:
+            raise IRRuntimeError("List length mismatch.")
+        if len(self.stack) < size:
+            raise IRRuntimeError("Stack underflow while reading list packet.")
+        return [self._pop() for _ in range(size)]
 
     def _jump_to_label(self, label: int) -> None:
         if label not in self.label_to_index:
@@ -307,7 +428,8 @@ class SelVerIRInterpreter:
 
         if initial_state:
             for k, v in initial_state.items():
-                self.state[k] = copy.deepcopy(v)
+                self.scopes[0].values[k] = copy.deepcopy(v)
+        self._refresh_public_views()
 
         while 0 <= self.pc < len(self.code):
             if self.steps >= self.max_steps:
@@ -315,6 +437,7 @@ class SelVerIRInterpreter:
 
             instr = self.code[self.pc]
             self._step(instr)
+            self._refresh_public_views()
             self.steps += 1
 
         return ExecutionResult(
@@ -341,6 +464,11 @@ class SelVerIRInterpreter:
 
         if op == "PUSH":
             self._exec_push(instr.args)
+            self.pc += 1
+            return
+
+        if op == "LOAD":
+            self._exec_load(instr.args)
             self.pc += 1
             return
 
@@ -483,10 +611,37 @@ class SelVerIRInterpreter:
             self._jump_to_label(target)
             return
 
+        if op == "CALL":
+            self._exec_call(instr.args)
+            return
+
+        if op == "CSCOPE":
+            self.scopes.append(self._fresh_scope())
+            self.pc += 1
+            return
+
+        if op == "PSCOPE":
+            if len(self.scopes) == 1:
+                raise IRRuntimeError("Cannot leave the root scope.")
+            self.scopes.pop()
+            self.pc += 1
+            return
+
+        if op == "ENV":
+            if not self.call_stack:
+                raise IRRuntimeError("ENV requires an active call frame.")
+            self.scopes = [self._fresh_scope()]
+            self.pc += 1
+            return
+
+        if op == "RET":
+            self._exec_ret(instr.args)
+            return
+
         if op == "VERI":
-            # spec = instr.args[0] if instr.args else None
-            # if self.verifier is not None:
-            #     self.verifier(spec, copy.deepcopy(self.state))
+            spec = instr.args[0] if instr.args else None
+            if self.verifier is not None:
+                self.verifier(spec, copy.deepcopy(self.state))
             self.pc += 1
             return
 
@@ -503,26 +658,20 @@ class SelVerIRInterpreter:
         type_obj, name_obj = args
         name = str(name_obj).strip()
 
-        if name in self.types:
-            raise IRRuntimeError(f"{name} has already been declared.") 
-
         decl_type = _type_from_object(type_obj)
-        self.types[name] = decl_type
-
-        # default value initialization
         if decl_type.kind == "INT":
-            self.state[name] = 0
+            self._declare(name, decl_type, 0)
             return
 
         if decl_type.kind == "FLOAT":
-            self.state[name] = 0.0
+            self._declare(name, decl_type, 0.0)
             return
 
         if decl_type.kind == "LIST":
             if decl_type.size is None:
                 raise IRRuntimeError("Static list declaration requires a size.")
             zero = 0 if decl_type.elem_kind == "INT" else 0.0
-            self.state[name] = [zero for _ in range(decl_type.size)]
+            self._declare(name, decl_type, [zero for _ in range(decl_type.size)])
             return
 
         raise IRRuntimeError(f"Unsupported DECL type: {decl_type}")
@@ -532,9 +681,6 @@ class SelVerIRInterpreter:
             raise IRRuntimeError("LDECL expects two arguments.")
         type_obj, name_obj = args
         name = str(name_obj).strip()
-
-        if name in self.types:
-            raise IRRuntimeError(f"{name} has already been declared.")
 
         decl_type = _type_from_object(type_obj)
         if decl_type.kind != "LIST":
@@ -546,10 +692,8 @@ class SelVerIRInterpreter:
             raise IRRuntimeError("List size cannot be negative.")
 
         runtime_type = DeclType("LIST", decl_type.elem_kind, size)
-        self.types[name] = runtime_type
-
         zero = 0 if decl_type.elem_kind == "INT" else 0.0
-        self.state[name] = [zero for _ in range(size)]
+        self._declare(name, runtime_type, [zero for _ in range(size)])
 
     def _exec_push(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -564,17 +708,26 @@ class SelVerIRInterpreter:
 
         # loading from a declared variable
         name = str(arg).strip()
-        if name in self.types:
-            value = self.state[name]
+        scope = self._find_scope_with_value(name)
+        if scope is not None:
+            value = self._get_value(name)
             if isinstance(value, list):
-                # push x[0] as top element, matching STORE order
-                for item in reversed(value):
-                    self._push(item)
+                self._push_list_packet(value)
             else:
                 self._push(value)
             return
 
         raise IRRuntimeError(f"Cannot PUSH unknown identifier or immediate: {arg}")
+
+    def _exec_load(self, args: Tuple[Any, ...]) -> None:
+        if len(args) != 1:
+            raise IRRuntimeError("LOAD expects one source.")
+        name = str(args[0]).strip()
+        value = self._get_value(name)
+        if isinstance(value, list):
+            self._push_list_packet(value)
+            return
+        self._push(value)
 
     def _exec_store(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -584,15 +737,15 @@ class SelVerIRInterpreter:
 
         if decl_type.kind in {"INT", "FLOAT"}:
             value = self._pop()
-            self.state[name] = _coerce_value(value, decl_type) # type casting
+            self._set_value(name, _coerce_value(value, decl_type))
             return
 
         if decl_type.kind == "LIST":
             if decl_type.size is None:
                 raise IRRuntimeError("Cannot STORE whole list without a known list size.")
-            items = [self._pop() for _ in range(decl_type.size)] # pop the items from the stack
-            list_value = _coerce_value(items, decl_type) # type casting
-            self.state[name] = list_value # store the list value in the state
+            items = self._pop_list_packet(expected_size=decl_type.size)
+            list_value = _coerce_value(items, decl_type)
+            self._set_value(name, list_value)
             return
 
         raise IRRuntimeError(f"Unsupported STORE target type: {decl_type}")
@@ -606,7 +759,7 @@ class SelVerIRInterpreter:
             raise IRRuntimeError(f"LLOAD target is not a list: {name}")
 
         idx = int(self._pop()) # index from the stack
-        arr = self.state[name]
+        arr = self._get_value(name)
         if idx < 0 or idx >= len(arr):
             raise IRRuntimeError(f"List index out of bounds: {name}[{idx}]")
         self._push(arr[idx])
@@ -623,7 +776,7 @@ class SelVerIRInterpreter:
         idx = int(self._pop())
         value = self._pop()
 
-        arr = self.state[name]
+        arr = self._get_value(name)
         if idx < 0 or idx >= len(arr):
             raise IRRuntimeError(f"List index out of bounds: {name}[{idx}]")
 
@@ -641,10 +794,57 @@ class SelVerIRInterpreter:
             return
 
         if decl_type.kind == "LIST":
-            self._push(len(self.state[name]))
+            len_name = f"_{name}_len_1"
+            len_scope = self._find_scope_with_value(len_name)
+            if len_scope is not None:
+                self._push(int(self._get_value(len_name)))
+                return
+            self._push(len(self._get_value(name)))
             return
 
         raise IRRuntimeError(f"Unsupported LEN target: {name}")
+
+    def _exec_call(self, args: Tuple[Any, ...]) -> None:
+        if len(args) != 1:
+            raise IRRuntimeError("CALL expects one target label.")
+        target = int(args[0])
+        self.call_stack.append(CallFrame(return_pc=self.pc + 1, scopes=tuple(self.scopes)))
+        self._jump_to_label(target)
+
+    def _exec_ret(self, args: Tuple[Any, ...]) -> None:
+        if not self.call_stack:
+            raise IRRuntimeError("RET requires an active call frame.")
+        if not self.stack:
+            raise IRRuntimeError("RET requires a value on the stack.")
+
+        # return kind flags
+        # return 0 => leaves stack as 0
+        # return [] => leaves stack as a list packet with the size on the top so 0 again
+        if len(args) > 1:
+            raise IRRuntimeError("RET expects at most one return-kind flag.")
+
+        return_kind = None
+        if args:
+            return_kind = int(args[0])
+            if return_kind not in (0, 1):
+                raise IRRuntimeError("RET return-kind flag must be 0 or 1.")
+
+        if return_kind == 1:
+            return_value = self._pop_list_packet()
+        elif return_kind == 0:
+            return_value = self._pop()
+        elif len(self.stack) == 1:
+            return_value = self._pop()
+        else:
+            top = self.stack[-1]
+            if not isinstance(top, int) or top < 0:
+                raise IRRuntimeError("Malformed list return packet.")
+            return_value = self._pop_list_packet()
+
+        frame = self.call_stack.pop()
+        self.scopes = list(frame.scopes)
+        self._set_retvar(return_value)
+        self.pc = frame.return_pc
 
 
 # -----------------------

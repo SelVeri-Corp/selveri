@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from lark import Lark, Transformer, v_args, LarkError
-from errors import ParserError
+from .errors import ParserError
 
 # =========================
 # AST
