@@ -108,7 +108,6 @@
 && \mid\; \texttt{WRITELN} \; \langle ident \rangle
 \\[2pt]
 
-
 && \mid\; \texttt{JZ} \; \langle int \rangle
 \\[2pt]
 
@@ -118,8 +117,7 @@
 && \mid\; \texttt{CSCOPE} \;\mid\; \texttt{PSCOPE}
 \\[2pt]
 
-
-&& \mid\; \texttt{ENV}
+&& \mid\; \texttt{FUNCENV} \; \langle ident \rangle, \langle type \rangle
 \\[2pt]
 
 && \mid\; \texttt{CALL} \; \langle ident \rangle
@@ -135,6 +133,7 @@
 
 \langle \mathit{list\_type} \rangle &::=& \texttt{LIST[INT]} \;\mid\; \texttt{LIST[FLOAT]}  \\[6pt]
 
+\langle \mathit{type} \rangle &::=& \langle \mathit{basic\_type} \rangle \;\mid\; \langle \mathit{list\_type} \rangle \\[6pt]
 
 \langle \mathit{ident} \rangle &::=& \text{[A-Za-z\_][A-Za-z0-9\_]*} \\[6pt]
 
@@ -152,30 +151,23 @@
 \newpage
 \section{Semantics}
 
-\vspace{2.5em}
-
 \subsection{Mathematical notions}
-
 The \texttt{SelVeri} intermediate representation, \texttt{SelVerIR} is executed on a \textit{stack-based} abstract machine (\textbf{AM}) and aims to be provably correct implementation of the high-level \texttt{SelVeri} language.
 
-\vspace{1em}
-
 \subsubsection{Stack}
-
-At any moment of the execution of a \texttt{SelVerIR} program, its stack, denoted as $e$, is a an ordered finite sequence consisting elements are from \textbf{Val}, which will be used in the flow of the program in the \textit{LIFO} order. As expected, $e$ supports a variety of \texttt{PUSH} and (indirectly) \texttt{POP} operations. For convenience, the empty stack is denoted separately, as $\epsilon$.
+At any moment of the execution of a \texttt{SelVerIR} program, its stack, denoted as $e$, is a an ordered finite sequence consisting elements are from \textbf{Val}, which will be used in the flow of the program in the \textit{LIFO} order. As expected, $e$ supports a variety of \texttt{PUSH} and (indirectly) \texttt{POP} operations. For convenience, the empty stack is denoted separately, as $\epsilon$. Furthermore, other instructions like \texttt{LOAD}, \texttt{LLOAD}, \texttt{STORE}, \texttt{LSTORE} can perform (possible multiple) push and pop operations on the stack.
 
 \subsubsection{Program counter}
-
-Intuitively, one can think of any \texttt{SelverIR} program, $P$ as an ordered list of commands. Program counter, $pc$, represents the index of the command that is to be executed next. Control-flow statements such as \texttt{GOTO} and \texttt{JZ} can alter the program counter in a non-sequential manner.
+Intuitively, one can think of any \texttt{SelverIR} program, $P$ as an ordered list of commands. Program counter, $pc$, represents the index of the command that is to be executed next. Control-flow statements such as \texttt{GOTO} and \texttt{JZ} can alter the program counter in a non-sequential manner. Function calls using \texttt{CALL} instruction also make use of $pc$ internally.
 
 \subsubsection{Return address}
-
 A return address, $ra$, is the index of the command that is to be executed next, just after current function call ends. Instead of storing one $ra$ at any given time, the abstract machine manages a separate stack called $ras$, containing return addresses in LIFO order, to be able to support nested function calls.
 
 \subsubsection{IR-configuration}
-
-An IR-configuration is the representation of the execution state in the form of a 6-tuple $\langle c,\, e,\, \sigma,\, s,\, pc,\, ras \rangle$ where 
-
+An IR-configuration is the representation of the execution state in the form of an 8-tuple 
+\[
+    \langle c,\, e,\, \sigma,\, s,\, pc,\, ras,\, \iota, \Omega \rangle
+\] where
 \begin{itemize}
     \item $c$ is the list of commands representing the remaining part of the program \texttt{SelverIR} program, i.e, $c = P[pc:]$.
 
@@ -188,12 +180,16 @@ An IR-configuration is the representation of the execution state in the form of 
     \item $pc$ is the program counter.
 
     \item $ras$ is the return-address-stack.
+
+    \item $\iota$ is the unread input stream.
+
+    \item $\Omega$ is the output trace produced so far.
     
 \end{itemize}
 
 \newpage
 \subsection{Small-step operational semantics of \texttt{SelverIR} commands}
-Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Note that any configuration which is not explicitly stated in the tables above leads to the erroneous state, $\hat{\sigma}$ and increments $pc$ by exactly 1.
+Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. For simplicity, we omit explicitly writing last 3 elements of the IR-configuration wherever possible. Reader must be aware of the fact that these remain unchanged unless explicitly specified. Note that any configuration which is not explicitly stated in the tables above leads to the erroneous state, $\hat{\sigma}$ and increments $pc$ by exactly 1.
 
 \subsubsection{Small-step operational semantics of state-related commands}
 
@@ -354,31 +350,25 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. No
 \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
 \hline\hline
 
-\langle \texttt{READ}\; x : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
+\langle \texttt{READ} : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, i : \iota,\, \Omega \rangle & 
 {\renewcommand{\arraystretch}{1.0}
 \begin{array}[t]{@{}l@{}}
-\langle c,\, e,\, \sigma[x \mapsto i],\, s,\, pc+1 \rangle \\
-\text{if $i$ is the input and $x \in \textbf{Var} \land i \in ran\mathcal{L}_{s(x)}$}
+\langle c,\, i : e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \Omega \rangle \\
+\text{if $i \in \text{ran}\mathcal{A}$}
 \end{array}} \\
 
-\langle \texttt{WRITE}\; x : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
-{\renewcommand{\arraystretch}{1.0}
-\begin{array}[t]{@{}l@{}}
-\langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \\
-\text{where the abstract machine emits the value $\mathcal{A}(x, \sigma, s)$}
-\end{array}} \\
+\langle \texttt{WRITE}\; x : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle & 
+\langle c,\, e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \mathcal{A}(x, \sigma, s) : \Omega \rangle \\
 
-\langle \texttt{WRITELN}\; x : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
-{\renewcommand{\arraystretch}{1.0}
-\begin{array}[t]{@{}l@{}}
-\langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \\
-\text{where the abstract machine emits the value $\mathcal{A}(x, \sigma, s)$ and a newline}
-\end{array}} \\
+\langle \texttt{WRITELN}\; x : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle & 
+\langle c,\, e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \texttt{nl} : \mathcal{A}(x, \sigma, s) : \Omega \rangle \\
 \hline\hline
 \end{tabular*}
 \caption{Operational semantics of I/O commands}
 \label{tab:am-sos-ctrl}
 \end{table}
+
+\texttt{nl} denotes the newline character in the usual sense and is handled by the abstract machine and its interaction with the operating system. It is included for convenience and SelVerIR still does not have any direct interaction with the IO stream or char types.
 
 \subsubsection{Small-step operational semantics of control-flow commands}
 
@@ -402,8 +392,7 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. No
 
 \langle \texttt{PSCOPE} : c ,\, e,\, \sigma_c,\, s_c,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
 
-
-\langle \texttt{ENV} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma}',\, \tilde{s}',\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ is of the caller}  \\
+\langle \texttt{FUNCENV}\; f, t_r : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma}',\, \tilde{s}',\, pc+1 \rangle \quad \text{where $f$ names the current function and $\sigma$ and $s$ is of the caller}  \\
 
 \langle \texttt{RET} : c ,\, v : e,\, \sigma',\, s',\, pc ,\, ra : ras \rangle & \langle P[ra:],\, e,\, \sigma[\texttt{retvar} \mapsto v],\, s[\texttt{retvar} \mapsto s'(v)],\, ra ,\, ras \rangle \quad \text{if the return-type of the function called is equal to $s'(v)$ and $\sigma$ and $s$ is of the caller} \\
 
@@ -414,8 +403,7 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. No
 \end{tabular*}
 \caption{Operational semantics of control-flow commands}
 \label{tab:am-sos-ctrl}
-\end{table}\\
-
+\end{table}
 
 As one can notice from the tables above, we do not have type-specific commands for \texttt{ADD}, \texttt{SUB} and \texttt{MUL} or boolean operators as these operations are closed under $\mathbb{Z}$ \footnote{Although syntactically different in \texttt{SelVeri} high level language; semantically, we do not interpret any integer differently than its real number counterpart.}. However, since this is not the case for division, we have separate instructions for integer and float division, namely \texttt{iDIV} and \texttt{fDIV}.
 
@@ -617,7 +605,7 @@ $\begin{array}{ll}
 \\[1.5ex]
 
 \mathcal{C}(\texttt{function}\; f(x_1 : t_1 \dots, x_n : t_n) \,\texttt{->}\, t_r \,\texttt{::}\, S_f) 
-\\ \quad = \texttt{ENV} : [\texttt{L}]\texttt{DECL}\; t_1\;x_1 : \texttt{STORE}\; x_1 :  \dots : [\texttt{L}]\texttt{DECL}\; t_n\;x_n : \texttt{STORE}\; x_n : \mathcal{C}(S_f)
+\\ \quad = \texttt{FUNCENV}\; f, t_r : [\texttt{L}]\texttt{DECL}\; t_1\;x_1 : \texttt{STORE}\; x_1 :  \dots : [\texttt{L}]\texttt{DECL}\; t_n\;x_n : \texttt{STORE}\; x_n : \mathcal{C}(S_f)
 \\[1.5ex]
 
 \mathcal{C}(\texttt{call}\; f(a_1 \dots, a_n)) = 
@@ -1621,7 +1609,7 @@ by the induction hypothesis, the compilation of $S_f$ is correct, since the exec
   && (\text{correctness of $\mathcal{CA}$})   \\
   &\triangleright \langle  P[pc_f],\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
   && (\text{operational semantics})   \\
-  &= \langle  \texttt{ENV} : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
+  &= \langle  \texttt{FUNCENV}\; f, t_r : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
   && (\text{definition of $\mathcal{C}$})   \\
   &\triangleright \langle  \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \tilde{\sigma}', \tilde{s}',\, pc_f + 1,\, (pc+n+1) : ras \rangle
   && (\text{operational semantics})   \\
@@ -1698,7 +1686,7 @@ No matter the reason, as no statically-correct \texttt{SelVeri} program includes
 \vspace{1em}
 \section{Divergent programs}
 
-If a \texttt{SelVeri} program $P$ terminates after a finite number a steps, it is called \textit{convergent}; otherwise, a non-terminating $P$ is called \textit{divergent}. \texttt{SelVeri} has two possible conditions for non-termination:
+If a \texttt{SelVeri} program $P$ terminates after a finite number of steps, it is called \textit{convergent}; otherwise, a non-terminating $P$ is called \textit{divergent}. \texttt{SelVeri} has two possible conditions for non-termination:
 
 \begin{enumerate}
     \item Infinite \texttt{while}-loops
@@ -1733,7 +1721,7 @@ Now, as our formalization enhanced, we can attempt to prove the correctness of d
 \[
 \langle P,\, \sigma,\, s \rangle \; \rightarrow^\alpha \; \langle P',\, \sigma^P_\alpha,\, s^P_\alpha \rangle \quad \implies \quad 
 \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc,\, ras \rangle \; \triangleright^\beta \; \langle \mathcal{C}(P'),\, e',\, \sigma^P_\alpha,\, s^P_\alpha,\, pc',\, ras' \rangle 
-\] where $\beta = k  \cdot \alpha$ \footnote{Because the compilation function $\mathcal{C}$ emits a finite number of commands per high-level statements.} for some constant non-zero $k \in \mathbb{N}$. 
+\] where $\beta = k  \cdot \alpha$ \footnote{Because the compilation function $\mathcal{C}$ emits a finite number of commands per high-level statement.} for some constant non-zero $k \in \mathbb{N}$. 
 
 \begin{proof} We will prove this by a transfinite induction on $\alpha$. But before starting the proof; observe that the small-step operational semantics of \texttt{SelVeri} and \texttt{SelVerIR} are defined exclusively via successor transition relations, meaning that any execution trace is a sequence strictly indexed by the natural numbers, $\mathbb{N}$. Consequently, the execution trace of any divergent program has an exact ordinal length of $\omega$, as the semantics do not define limit-ordinal transitions. Hence, we limit our attention to the ordinals that are lesser or equal to $\omega$ \footnote{We are not interested in hypercomputation here.}. We call this fact as \textit{$\omega$-bound of computation}.
 
@@ -1758,7 +1746,7 @@ Now, as our formalization enhanced, we can attempt to prove the correctness of d
             Observe that with the exact same manner, for any sufficiently large $N'$, we can    construct a statement $S^{N'}_r$ (therefore a $\mathcal{C}(S^{N'}_r)$ in the intermediate representation)  that does not preserve the value of $x$, hence $x$ also does not $\omega$-stabilize under the execution of $\mathcal{C}(P)$, i.e. the value of $x$ is $\mu$ in the IR counterpart as well.      
         \end{enumerate}
 
-        These both cases ensure that the resulting program states after executing $P$ and $\mathcal{C}(P)$ for $\omega$-steps, are exactly equal; establishing the correctness of the compilation of divergent \texttt{SelVeri} programs.
+        Both of these cases ensure that the resulting program states after executing $P$ and $\mathcal{C}(P)$ for $\omega$-steps, are exactly equal; establishing the correctness of the compilation of divergent \texttt{SelVeri} programs.
         
     \end{itemize}
 \end{proof}

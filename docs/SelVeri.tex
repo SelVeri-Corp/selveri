@@ -15,7 +15,10 @@
 \usepackage{tablefootnote}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 
-\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.8}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+
+\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.9}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -33,7 +36,7 @@ Identifiers must start with a letter or underscore, and continue with letters, d
 Integer and floating-point literals are given by the following lexical categories:
 \[
 \begin{array}{rcl}
-\langle \mathit{Ident} \rangle &::=& [A\texttt{-}Za\texttt{-}z\_][A\texttt{-}Za\texttt{-}z0\texttt{-}9\_]^* \\
+\langle \mathit{Ident} \rangle &::=& [A\texttt{-}Za\texttt{-}z][A\texttt{-}Za\texttt{-}z0\texttt{-}9\_]^* \\
 \langle \mathit{IntLit} \rangle &::=& [0\texttt{-}9]^+ \\
 \langle \mathit{FloatLit} \rangle &::=& [0\texttt{-}9]^+\texttt{.}[0\texttt{-}9]^+
 \end{array}
@@ -56,9 +59,9 @@ All variables and function return values are statically typed.
 &::=&
 [\langle \mathit{BasicType} \rangle
 \;\mid\;
-\mathtt{List}\,[\langle \mathit{BasicType} \rangle,\; \langle \mathit{IntLit} \rangle\, (,\langle \mathit{AExp})^+ \rangle]
+\mathtt{List}\,[\langle \mathit{BasicType} \rangle,\; \langle \mathit{IntLit} \rangle\, (,\langle \mathit{AExp} \rangle)^+]
 \;\mid\;
-\mathtt{type($\langle \mathit{ident} \rangle$)}
+\mathtt{type(\langle \mathit{ident} \rangle)}
 \end{array}
 \]
 
@@ -122,9 +125,15 @@ We declare the syntax of arithmetic expressions so that the operator precedence 
 \;\mid\;
 \mathtt{len}(\langle \mathit{Ident} \rangle)
 \;\mid\;
-\langle \mathit{Ident} \rangle[\langle \mathit{AExp} \rangle]
+\langle \mathit{IndexedVal} \rangle
 \;\mid\;
-(\langle \mathit{AExp} \rangle)
+(\langle \mathit{AExp} \rangle) \\[4pt]
+
+\langle \mathit{IndexedVal} \rangle
+&::=&
+\langle \mathit{IndexedVal} \rangle [\langle \mathit{Aexp} \rangle]
+\;\mid\;
+\langle \mathit{Ident} \rangle [\langle \mathit{Aexp} \rangle]
 \end{array}
 \]
 $\mathtt{len}$ keyword defined above semantically gives us the length of a list. In the current implementation, length of a list is fixed, so it can be resolved via a lookup from the scope table. It must not be confused with a function call, as no scope switches happen while resolving this value.
@@ -194,7 +203,7 @@ Boolean expressions used in guards and specifications include arithmetic express
 \footnotetext{We interpret results of arithmetic expressions as boolean values where needed using equality to zero as in other imperative languages like C. This is useful for being able to write statements like while x, where x is an integer variable.}
 
 \subsection{Specifications (Runtime Assertions)}
-Here the syntax is also constructed in a way that establishes operator precedence rules.
+Here the syntax is also constructed in a way that establishes operator precedence rules. In the implemented parser, $\langle \mathit{Spec} \rangle$ nodes are not parsed further and parser accepts any character sequence in the place of this node. This is because specifications are compiled to the intermediate language literally and parsed for the verification module starting from the IR code.\footnotemark
 \[
 \begin{array}{rcl}
 \langle \mathit{Spec} \rangle
@@ -286,6 +295,8 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 \end{array}
 \]
 
+\footnotetext{This approach might lead to the generation of broken IR code as a non-valid specification is accepted by the parser. However, in the final design, IR generation is planned to be in memory (i.e. no IR code file to be generated). Thus, in the final implementation, after the generation of IR code of the input program, all specifications will be parsed in the memory with position information before the beginning of execution. This way, a compiler error can still be thrown for invalid specification statements.}
+
 \subsection{Statements, Functions, and Programs}
 
 \paragraph{Top-Level Statements}
@@ -345,7 +356,7 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 
 \langle \mathit{ListAssign} \rangle
 &::=&
-\langle \mathit{Ident} \rangle[\langle \mathit{AExp} \rangle]\;\texttt{:=}\;\langle \mathit{AExp} \rangle \\[4pt]
+\langle \mathit{IndexedVal} \rangle\;\texttt{:=}\;\langle \mathit{AExp} \rangle \\[4pt]
 
 \langle \mathit{IOStmt} \rangle
 &::=&
@@ -479,159 +490,138 @@ must end with a semicolon. Statements of the form
 
 \newpage
 \section{Semantics}
-\vspace{2em}
+% \vspace{2em}
 
 \subsection{Important notions for formalizing \texttt{SelVeri}}
-\vspace{2.5em}
+% \vspace{2.5em}
 
 \subsubsection{Types}
 
 Let \textbf{Type} be the set of all possible types. For the current implementation of \texttt{SelVeri}, an element of \textbf{Type} can be either \textbf{Int}, \textbf{Float} or a \textbf{List} of any dimension, including one of the former two, which can be interpreted as a dependent type. More formally:
-
 \begin{itemize}
     \item $\textbf{Int} : \textbf{Type}$ 
     \item $\textbf{Float} : \textbf{Type}$ 
     \item $ \textbf{List}: (\Pi{t} : \textbf{BasicType} \, . \,  (\Pi{d} : \textbf{$\mathbb{N}^+$} \, . \,  (\Pi{\vec{n}} : \textbf{$\mathbb{N}^d$} \, . \,  \textbf{Type})))$
-\end{itemize} where $\textbf{BasicType} := \{\textbf{Int}, \textbf{Float}\}$ Similarly, we define $\textbf{ListType} := \textbf{Type} \setminus \textbf{BasicType}$ 
+\end{itemize} where $\textbf{BasicType} := \{\textbf{Int}, \textbf{Float}\}$. Similarly, we define $\textbf{ListType} := \textbf{Type} \setminus \textbf{BasicType}$ 
 
-
-For convenience, we define the projection function:
+For convenience, we define the projection function $\pi_d: \mathbb{N}^d \to \mathbb{N}^{d-1}$:
 \[
-\pi_d: (n_1,\cdots,n_d) \rightarrow (n_2,\cdots,n_d)
+\pi_d: (n_1,\cdots,n_d) \mapsto (n_2,\cdots,n_d)
 \]
+and throughout this text, we refer the $i$th component of $\vec{n}$ as $n_i$.
 
-\vspace{2.5em}
 \subsubsection{Immediates}
 
 Let \textbf{Imm} be the set of syntactic immediate values supported by \texttt{SelVeri}, e.g. $5$ or  $3.14$, and \textbf{Var} be the infinite set of all syntactic variables  For each type, we need an evaluation function that translates syntactic immediates into the corresponding semantic values.
-
-\[
-\mathcal{I}: \textbf{Imm} \cap \textbf{Int} \rightarrow \mathbb{Z}
-\]
-\[
-\mathcal{F}: \textbf{Imm} \cap \textbf{Float} \rightarrow \mathbb{R}
-\]
-\[
-\mathcal{L}_{\textbf{List[$t, d, \vec{n}$]}}: \textbf{Imm} \cap \textbf{List[$t, d, \vec{n}$]} \rightarrow A^{n_1} 
-\]
+\begin{align*}
+\mathcal{I}&: \textbf{Imm} \cap \textbf{Int} \rightarrow \mathbb{Z} \\
+\mathcal{F}&: \textbf{Imm} \cap \textbf{Float} \rightarrow \mathbb{R} \\
+\mathcal{L}_{\textbf{List[$t, d, \vec{n}$]}}&: \textbf{Imm} \cap \textbf{List[$t, d, \vec{n}$]} \rightarrow A^{n_1} 
+\end{align*}
 where $A$ is the codomain of $\mathcal{L}_{\textbf{List[$t, d-1, \pi_d(\vec{n})$]}}$. The reader should notice that:
-
 \begin{itemize}
     \item $\textbf{List[$t, 0, ()$]} = t$ 
     \item $\mathcal{L}_\textbf{Int} = \mathcal{I}$ and $\mathcal{L}_\textbf{Float} = \mathcal{F}$
 \end{itemize}
-
 For simplicity, we also define $\mathcal{V} := \bigcup_{t \in \textbf{Type}} \mathcal{L}_t$
 
-\newpage
+% \newpage
 \subsubsection{Scope}
 
 Let \textbf{Scope} be the set of all scopes and \textbf{AExp} be the set of all arithmetic expressions. Each scope is a representation  of 'known' variables in a given block of statements including the variables declared until program execution reaches the corresponding block. Formally,
-
 \[
 \forall s \in \textbf{Scope} \, . \, s: \textbf{AExp}  \rightarrow \textbf{Type}
 \]
-Given any scope, $s$, immediates are mapped to the corresponding types; e.g. $s(5) = \textbf{Int}$, , as expected. Additionally, given any non-atomic arithmetic expression $a$, we have
 
+Given any scope, $s$, immediates are mapped to the corresponding types; e.g. $s(5) = \textbf{Int}$,\\ $s([1,2,3]) = \textbf{List}[\textbf{Int}, 1, 3]$, as expected. Additionally, given any non-atomic arithmetic expression $a$, we have
 \[
 s(a) = \begin{cases}
-\textbf{Int} \quad \text{if $s(a') = \textbf{Int}$ for all subterms $a'$ of $a$} \\
-\textbf{Float} \quad \text{if $s(a') = \textbf{Int}$ for some subterm $a'$ of $a$} \\ 
+\textbf{Int} & \text{if $s(a') = \textbf{Int}$ for all subterms $a'$ of $a$} \\
+\textbf{Float} & \text{if $s(a') = \textbf{Float}$ for some subterm $a'$ of $a$} \\ 
 \end{cases}
-\] Note that a composite arithmetic expression cannot have a non-basic type in \textit{SelVeri}. \\
+\] 
+Note that a composite arithmetic expression cannot have a non-basic type in \textit{SelVeri} as
+we do not allow a list literal to interact with arithmetic operators.
 
 Initially, each scope starts its lifetime as an empty scope, denoted as $\tilde{s}$, 
-
 \[
 \forall x \in \textbf{Var} \, . \,\tilde{s}(x) = \textbf{Void}
 \]
-where \textbf{Void} is the empty type.\\
+where $\textbf{Void} : \textbf{Type}$ is the empty type.\\
 
 To simplify the formalization of list-types, given any scope $s$, we enforce the following implication:
 
 \[
-s(x) = \textbf{List[$t,d, n$]}
+s(x) = \textbf{List[$t,d,\vec{n}$]}
 \implies
 \forall i \in \{0, \,...\, , n-1\} \,.\, s(x\texttt{[$i$]}) = \textbf{List[$t, d-1, \pi_d(\vec{n})$]}
 \]
 We call this implication as \textit{recursive declaration principle}. As \texttt{SelVeri} syntax does not allow identifiers including \texttt{[} or \texttt{]} characters, it is not possible to create any scope contradicting the recursive declaration. \\
 
-Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}. If $s$ is a scope, we denote its immediate child as $s_c$. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope. When a variable is reached by a parent scope, then a change to its type (which is only possible for the special variable \texttt{retvar}, see section \textbf{2.1.5}) then the change is made directly to the parent scope. However, for simplicity, we omit this special case in our configurations.
-
+Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}. If $s$ is a scope, we denote its immediate child as $s_c$. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope. When a variable is reached by a parent scope, then a change to its type (which is only possible for the special variable \texttt{retvar}, see section \textbf{2.1.5}) is made directly to the parent scope. However, for simplicity, we omit this special case in our configurations.
 
 \subsubsection{Program states}
 
 Let \textbf{State} be the set of all possible program states and \textbf{Val} \footnote{The reader can notice that $ran\mathcal{I}$, $ran\mathcal{F}$ and $ran\mathcal{L}$ are all subsets of \textbf{Val}.} be the set of all semantic values. Each state is in fact a map from \textbf{Var} and \textbf{Scope} to \textbf{Val}, representing the value of a given variable in the specified scope. Formally,
-
 \[
 \forall \sigma \in \textbf{State} \, . \, \sigma: \textbf{Var} \times \textbf{Scope} \rightarrow \textbf{Val}
 \]
 
-Each program starts with an empty state, $\tilde{\sigma}$ in which each declared variable has the default value of this type, e.g. 0 for \textbf{Int}, 0.0 for \textbf{Float} and  [0, 0, 0] for \textbf{List[Int, 1, 3]}. If the specific type is unknown in a given context, the default value of the corresponding type is denoted as \textbf{0}.\\
+Each program starts with an empty state, $\tilde{\sigma}$ in which each declared variable has the default value of this type, e.g. 0 for \textbf{Int}, 0.0 for \textbf{Float} and  [0, 0, 0] for \textbf{List[Int, 1, 3]}. If the specific type is unknown in a given context, the default value of the corresponding type is denoted as \textbf{0}.
 
 Also, similar to scopes, program states also have parents. A child program state of $\sigma$ is denoted as $\sigma_c$. When a variable is reached by a parent scope, then its value must be reached by the parent program state. The change must be directly made in the parent program state, in case of an assignment. However, for simplicity, we omit this special case in our configurations.
 
-
-\\
-
 Additionally, each program state carries an \texttt{error\_flag} that is set if and only if an error occurs during the execution of the program. A cause for this can be using a variable before declaring it. In order to embed this misusage as an error into our semantics, we add the following rule to our program states:
-
 \[
 \forall \sigma \in \textbf{State} \, . \, \sigma(x,s) = \bot \quad \text{if } s(x) = \textbf{Void}.
 \]
 
 Before moving to the next section, reader should be aware of an abuse of notation we use for convenient representation of erroneous states:
-
 \begin{itemize}
     \item $\sigma$ represents a program state without any errors.
     \item $\hat{\sigma}$ represents a program state with an error.
     \item $\underline{\sigma}$ represents any program state (may be error-free or erroneous).
 \end{itemize}
 
-\vspace{2em}
+\newpage
 \subsubsection{Functions}
 
-Let \textbf{Func} be the infinite set of all possible definable \texttt{SelVeri} functions. To store the information of all function definitions in a given program, we introduce the concept of the \textit{function environment}, denoted as $\Gamma$:
-
+Let \textbf{FuncName} be the infinite set of all valid \texttt{SelVeri} function names. To store the information of all function definitions in a given program, we introduce the concept of the \textit{function environment}, denoted as $\Gamma$:
 \[
-\Gamma : \textbf{Func} \rightarrow (\textbf{Var} \times \textbf{Type})^n \times \textbf{Type} \times \textbf{Code}
-\] where $n$ is the arity of the input function and \textbf{Code} is the set of all syntactically-correct \texttt{SelVeri} programs. During the compilation stage, compiler populates $\Gamma$ with a single-pass through the function definitions. \\
+\Gamma : \textbf{FuncName} \rightarrow (\textbf{Var} \times \textbf{Type})^n \times \textbf{Type} \times \textbf{Code}
+\] where $n$ is the arity of the input function and \textbf{Code} is the set of all syntactically-correct \texttt{SelVeri} programs. During the compilation stage, compiler populates $\Gamma$ with a single-pass through the function definitions.
 
 For example, if one defines the function \texttt{f} as in the following way:
 \[
-\texttt{function f(x : Int, y : Float, z : List[Float,1,2]) -> Int ::($S_\textbf{f}$)} 
+\texttt{function f(x:Int, y:Float, z:List[Float,1,2]) -> Int ::}\; S_\textbf{f} \;\;\texttt{end}
 \]
-where $S_\textbf{f}$ is some function statement, then 
+where $S_\textbf{f}$ is some function statement sequence, then 
 \[
 \Gamma(\texttt{f}) = ((\texttt{x},\, \texttt{Int}), (\texttt{y},\, \texttt{Float}),(\texttt{z},\, \texttt{List[Float,1,2]})),\; \texttt{Int},\; S_\textbf{f})
 \]
-
-On the other hand, if \texttt{g} is an undefined function, then $\Gamma(\texttt{g}) = \emptyset$. \\
+On the other hand, if \texttt{g} is an undefined function, then $\Gamma(\texttt{g}) = \emptyset$.
 
 Moreover, we introduce a special, dynamically-typed variable \texttt{retvar} which holds the return-value of the last called function. Initially, its type is \textbf{Void} and its value is $\bot$. \texttt{retvar} is a reserved keyword in \texttt{SelVeri}, meaning that no user-defined identifier can have this name.  An example usage would be: 
-
 \[
-\texttt{w : Int; call f(5, 3.14, [42, 42]); w := retvar;}
-\] Assuming that, with the inputs above, execution of the body of \texttt{f} does not result in an error state, our operational semantics will ensure that variable \texttt{w} holds the result of the computation of \texttt{f}.
+\texttt{w:Int; call f(5, 3.14, [42, 42]); w := retvar;}
+\]
+Assuming that, with the inputs above, execution of the body of \texttt{f} does not result in an error state, our operational semantics will ensure that variable \texttt{w} holds the result of the computation of \texttt{f} (the value returned from \texttt{f} to be exact).
 
-\vspace{2em}
 \subsubsection{List sizes}
 
-\texttt{SelVeri} supports multi-dimensional lists and to be able to formalize them correctly we define the following helper function:
-
+\texttt{SelVeri} supports multi-dimensional lists and to be able to formalize them correctly we define the following helper function $\text{size}: \textbf{Type} \to \mathbb{N}$:
 \[
 size(t) = \begin{cases}
     0 & \text{if $t \in \textbf{BasicType}$ } \\
     \Pi_{i = 1}^d{n_i} & \text{if $t = \textbf{List[$t', d, \vec{n}$]}$ for some $t' \in \textbf{BasicType}$ } 
 \end{cases}
 \]
-
+In a type declaration like $\textbf{List}[t, d, \vec{n}]$, definition of $\textbf{List}$ type enforces $t \in \textbf{BasicType}$, so above definition covers all possible t values.
 
 \newpage
 \subsection{Semantics of arithmetic expressions}
 
 We define the arithmetic valuation function $\mathcal{A}$, representing the semantics of the arithmetic expressions in \texttt{SelVeri}.
-
 \[
 \mathcal{A} : \textbf{AExp} \times \textbf{State} \times \textbf{Scope} \rightarrow \textbf{Val} 
 \]
@@ -639,73 +629,104 @@ We define the arithmetic valuation function $\mathcal{A}$, representing the sema
 \begin{table}[h!]
 \centering
 \renewcommand{\arraystretch}{1.8} % increases vertical space
-\large % increases overall font size in the table
 
 % \makebox forces the oversized box to center perfectly on the page
 \makebox[\textwidth][c]{% 
 \fbox{%
 \begin{tabular}{l}
-% Internal array to align the first four "ifs"
-$\begin{array}{ll}
-\mathcal{A}(x, \sigma, s)= \mathcal{I}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int}\\
+$
+    \begin{alignedat}{2}
+    \mathcal{A}(x, \sigma, s) &= \mathcal{I}(x)
+    \qquad &&\text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int} \\
+    
+    \mathcal{A}(x, \sigma, s) &= \mathcal{F}(x)
+    \qquad &&\text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float} \\
+    
+    \mathcal{A}(x, \sigma, s) &= \text{size}(\textbf{List}[ t,d, \vec{n}]) : \mathcal{L}_{\textbf{List}[t, d,\vec{n}]}(x)
+    \qquad &&\text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,d,\vec{n}  \textbf{]} \\
+    
+    \mathcal{A}(x, \sigma, s) &= \sigma(x, s)
+    \qquad &&\text{if } x \in \textbf{Var} \\
+    
+    \mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s) &= \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s)
+    \qquad &&\text{if $lst \in \textbf{Var}$ and $lst$} \\
 
-\mathcal{A}(x, \sigma, s)= \mathcal{F}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float}\\
+    \mathcal{A}(\texttt{len($x$)}, \sigma, s) &= 
+    \left\{
+      \begin{aligned}
+        & 0 \\
+        & \mathcal{A}(\texttt{\_$x$\_len\_1}, \sigma, s) \\
+        & \bot
+      \end{aligned}
+    \right.
+    \qquad
+      &&\begin{aligned}  
+        &\text{if } x \in \textbf{Var} \land s(x) \in \textbf{BasicType} \\
+        &\text{if } x \in \textbf{Var} \land s(x) \notin \{\textbf{Void}, \textbf{Int}, \textbf{Float}\} \\
+        &\text{otherwise}
+      \end{aligned} \\
 
-\mathcal{A}(x, \sigma, s)= size(\textbf{List[} t,d, \vec{n} \textbf{]}) : \mathcal{L}_{\textbf{List[$t, d,\vec{n} $]}}(x) \qquad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,d,\vec{n}  \textbf{]} \\
+    \mathcal{A}(a_1 + a_2, \sigma, s) &=  
+    \left\{
+    \begin{aligned}
+        & \mathcal{A}(a_1, \sigma, s) + \mathcal{A}(a_2, \sigma, s) \\
+        & \bot
+    \end{aligned}
+    \right.
+    \qquad
+    &&\begin{aligned}
+        &\text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
+        &\text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+    \end{aligned} \\
 
-\mathcal{A}(x, \sigma, s)= \sigma(x, s) \qquad \text{if } x \in \textbf{Var} \\
+    \mathcal{A}(a_1 \ast a_2, \sigma, s) &= 
+    \left\{
+    \begin{aligned}
+        & \mathcal{A}(a_1, \sigma, s)\cdot \mathcal{A}(a_2, \sigma, s) \\
+        & \bot
+    \end{aligned}
+    \right.
+    \qquad
+    &&\begin{aligned}
+        &\text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
+        &\text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+    \end{aligned} \\
 
-\mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s)= \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s) & \\ \qquad \text{if $lst \in \textbf{Var}$ and $lst$} 
+    \mathcal{A}(a_1 - a_2, \sigma, s) &= 
+    \left\{
+    \begin{aligned}
+        & \mathcal{A}(a_1, \sigma, s)- \mathcal{A}(a_2, \sigma, s) \\
+        & \bot
+    \end{aligned}
+    \right.
+    \qquad
+    &&\begin{aligned}
+        &\text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
+        &\text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
+    \end{aligned} \\
 
-\end{array}$ \\[5pt]
-
-\(\mathcal{A}(\texttt{len($x$)}, \sigma, s)= \left\{
-  \begin{array}{ll}
-    0& \text{if } x \in \textbf{Var} \land s(x) \in \textbf{BasicType} \\
-    \mathcal{A}(\texttt{\_$x$\_len\_1}, \sigma, s)& \text{if } x \in \textbf{Var} \land s(x) \notin \{\textbf{Void}, \textbf{Int}, \textbf{Float}\} \\
-    \bot & \text{otherwise}
-  \end{array}
-\right.\) \\
-
-\(\mathcal{A}(a_1 + a_2, \sigma, s)=  
-\left\{
-  \begin{array}{ll}
-    \mathcal{A}(a_1, \sigma, s)+ \mathcal{A}(a_2, \sigma, s) & \text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
-    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
-  \end{array}
-\right.\) \\
-
-\(\mathcal{A}(a_1 \ast a_2, \sigma, s)= \left\{
-  \begin{array}{ll}
-    \mathcal{A}(a_1, \sigma, s)\cdot \mathcal{A}(a_2, \sigma, s)& \text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
-    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
-  \end{array}
-\right.\) \\
-
-\(\mathcal{A}(a_1 - a_2, \sigma, s)= \left\{
-  \begin{array}{ll}
-    \mathcal{A}(a_1, \sigma, s)- \mathcal{A}(a_2, \sigma, s)& \text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
-    \bot & \text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
-  \end{array}
-\right.\) \\
-
-\(\mathcal{A}(a_1 / a_2, \sigma, s)= \left\{
-  \begin{array}{ll}
-    \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s) \footnotemark & \text{if } \mathcal{A}(a_2, \sigma, s)\neq 0 \land (\mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot) \\
-    \bot & \text{if } \mathcal{A}(a_2, \sigma, s)= 0 \lor (\mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot)  \\
-  \end{array}
-\right.\) \\
-
+    \mathcal{A}(a_1 / a_2, \sigma, s) &= 
+    \left\{
+    \begin{aligned}
+        & \mathcal{A}(a_1, \sigma, s) / \mathcal{A}(a_2, \sigma, s) \footnotemark \\
+        & \bot
+    \end{aligned}
+    \right.
+    \qquad
+    &&\begin{aligned}
+        &\text{if } \mathcal{A}(a_2, \sigma, s)\neq 0 \land (\mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot) \\
+        &\text{if } \mathcal{A}(a_2, \sigma, s)= 0 \lor (\mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot)
+    \end{aligned} \\
+\end{alignedat}
+$
 \end{tabular}%
-}%
-} % <-- Closing bracket for \makebox
+}
+}
 
 \caption{The semantics of arithmetic expressions}
 \label{tab:arith-semantics}
 \end{table}
 \footnotetext{If $(a_1 / a_2)$ has no subterm of type \textbf{Float}, then the $/$ symbol represents the integer division; otherwise, it represents the division of the field $\mathbb{R}$.}
-
-\\
 
 Although not explicitly stated in the table above, given any binary operation, operators are required to be of the same type (except for the cases of implicit coercion \footnote{An example is multiplying an integer with a float. In such cases, compiler converts the integer to a float with the same value. Conversion of integers to floats is the only possibility for an implicit coercion, as for the current implementation of \texttt{SelVeri}.} handled by the compiler) and can only be of \textit{basic types} \footnote{The only basic types are \textbf{Int} and \textbf{Float} for the current implementation of \texttt{SelVeri}.}. Otherwise, the result of the evaluation is $\bot$. The same rules apply to the next section (boolean expressions) as well.
 
