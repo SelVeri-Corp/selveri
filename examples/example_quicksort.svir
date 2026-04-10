@@ -258,3 +258,5 @@
 257: CALL quickSort
 258: LOAD retvar
 259: STORE lst
+260: LOAD lst
+261: WRITE LIST

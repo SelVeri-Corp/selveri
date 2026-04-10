@@ -1,0 +1,13 @@
+x : Int;
+x := read();
+writeline(x);
+
+y : List[Int, 1, 5];
+i : Int;
+i := 0;
+while i < 5 do
+    y[i] := x;
+    x := x + 2;
+    i := i + 1;
+od
+write(y);

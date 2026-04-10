@@ -99,13 +99,13 @@
 && \mid\; \texttt{XOR}
 \\[2pt]
 
-&& \mid\; \texttt{READ} \; \langle ident \rangle
+&& \mid\; \texttt{READ}
 \\[2pt]
 
-&& \mid\; \texttt{WRITE} \; \langle ident \rangle
+&& \mid\; \texttt{WRITE} \;\mid\; \texttt{LWRITE}
 \\[2pt]
 
-&& \mid\; \texttt{WRITELN} \; \langle ident \rangle
+&& \mid\; \texttt{WRITELN} \;\mid\; \texttt{LWRITELN}
 \\[2pt]
 
 && \mid\; \texttt{JZ} \; \langle int \rangle
@@ -189,7 +189,7 @@ An IR-configuration is the representation of the execution state in the form of 
 
 \newpage
 \subsection{Small-step operational semantics of \texttt{SelverIR} commands}
-Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. For simplicity, we omit explicitly writing last 3 elements of the IR-configuration wherever possible. Reader must be aware of the fact that these remain unchanged unless explicitly specified. Note that any configuration which is not explicitly stated in the tables above leads to the erroneous state, $\hat{\sigma}$ and increments $pc$ by exactly 1.
+Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. For simplicity, we omit explicitly writing last 3 elements of the IR-configuration throughout the document, including the correctness proof at section \textbf{4}. Reader must be aware of the fact that these remain unchanged unless explicitly specified. Note that any configuration which is not explicitly stated in the tables above leads to the erroneous state, $\hat{\sigma}$ and increments $pc$ by exactly 1.
 
 \subsubsection{Small-step operational semantics of state-related commands}
 
@@ -353,14 +353,14 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \langle \texttt{READ} : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, i : \iota,\, \Omega \rangle & 
 {\renewcommand{\arraystretch}{1.0}
 \begin{array}[t]{@{}l@{}}
-\langle c,\, i : e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \Omega \rangle \\
-\text{if $i \in \text{ran}\mathcal{A}$}
+\langle c,\, i: e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \Omega \rangle \\
+\text{if $i \in \textbf{Imm} \cap \{\textbf{Int} \cup \textbf{Float}\}$}
 \end{array}} \\
 
-\langle \texttt{WRITE}\; x : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle & 
+\langle \texttt{WRITE} : c ,\, x : e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle & 
 \langle c,\, e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \mathcal{A}(x, \sigma, s) : \Omega \rangle \\
 
-\langle \texttt{WRITELN}\; x : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle & 
+\langle \texttt{WRITELN} : c ,\, x : e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle & 
 \langle c,\, e,\, \sigma,\, s,\, pc+1,\, ras,\, \iota,\, \texttt{nl} : \mathcal{A}(x, \sigma, s) : \Omega \rangle \\
 \hline\hline
 \end{tabular*}
@@ -368,7 +368,7 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \label{tab:am-sos-ctrl}
 \end{table}
 
-\texttt{nl} denotes the newline character in the usual sense and is handled by the abstract machine and its interaction with the operating system. It is included for convenience and SelVerIR still does not have any direct interaction with the IO stream or char types.
+\texttt{nl} denotes the newline character in the usual sense and is handled by the abstract machine and its interaction with the operating system. It is included for convenience and SelVerIR still does not have any direct interaction with the IO stream or char types. Write mode does not affect the operational semantics in any way.
 
 \subsubsection{Small-step operational semantics of control-flow commands}
 
@@ -617,40 +617,42 @@ $\begin{array}{ll}
 \mathcal{CA}(a) : \texttt{RET}
 \\[1.5ex]
 
-\mathcal{C}(\texttt{read}\; x) = \texttt{READ}\;x
+\mathcal{C}(\texttt{write}(a)) = \left\{
+    \begin{aligned}
+        \mathcal{CA}(a) : \texttt{WRITE} \quad &\text{if } \mathcal{A}(a, \sigma, s) \in \textbf{BasicType} \\
+        \mathcal{CA}(a) : \texttt{LWRITE} \quad &\text{if } \mathcal{A}(a, \sigma, s) \in \textbf{ListType}
+    \end{aligned}
+    \right.
 \\[1.5ex]
 
-\mathcal{C}(\texttt{write}\; x) = \texttt{WRITE}\;x
-\\[1.5ex]
-
-\mathcal{C}(\texttt{writeline}\; x) = \texttt{WRITELN}\;x
+\mathcal{C}(\texttt{writeline}(a)) = \left\{
+    \begin{aligned}
+        \mathcal{CA}(a) : \texttt{WRITELN} \quad &\text{if } \mathcal{A}(a, \sigma, s) \in \textbf{BasicType} \\
+        \mathcal{CA}(a) : \texttt{LWRITELN} \quad &\text{if } \mathcal{A}(a, \sigma, s) \in \textbf{ListType}
+    \end{aligned}
+    \right.
 \\[1.5ex]
 \end{array}$%
 }%
 } % <-- closes \resizebox
 \end{table}
 
-Please note that, during the compilation phase, compiler labels each compiled command with a corresponding program counter, using a simple incrementing counter. Therefore, $pc$ variables seen in the compilation of the control-flow statements are actually replaced with syntactic integer-immediates. \\
+Please note that, during the compilation phase, compiler labels each compiled command with a corresponding program counter, using a simple incrementing counter. Therefore, $pc$ variables seen in the compilation of the control-flow statements are actually replaced with syntactic integer-immediates.
 
-Regarding the in-brackets parts of function definition compilation, a function parameter can be either a list (declared using \texttt{LDECL})  or a basic type (declared using \texttt{DECL}) To cover this up, our operational semantics ensure that \texttt{STORE} also pushes the size of a list to the stack and \texttt{LDECL} expects the size of the declared list to be on top of the stack. However, since in both cases (with or without in-brackets parts) the resulting program state and scope tuple is trivially equivalent, we omit this distinction between \texttt{DECL} and \texttt{LDECL} in the correctness proof in the next section. \\
+Regarding the in-brackets parts of function definition compilation, a function parameter can be either a list (declared using \texttt{LDECL})  or a basic type (declared using \texttt{DECL}) To cover this up, our operational semantics ensure that \texttt{STORE} also pushes the size of a list to the stack and \texttt{LDECL} expects the size of the declared list to be on top of the stack. However, since in both cases (with or without in-brackets parts) the resulting program state and scope tuple is trivially equivalent, we omit this distinction between \texttt{DECL} and \texttt{LDECL} in the correctness proof in the next section.
 
 Additionally, as high-level \texttt{SelVeri} languagae ensures that every possible execution of $S_f$ ends with a \texttt{return}-statement, one can certainly say that $\mathcal{C}(S_f)$ ends with a \texttt{RET} command. This fact will be important for our correctess proof and for convenience, it was named as the \textit{return rule}.
 
+The \texttt{LWRITE} and \texttt{LWRITELN} instructions are needed due to complete seperation of compiler and interpreter modules. Interpreter has no way to check if the value on top of the stack represents a literal value, or the size of the list packed placed in the stack.
 
-\vspace{2.5em}
 \section{Provably Correct Implementation}
-
 Now that the compilation function is explicitly defined, we need to prove the correctness of our implementation; by showing that given any  \texttt{SelVeri} program $P$, we have
-
 \[
 \langle P,\, \tilde{\sigma},\, \tilde{s} \rangle \; \rightarrow^{\ast} \; \underline{\sigma}_f \quad \implies \quad 
 \langle \mathcal{C}(P),\, \epsilon,\, \tilde{\sigma},\, \tilde{s},\, 0 \rangle \; \triangleright^{\ast} \; \underline{\sigma}_f
 \]
 
-\vspace{1em}
-
 \subsection{Correctness of expressions}
-\vspace{0.5em}
 
 \subsubsection{Arithmetic}
 Given any program stack $e$, non-erroneous program state $\sigma$, scope $s$, program counter $pc$, we have:
@@ -1631,7 +1633,9 @@ Similar to our proof of the correctness of \texttt{while}-statements, this assum
 
 \footnotetext{Note that we do not cover the case where the execution of $S_f$ leads to an erroneous state, as the last semantic rule in the section \textbf{2.2.5} of this document and [$\text{err}_{\text{os}}$] rule of high-level semantics ensure the correctness of the translation in this case.}
 
-  \item \textbf{case 11:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
+  \item \textbf{case 11:} $P = read$
+
+  \item \textbf{case 13:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
 
     Assume
 
