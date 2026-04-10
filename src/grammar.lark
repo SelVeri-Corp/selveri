@@ -155,11 +155,18 @@ interval: "[" aexp "," aexp ")"                                           -> int
 set_lit: "{" aexp_list "}"                                                -> set_lit
 
 // ------------------ FUNCTIONS ------------------
-func_decl: "function" IDENT "(" param_list? ")" "->" type "::" func_stmt_seq "end" -> func_decl
+func_decl: "function" IDENT "(" param_list? ")" "->" return_type "::" func_stmt_seq "end" -> func_decl
+
+?return_type: type
+            | dynamic_list_type
 
 ?param_list: param ("," param)*
-?param:  IDENT ":" type                                                   -> param_type
-       | IDENT ":" "List" "[" basic_type "," INT_LIT "]"                  -> param_list_type
+?param: IDENT ":" param_type_node                                          -> param_type
+
+?param_type_node: type
+                | dynamic_list_type
+
+dynamic_list_type: "List" "[" basic_type "," INT_LIT "]"                  -> dynamic_list_type
 
 func_stmt_seq: func_stmt*
 ?func_stmt:  func_terminated_stmt
