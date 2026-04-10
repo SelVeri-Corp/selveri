@@ -37,17 +37,17 @@ class BasicType(ConcreteType):
         raise NotImplementedError("Subclasses must implement __str__")
 
 @dataclass(frozen=True)
-class TypeInt(BasicType):
+class IntType(BasicType):
     def __str__(self) -> str:
         return "INT"
 
 @dataclass(frozen=True)
-class TypeFloat(BasicType):
+class FloatType(BasicType):
     def __str__(self) -> str:
         return "FLOAT"
 
 @dataclass(frozen=True)
-class TypeList(ConcreteType):
+class ListType(ConcreteType):
     elem: BasicType
     dimension: IntLit
     shape: List[AExp] = field(default_factory=list)
@@ -63,7 +63,7 @@ class TypeList(ConcreteType):
         return f"LIST[{self.elem},{self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 @dataclass(frozen=True)
-class TypeDynamicList(TypeNode):
+class DynamicListType(TypeNode):
     elem: BasicType
     dimension: IntLit
     shape: List[Optional[AExp]] = field(default_factory=list)
@@ -117,6 +117,11 @@ class AIndex(AExp):
 
     def __str__(self) -> str:
         return f"{self.base}[{self.index}]"
+
+@dataclass(frozen=True)
+class ARead(AExp):
+    def __str__(self) -> str:
+        return "read()"
 
 @dataclass(frozen=True)
 class AUnOp(AExp):
@@ -258,6 +263,14 @@ class While(Stmt):
     cond: BExp
     body: List[Stmt]
 
+@dataclass(frozen=True)
+class Write(Stmt):
+    aexp: AExp
+
+@dataclass(frozen=True)
+class WriteLine(Stmt):
+    aexp: AExp
+
 # Functions
 @dataclass(frozen=True)
 class Param:
@@ -300,6 +313,8 @@ class AstBuilder(Transformer):
     def decl_stmt(self, name, type_node): return Decl(str(name), type_node)
     def assign_stmt(self, name, expr): return Assign(str(name), expr)
     def list_assign_stmt(self, target, expr): return ListAssign(target, expr)
+    def write_stmt(self, aexp): return Write(aexp)
+    def writeline_stmt(self, aexp): return WriteLine(aexp)
     def pass_stmt(self): return Pass()
     def empty_stmt(self): return Pass()
     def while_stmt(self, cond, body_seq): return While(cond=cond, body=body_seq or [Pass()])
@@ -308,10 +323,10 @@ class AstBuilder(Transformer):
     def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
 
     # types
-    def type_int(self): return TypeInt()
-    def type_float(self): return TypeFloat()
-    def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
-    def dynamic_list_type(self, elem, dimension): return TypeDynamicList(elem, IntLit(int(dimension)))
+    def type_int(self): return IntType()
+    def type_float(self): return FloatType()
+    def type_list(self, elem, dimension, shape): return ListType(elem, IntLit(int(dimension)), shape)
+    def dynamic_list_type(self, elem, dimension): return DynamicListType(elem, IntLit(int(dimension)))
 
     # function parameters
     def param_type(self, name, type_node):
@@ -332,6 +347,7 @@ class AstBuilder(Transformer):
         if not isinstance(base, AExp):
             base = AVar(str(base))
         return AIndex(base, idx)
+    def a_read(self): return ARead()
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)

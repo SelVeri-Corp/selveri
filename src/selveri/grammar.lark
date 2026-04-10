@@ -37,6 +37,11 @@ stmt_seq: stmt*
                | list_assign
                | "pass"                                               -> pass_stmt
                | func_call
+               | write_stmt
+               | writeline_stmt
+
+write_stmt: "write" "(" aexp ")"                                        -> write_stmt
+writeline_stmt: "writeline" "(" aexp ")"                                -> writeline_stmt
 
 // Statements that MUST NOT end with ';'
 ?unterminated_stmt: if_stmt
@@ -89,6 +94,7 @@ aexp: aexp_sum                                                              -> a
          | "len" "(" IDENT ")"                                            -> a_len
          | indexed_value                                                  
          | "(" aexp ")"
+         | "read" "(" ")"                                                 -> a_read
 
 // ------------------ BOOLEAN EXPRESSIONS ------------------
 bexp: b_or                                                                -> bexp
