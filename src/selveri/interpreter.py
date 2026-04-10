@@ -116,13 +116,19 @@ def _split_top_level_commas(s: str) -> List[str]:
         parts.append(tail)
     return parts
 
-# parse scalar token: INT | FLOAT
+# parse scalar token: INT | FLOAT | list literal e.g. [1,2,3] or [1, [2, 3]]
 def _parse_scalar_token(token: str) -> Any:
     t = token.strip()
     if _INT_RE.fullmatch(t):
         return int(t)
     if _FLOAT_RE.fullmatch(t):
         return float(t)
+    if len(t) >= 2 and t[0] == "[" and t[-1] == "]":
+        inner = t[1:-1].strip()
+        if not inner:
+            return []
+        return [_parse_scalar_token(p) for p in _split_top_level_commas(inner)]
+
     return t
 
 # parse label line: LABEL OP [args]
@@ -451,16 +457,16 @@ class SelVerIRInterpreter:
             return DeclType("LIST", elem_kind, len(value))
         raise IRRuntimeError(f"Unsupported runtime value: {value!r}")
 
-    def _set_retvar(self, value: Any, decl_type: Optional[DeclType] = None) -> None:
+    def _set_dynamic_var(self, name: str, value: Any, decl_type: Optional[DeclType] = None) -> None:
         scope = self.scopes[-1]
         if decl_type is None:
-            scope.values["retvar"] = copy.deepcopy(value)
-            scope.types["retvar"] = self._infer_decl_type_from_value(value)
+            scope.values[name] = copy.deepcopy(value)
+            scope.types[name] = self._infer_decl_type_from_value(value)
             return
 
         coerced_value = _coerce_value(value, decl_type)
-        scope.values["retvar"] = copy.deepcopy(coerced_value)
-        scope.types["retvar"] = decl_type
+        scope.values[name] = copy.deepcopy(coerced_value)
+        scope.types[name] = decl_type
 
     def _push_list_packet(self, values: List[Any]) -> None:
         for item in values:
@@ -699,6 +705,34 @@ class SelVerIRInterpreter:
             self._exec_ret(instr.args)
             return
 
+        if op == "WRITE":
+            print(self._pop(), end="")
+            self.pc += 1
+            return
+
+        if op == "WRITELN":
+            print(self._pop(), end="\n")
+            self.pc += 1
+            return
+        
+        if op == "LWRITE":
+            items = self._pop_list_packet(expected_size=None)
+            print(items, end="")
+            self.pc += 1
+            return
+
+        if op == "LWRITELN":
+            items = self._pop_list_packet(expected_size=None)
+            print(items, end="\n")
+            self.pc += 1
+            return
+
+        if op == "READ":
+            value = input()
+            self._push(_parse_scalar_token(value))
+            self.pc += 1
+            return
+
         if op == "VERI":
             spec = instr.args[0] if instr.args else None
             if self.verifier is not None:
@@ -765,6 +799,9 @@ class SelVerIRInterpreter:
         # literal values
         if isinstance(arg, (int, float)):
             self._push(arg)
+            return
+        if isinstance(arg, list):
+            self._push_list_packet(arg)
             return
 
         raise IRRuntimeError(f"Cannot PUSH unknown immediate: {arg}")
@@ -895,7 +932,7 @@ class SelVerIRInterpreter:
 
         frame = self.call_stack.pop()
         self.scopes = list(frame.scopes)
-        self._set_retvar(return_value, return_type)
+        self._set_dynamic_var("retvar", return_value, return_type)
         self.pc = frame.return_pc
 
 

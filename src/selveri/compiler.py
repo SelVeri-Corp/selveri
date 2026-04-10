@@ -9,13 +9,15 @@ from .parser import (
     parse_selveri,
     Program,
     Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
-    TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
-    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, FuncCall,
+    TypeNode, BasicType, IntType, FloatType, ListType, DynamicListType,
+    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
-    FunctionDecl,
+    FunctionDecl, Write, WriteLine,
 )
 
 from .errors import CompilerError
+
+RESERVED_NAMES = ["retvar", "read", "write", "len"]
 
 # -----------------------
 # IR instruction model
@@ -131,9 +133,7 @@ class SelVeriCompiler:
     """
 
     def __init__(self) -> None:
-        # starting scope with retvar
-        self.scope = _ScopeFrame() # parent scope
-        self.scope.bindings["retvar"] = None
+        self._create_scope(fresh_env=True) # create global parent scope
         self.current_return_type: Optional[TypeNode] = None
         # functions to be compiled (declaration object, pc)
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
@@ -174,7 +174,7 @@ class SelVeriCompiler:
         type_node = owner.bindings[name]
         if type_node is None:
             if name == "retvar":
-                raise CompilerError("retvar has no type until a function call returns.")
+                raise CompilerError(f"retvar has no type yet.")
             raise CompilerError(f"Internal: unbound variable: {name}")
         return type_node
 
@@ -184,7 +184,7 @@ class SelVeriCompiler:
             return info
 
         type_node = self.scope.get_binding(name)
-        if isinstance(type_node, (TypeList, TypeDynamicList)):
+        if isinstance(type_node, (ListType, DynamicListType)):
             return self._list_info_from_type(type_node)
 
         if type_node is None and self.scope.find_binding_owner(name) is None:
@@ -192,8 +192,8 @@ class SelVeriCompiler:
         raise CompilerError(f"'{name}' is not a declared list.")
 
     def _bind_name(self, name: str, type_node: Optional[TypeNode]) -> None:
-        if name == "retvar":
-            raise CompilerError("retvar is reserved and cannot be declared by the user.")
+        if name in RESERVED_NAMES:
+            raise CompilerError(f"{name} is reserved and cannot be declared by the user.")
         if name in self.scope.bindings:
             raise CompilerError(f"Duplicate declaration: {name}")
         self.scope.bindings[name] = type_node
@@ -203,14 +203,16 @@ class SelVeriCompiler:
         self.emit("DECL", self._ct_type(type_node), name)
 
     def _declare_list_len_slot(self, list_name: str, dim: int) -> None:
-        self._declare_basic(self._list_len_name(list_name, dim), TypeInt())
+        self._declare_basic(self._list_len_name(list_name, dim), IntType())
 
-    def _set_retvar_type(self, type_node: Optional[TypeNode]) -> None:
-        self.scope.bindings["retvar"] = type_node
-        if isinstance(type_node, (TypeList, TypeDynamicList)):
-            self.scope.lists["retvar"] = self._list_info_from_type(type_node)
+    def _set_dynamic_var_type(self, name: str, type_node: Optional[TypeNode]) -> None:
+        if name != "retvar":
+            raise CompilerError(f"Internal: {name} is not a dynamic variable.")
+        self.scope.bindings[name] = type_node
+        if isinstance(type_node, (ListType, DynamicListType)):
+            self.scope.lists[name] = self._list_info_from_type(type_node)
             return
-        self.scope.lists.pop("retvar", None)
+        self.scope.lists.pop(name, None)
 
     def _try_eval_const_int(self, a: AExp) -> Optional[int]:
         """
@@ -267,12 +269,12 @@ class SelVeriCompiler:
         if not shape:
             return elem_type
         if any(dim is None for dim in shape):
-            return TypeDynamicList(
+            return DynamicListType(
                 elem_type,
                 IntLit(len(shape)),
                 [IntLit(dim) if dim is not None else None for dim in shape],
             )
-        return TypeList(
+        return ListType(
             elem_type,
             IntLit(len(shape)),
             [IntLit(dim) for dim in shape if dim is not None],
@@ -282,13 +284,13 @@ class SelVeriCompiler:
         """
         Converts a list type to a _ListInfo object.
         """
-        if isinstance(type_node, TypeList):
+        if isinstance(type_node, ListType):
             return _ListInfo(
                 elem_type=type_node.elem,
                 dimension=type_node.dimension.value,
                 shape=tuple(self._try_eval_const_int(dim_expr) for dim_expr in type_node.shape),
             )
-        if isinstance(type_node, TypeDynamicList):
+        if isinstance(type_node, DynamicListType):
             if type_node.shape:
                 raw_shape = list(type_node.shape)
                 if len(raw_shape) < type_node.dimension.value:
@@ -309,7 +311,7 @@ class SelVeriCompiler:
     def _get_list_expr_info(self, expr: AExp) -> _ListInfo:
         if isinstance(expr, AVar):
             type_node = self._get_declared_type(expr.name)
-            if not isinstance(type_node, (TypeList, TypeDynamicList)):
+            if not isinstance(type_node, (ListType, DynamicListType)):
                 raise CompilerError(f"Expression '{expr.name}' is not a list.")
             owner = self.scope.find_list_owner(expr.name)
             if owner is not None:
@@ -347,11 +349,11 @@ class SelVeriCompiler:
         return True
 
     def _basic_types_compatible(self, actual: TypeNode, expected: TypeNode) -> bool:
-        if isinstance(expected, TypeFloat):
-            return isinstance(actual, (TypeInt, TypeFloat)) # integers are casted into floats gracefully
-        return type(actual) is type(expected)
+        if isinstance(expected, FloatType):
+            return isinstance(actual, BasicType) # integers are casted into floats gracefully
+        return type(actual) is type(expected) or type(actual) is BasicType
 
-    def _infer_list_literal_type(self, literal: ListLit) -> TypeList:
+    def _infer_list_literal_type(self, literal: ListLit) -> ListType:
         """
         Infers the type of a list literal at compile time.
         Raises a CompilerError if the list literal is empty or if the list literal items do not have a uniform nesting depth.
@@ -365,15 +367,15 @@ class SelVeriCompiler:
             raise CompilerError("Empty list literals are not supported.")
 
         first_type = self._infer_imm_type(literal.items[0])
-        if isinstance(first_type, (TypeInt, TypeFloat)):
+        if isinstance(first_type, (IntType, FloatType)):
             elem_type = first_type
             for item in literal.items[1:]:
                 item_type = self._infer_imm_type(item)
-                if not isinstance(item_type, (TypeInt, TypeFloat)):
+                if not isinstance(item_type, (IntType, FloatType)):
                     raise CompilerError("List literal items must have a uniform nesting depth.")
-                if isinstance(elem_type, TypeFloat) or isinstance(item_type, TypeFloat):
-                    elem_type = TypeFloat()
-            return TypeList(elem_type, IntLit(1), [IntLit(len(literal.items))])
+                if isinstance(elem_type, FloatType) or isinstance(item_type, FloatType):
+                    elem_type = FloatType()
+            return ListType(elem_type, IntLit(1), [IntLit(len(literal.items))])
 
         nested_info = self._list_info_from_type(first_type)
         elem_type = nested_info.elem_type
@@ -381,26 +383,26 @@ class SelVeriCompiler:
 
         for item in literal.items[1:]:
             item_type = self._infer_imm_type(item)
-            if not isinstance(item_type, TypeList):
+            if not isinstance(item_type, ListType):
                 raise CompilerError("List literal items must have a uniform nesting depth.")
             item_info = self._list_info_from_type(item_type)
             if item_info.dimension != nested_info.dimension or item_info.shape != nested_shape:
                 raise CompilerError("Nested list literal must be rectangular.")
             if item_info.elem_type != elem_type:
-                if isinstance(elem_type, TypeInt) and isinstance(item_info.elem_type, TypeFloat):
-                    elem_type = TypeFloat()
-                elif not (isinstance(elem_type, TypeFloat) and isinstance(item_info.elem_type, TypeInt)):
+                if isinstance(elem_type, IntType) and isinstance(item_info.elem_type, FloatType):
+                    elem_type = FloatType()
+                elif not (isinstance(elem_type, FloatType) and isinstance(item_info.elem_type, IntType)):
                     raise CompilerError("Nested list literal elements must have a uniform basic type.")
 
         shape = [IntLit(len(literal.items))]
         shape.extend(IntLit(dim) for dim in nested_shape if dim is not None)
-        return TypeList(elem_type, IntLit(len(shape)), shape)
+        return ListType(elem_type, IntLit(len(shape)), shape)
 
     def _infer_imm_type(self, imm: Union[IntLit, FloatLit, ListLit]) -> TypeNode:
         if isinstance(imm, IntLit):
-            return TypeInt()
+            return IntType()
         if isinstance(imm, FloatLit):
-            return TypeFloat()
+            return FloatType()
         if isinstance(imm, ListLit):
             return self._infer_list_literal_type(imm)
 
@@ -409,7 +411,7 @@ class SelVeriCompiler:
         literal: Union[ListLit, IntLit, FloatLit],
         expected_type: TypeNode,
     ) -> List[Union[int, float]]:
-        if isinstance(expected_type, TypeList):
+        if isinstance(expected_type, ListType):
             if not isinstance(literal, ListLit):
                 raise CompilerError("Nested list literal shape does not match the expected list type.")
             expected_len = self._eval_const_int(expected_type.shape[0])
@@ -421,7 +423,7 @@ class SelVeriCompiler:
             if expected_type.dimension.value == 1:
                 sub_expected: TypeNode = expected_type.elem
             else:
-                sub_expected = TypeList(
+                sub_expected = ListType(
                     expected_type.elem,
                     IntLit(expected_type.dimension.value - 1),
                     expected_type.shape[1:],
@@ -430,12 +432,12 @@ class SelVeriCompiler:
                 flat.extend(self._flatten_list_literal(item, sub_expected))
             return flat
 
-        if isinstance(expected_type, TypeInt):
+        if isinstance(expected_type, IntType):
             if not isinstance(literal, IntLit):
                 raise CompilerError("Int lists require integer elements.")
             return [literal.value]
 
-        if isinstance(expected_type, TypeFloat):
+        if isinstance(expected_type, FloatType):
             if not isinstance(literal, (IntLit, FloatLit)):
                 raise CompilerError("Float lists require numeric elements.")
             return [literal.value]
@@ -443,22 +445,22 @@ class SelVeriCompiler:
         raise CompilerError("Unsupported list literal type.")
 
     def _default_value_expr(self, type_node: TypeNode) -> AExp:
-        if isinstance(type_node, TypeInt):
+        if isinstance(type_node, IntType):
             return IntLit(0)
-        if isinstance(type_node, TypeFloat):
+        if isinstance(type_node, FloatType):
             return FloatLit(0.0)
-        if isinstance(type_node, TypeList):
+        if isinstance(type_node, ListType):
             size = self._eval_const_int(type_node.shape[0])
             if type_node.dimension.value == 1:
                 sub_default: TypeNode = type_node.elem
             else:
-                sub_default = TypeList(
+                sub_default = ListType(
                     type_node.elem,
                     IntLit(type_node.dimension.value - 1),
                     type_node.shape[1:],
                 )
             return ListLit([self._default_value_expr(sub_default) for _ in range(size)])
-        if isinstance(type_node, TypeDynamicList):
+        if isinstance(type_node, DynamicListType):
             raise CompilerError("Functions returning dynamically-sized lists must end with an explicit return.")
         raise CompilerError("Unsupported function return type for the return rule.")
 
@@ -508,43 +510,45 @@ class SelVeriCompiler:
 
     def _type_of_aexp(self, expr: AExp) -> TypeNode:
         if isinstance(expr, IntLit):
-            return TypeInt()
+            return IntType()
         if isinstance(expr, FloatLit):
-            return TypeFloat()
+            return FloatType()
         if isinstance(expr, ListLit):
             return self._infer_list_literal_type(expr)
         if isinstance(expr, AVar):
             return self._get_declared_type(expr.name)
         if isinstance(expr, ALen):
             self._get_declared_type(expr.name)
-            return TypeInt()
+            return IntType()
         if isinstance(expr, AIndex):
             info, _base_name, indices = self._resolve_list_access(expr)
             return self._get_type_list_access(info, indices)
         if isinstance(expr, AUnOp):
             inner = self._type_of_aexp(expr.rhs)
-            if not isinstance(inner, (TypeInt, TypeFloat)):
+            if not isinstance(inner, BasicType):
                 raise CompilerError("Unary '-' can only be applied to basic numeric expressions.")
             return inner
         if isinstance(expr, ABinOp):
             left = self._type_of_aexp(expr.left)
             right = self._type_of_aexp(expr.right)
-            if not isinstance(left, (TypeInt, TypeFloat)) or not isinstance(right, (TypeInt, TypeFloat)):
+            if not isinstance(left, BasicType) or not isinstance(right, BasicType):
                 raise CompilerError("Binary arithmetic operators can only be applied to basic numeric expressions.")
-            if isinstance(left, TypeFloat) or isinstance(right, TypeFloat):
-                return TypeFloat()
-            return TypeInt()
+            if isinstance(left, FloatType) or isinstance(right, FloatType):
+                return FloatType()
+            return IntType()
         if isinstance(expr, FuncCall):
             func_info = self.functions.get(expr.name)
             if func_info is None:
                 raise CompilerError(f"Undefined function: {expr.name}")
             return func_info[0].return_type
+        if isinstance(expr, ARead):
+            return BasicType()
         raise CompilerError(f"Unknown arithmetic expression node: {type(expr).__name__}")
 
     def _ct_type(self, type_node: BasicType) -> str:
-        if isinstance(type_node, TypeInt):
+        if isinstance(type_node, IntType):
             return "INT"
-        if isinstance(type_node, TypeFloat):
+        if isinstance(type_node, FloatType):
             return "FLOAT"
         raise CompilerError(f"Unsupported non-basic type in DECL: {type(type_node).__name__}")
 
@@ -552,9 +556,9 @@ class SelVeriCompiler:
         """
         Converts a basic type to the corresponding IR list type. Required for list declaration.
         """
-        if isinstance(elem_type, TypeInt):
+        if isinstance(elem_type, IntType):
             return "LIST[INT]"
-        if isinstance(elem_type, TypeFloat):
+        if isinstance(elem_type, FloatType):
             return "LIST[FLOAT]"
         raise CompilerError(f"Unsupported list element type: {type(elem_type).__name__}")
 
@@ -678,11 +682,11 @@ class SelVeriCompiler:
                 self.emit("MUL")
                 return
             if expr.op == "/":
-                self.emit("fDIV" if isinstance(self._type_of_aexp(expr), TypeFloat) else "iDIV")
+                self.emit("fDIV" if isinstance(self._type_of_aexp(expr), FloatType) else "iDIV")
                 return
             raise CompilerError(f"Unsupported binary operator in arithmetic expression: {expr.op}")
-        if isinstance(expr, FuncCall):
-            self._compile_call(expr)
+        if isinstance(expr, ARead):
+            self.emit("READ")
             return
         raise CompilerError(f"Unsupported arithmetic expression: {type(expr).__name__}")
 
@@ -762,17 +766,23 @@ class SelVeriCompiler:
         if isinstance(stmt, FuncCall):
             self._compile_call(stmt)
             return
+        if isinstance(stmt, Write):
+            self._compile_write(stmt)
+            return
+        if isinstance(stmt, WriteLine):
+            self._compile_writeline(stmt)
+            return
         raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
 
     def _compile_decl(self, decl: Decl) -> None:
         name = decl.name
         type_node = decl.type_node
 
-        if isinstance(type_node, (TypeInt, TypeFloat)):
+        if isinstance(type_node, (IntType, FloatType)):
             self._declare_basic(name, type_node)
             return
 
-        if isinstance(type_node, TypeList):
+        if isinstance(type_node, ListType):
             self._bind_name(name, type_node)
             self.scope.lists[name] = self._list_info_from_type(type_node)
             # _lst_dim_i generation
@@ -789,7 +799,7 @@ class SelVeriCompiler:
     def _compile_assign(self, stmt: Assign) -> None:
         target_type = self._get_declared_type(stmt.name)
 
-        if isinstance(target_type, (TypeInt, TypeFloat)):
+        if isinstance(target_type, (IntType, FloatType)):
             source_type = self._type_of_aexp(stmt.aexp)
             if not self._basic_types_compatible(source_type, target_type):
                 raise CompilerError(f"Type mismatch in assignment to '{stmt.name}'.")
@@ -797,7 +807,7 @@ class SelVeriCompiler:
             self.emit("STORE", stmt.name)
             return
 
-        if isinstance(target_type, (TypeList, TypeDynamicList)):
+        if isinstance(target_type, (ListType, DynamicListType)):
             expected = self._get_list_expr_info(AVar(stmt.name))
             actual = self._get_list_expr_info(stmt.aexp)
             if not self._are_list_types_compatible(actual, expected):
@@ -873,7 +883,7 @@ class SelVeriCompiler:
             raise CompilerError("Internal: return statement outside of a function.")
 
         expected_type = self.current_return_type
-        if isinstance(expected_type, (TypeList, TypeDynamicList)):
+        if isinstance(expected_type, (ListType, DynamicListType)):
             expected = self._list_info_from_type(expected_type)
             actual = self._get_list_expr_info(stmt.value)
             if not self._are_list_types_compatible(actual, expected):
@@ -900,7 +910,7 @@ class SelVeriCompiler:
             )
 
         for param, arg in zip(func_decl.params, call.args):
-            if isinstance(param.type_node, (TypeList, TypeDynamicList)):
+            if isinstance(param.type_node, (ListType, DynamicListType)):
                 expected = self._list_info_from_type(param.type_node)
                 actual = self._get_list_expr_info(arg)
                 if not self._are_list_types_compatible(actual, expected):
@@ -913,7 +923,23 @@ class SelVeriCompiler:
                 self.CA(arg)
 
         self.emit("CALL", call.name)
-        self._set_retvar_type(func_decl.return_type)
+        self._set_dynamic_var_type("retvar", func_decl.return_type)
+
+    def _compile_write(self, stmt: Write) -> None:
+        self.CA(stmt.aexp)
+        t = self._type_of_aexp(stmt.aexp)
+        if isinstance(t, (ListType, DynamicListType)):
+            self.emit("LWRITE")
+        else:
+            self.emit("WRITE")
+
+    def _compile_writeline(self, stmt: WriteLine) -> None:
+        self.CA(stmt.aexp)
+        t = self._type_of_aexp(stmt.aexp)
+        if isinstance(t, (ListType, DynamicListType)):
+            self.emit("LWRITELN")
+        else:
+            self.emit("WRITELN")
 
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
         for stmt in stmts:
@@ -925,7 +951,7 @@ class SelVeriCompiler:
                 raise CompilerError(f"Duplicate function declaration: {func.name}")
             self.functions[func.name] = (func, -1)
 
-    def _declare_static_list_param(self, name: str, type_node: TypeList) -> None:
+    def _declare_static_list_param(self, name: str, type_node: ListType) -> None:
         self._bind_name(name, type_node)
         info = self._list_info_from_type(type_node)
         self.scope.lists[name] = info
@@ -940,7 +966,7 @@ class SelVeriCompiler:
         self.emit("LDECL", self._ir_list_type(type_node.elem), name)
         self.emit("STORE", name)
 
-    def _declare_dynamic_list_param(self, name: str, type_node: TypeDynamicList) -> None:
+    def _declare_dynamic_list_param(self, name: str, type_node: DynamicListType) -> None:
         if type_node.dimension.value != 1:
             raise CompilerError("Only rank-1 variable-length list parameters are supported.")
         self._bind_name(name, type_node)
@@ -959,21 +985,20 @@ class SelVeriCompiler:
         self.functions[func.name] = (func, entry_pc)
 
         self.emit("FUNCENV", func.name, f"{func.return_type}")
-        self.scope = _ScopeFrame()
-        self.scope.bindings["retvar"] = None
+        self._create_scope(fresh_env=True)
         self.current_return_type = func.return_type
 
         # Parameters are pushed left-to-right by the caller, so bind them from the
         # top of the stack back toward the first argument.
         for param in reversed(func.params):
-            if isinstance(param.type_node, (TypeInt, TypeFloat)):
+            if isinstance(param.type_node, (IntType, FloatType)):
                 self._declare_basic(param.name, param.type_node)
                 self.emit("STORE", param.name) # fetch parameter value from stack
                 continue
-            if isinstance(param.type_node, TypeList):
+            if isinstance(param.type_node, ListType):
                 self._declare_static_list_param(param.name, param.type_node)
                 continue
-            if isinstance(param.type_node, TypeDynamicList):
+            if isinstance(param.type_node, DynamicListType):
                 self._declare_dynamic_list_param(param.name, param.type_node)
                 continue
             raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
