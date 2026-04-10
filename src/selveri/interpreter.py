@@ -41,7 +41,15 @@ class RuntimeScope:
 class CallFrame:
     return_pc: int
     scopes: Tuple[RuntimeScope, ...]
+    function_name: Optional[str] = None
     return_type: Optional[DeclType] = None
+
+
+@dataclass(frozen=True)
+class FunctionEntry:
+    name: str
+    pc: int
+    return_type: Optional[DeclType]
 
 
 # -----------------------
@@ -256,6 +264,16 @@ def _type_from_funcenv_arg(obj: Any) -> DeclType:
         return DeclType("LIST", decl_type.elem_kind, None)
     return decl_type
 
+
+def _funcenv_metadata(args: Tuple[Any, ...]) -> Tuple[Optional[str], Optional[DeclType]]:
+    if len(args) == 2:
+        name = str(args[0]).strip()
+        if not name:
+            raise IRParseError("FUNCENV function name cannot be empty.")
+        return name, _type_from_funcenv_arg(args[1])
+
+    raise IRParseError("FUNCENV expects a function name and a return type.")
+
 # type casting
 def _coerce_value(value: Any, decl_type: DeclType) -> Any:
     if decl_type.kind == "INT":
@@ -304,6 +322,7 @@ class SelVerIRInterpreter:
 
         self.code: List[IRInstr] = []
         self.label_to_index: Dict[int, int] = {}
+        self.functions: Dict[str, FunctionEntry] = {}
 
         self.state: Dict[str, Any] = {}
         self.types: Dict[str, DeclType] = {}
@@ -318,6 +337,16 @@ class SelVerIRInterpreter:
     def load(self, program: Iterable[IRInstr]) -> None:
         self.code = list(program)
         self.label_to_index = {instr.label: idx for idx, instr in enumerate(self.code)}
+        self.functions = {}
+        for instr in self.code:
+            if instr.op != "FUNCENV":
+                continue
+            name, return_type = _funcenv_metadata(instr.args)
+            if name is None:
+                continue
+            if name in self.functions:
+                raise IRParseError(f"Duplicate function environment: {name}")
+            self.functions[name] = FunctionEntry(name=name, pc=instr.label, return_type=return_type)
         self.reset_runtime() # reset the runtime state
 
     def reset_runtime(self) -> None:
@@ -336,6 +365,11 @@ class SelVerIRInterpreter:
         if not self.stack:
             raise IRRuntimeError("Stack underflow.")
         return self.stack.pop()
+
+    def _pop_binary_operands(self) -> Tuple[Any, Any]:
+        right = self._pop()
+        left = self._pop()
+        return left, right
 
     # ---------- lookup ----------
     def _fresh_scope(self) -> RuntimeScope:
@@ -429,7 +463,7 @@ class SelVerIRInterpreter:
         scope.types["retvar"] = decl_type
 
     def _push_list_packet(self, values: List[Any]) -> None:
-        for item in reversed(values):
+        for item in values:
             self._push(item)
         self._push(len(values))
 
@@ -441,7 +475,9 @@ class SelVerIRInterpreter:
             raise IRRuntimeError("List length mismatch.")
         if len(self.stack) < size:
             raise IRRuntimeError("Stack underflow while reading list packet.")
-        return [self._pop() for _ in range(size)]
+        items = [self._pop() for _ in range(size)]
+        items.reverse()
+        return items
 
     def _jump_to_label(self, label: int) -> None:
         if label not in self.label_to_index:
@@ -517,76 +553,66 @@ class SelVerIRInterpreter:
             return
 
         if op == "ADD":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(v1 + v2)
+            left, right = self._pop_binary_operands()
+            self._push(left + right)
             self.pc += 1
             return
 
         if op == "SUB":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(v1 - v2)
+            left, right = self._pop_binary_operands()
+            self._push(left - right)
             self.pc += 1
             return
 
         if op == "MUL":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(v1 * v2)
+            left, right = self._pop_binary_operands()
+            self._push(left * right)
             self.pc += 1
             return
 
         if op == "iDIV":
-            v1 = self._pop()
-            v2 = self._pop()
-            if int(v2) == 0:
+            left, right = self._pop_binary_operands()
+            if int(right) == 0:
                 raise IRRuntimeError("Integer division by zero.")
-            self._push(int(v1) // int(v2))
+            self._push(int(left) // int(right))
             self.pc += 1
             return
 
         if op == "fDIV":
-            v1 = self._pop()
-            v2 = self._pop()
-            if float(v2) == 0.0:
+            left, right = self._pop_binary_operands()
+            if float(right) == 0.0:
                 raise IRRuntimeError("Float division by zero.")
-            self._push(float(v1) / float(v2))
+            self._push(float(left) / float(right))
             self.pc += 1
             return
 
         if op == "EQ":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(1 if v1 == v2 else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if left == right else 0)
             self.pc += 1
             return
 
         if op == "LT":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(1 if v1 < v2 else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if left < right else 0)
             self.pc += 1
             return
 
         if op == "LE":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(1 if v1 <= v2 else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if left <= right else 0)
             self.pc += 1
             return
 
         if op == "GT":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(1 if v1 > v2 else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if left > right else 0)
             self.pc += 1
             return
 
         if op == "GE":
-            v1 = self._pop()
-            v2 = self._pop()
-            self._push(1 if v1 >= v2 else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if left >= right else 0)
             self.pc += 1
             return
 
@@ -597,23 +623,20 @@ class SelVerIRInterpreter:
             return
 
         if op == "AND":
-            b1 = self._pop()
-            b2 = self._pop()
-            self._push(1 if (_truthy(b1) and _truthy(b2)) else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if (_truthy(left) and _truthy(right)) else 0)
             self.pc += 1
             return
 
         if op == "OR":
-            b1 = self._pop()
-            b2 = self._pop()
-            self._push(1 if (_truthy(b1) or _truthy(b2)) else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if (_truthy(left) or _truthy(right)) else 0)
             self.pc += 1
             return
 
         if op == "XOR":
-            b1 = self._pop()
-            b2 = self._pop()
-            self._push(1 if (_truthy(b1) ^ _truthy(b2)) else 0)
+            left, right = self._pop_binary_operands()
+            self._push(1 if (_truthy(left) ^ _truthy(right)) else 0)
             self.pc += 1
             return
 
@@ -654,14 +677,19 @@ class SelVerIRInterpreter:
         if op == "FUNCENV":
             if not self.call_stack:
                 raise IRRuntimeError(f"{op} requires an active call frame.")
-            if len(instr.args) > 1:
-                raise IRRuntimeError("FUNCENV expects at most one argument.")
-            return_type = _type_from_funcenv_arg(instr.args[0]) if instr.args else None
+            name, return_type = _funcenv_metadata(instr.args)
             frame = self.call_stack[-1]
+            if frame.function_name is not None and name != frame.function_name:
+                raise IRRuntimeError(
+                    f"CALL landed in function environment '{name}', expected '{frame.function_name}'."
+                )
+            if frame.return_type is not None and return_type is not None and return_type != frame.return_type:
+                raise IRRuntimeError(f"FUNCENV return type for '{name}' does not match the function table.")
             self.call_stack[-1] = CallFrame(
                 return_pc=frame.return_pc,
                 scopes=frame.scopes,
-                return_type=return_type,
+                function_name=frame.function_name,
+                return_type=return_type if return_type is not None else frame.return_type,
             )
             self.scopes = [self._fresh_scope()]
             self.pc += 1
@@ -827,10 +855,26 @@ class SelVerIRInterpreter:
 
     def _exec_call(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
-            raise IRRuntimeError("CALL expects one target label.")
-        target = int(args[0])
-        self.call_stack.append(CallFrame(return_pc=self.pc + 1, scopes=tuple(self.scopes)))
-        self._jump_to_label(target)
+            raise IRRuntimeError("CALL expects one function name or label.")
+        target = args[0]
+        if not isinstance(target, str) or _INT_RE.fullmatch(target.strip()):
+            self.call_stack.append(CallFrame(return_pc=self.pc + 1, scopes=tuple(self.scopes)))
+            self._jump_to_label(int(target))
+            return
+
+        name = target.strip()
+        entry = self.functions.get(name)
+        if entry is None:
+            raise IRRuntimeError(f"Unknown function: {name}")
+        self.call_stack.append(
+            CallFrame(
+                return_pc=self.pc + 1,
+                scopes=tuple(self.scopes),
+                function_name=name,
+                return_type=entry.return_type,
+            )
+        )
+        self._jump_to_label(entry.pc)
 
     def _exec_ret(self, _args: Tuple[Any, ...]) -> None:
         if not self.call_stack:
@@ -864,7 +908,11 @@ def interpret_ir_text(
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
     program = parse_ir_text(text)
-    return interpret_ir_code(program, verifier=verifier, max_steps=max_steps)
+    return interpret_ir_code(
+        program,
+        verifier=verifier,
+        max_steps=max_steps,
+    )
 
 def interpret_ir_code(
     code: Iterable[IRInstr],

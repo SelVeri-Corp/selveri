@@ -1,28 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import ast
 from pathlib import Path
-from typing import Any
 
 from .compiler import compile_selveri_source_to_ir_text
 from .interpreter import interpret_ir_text
-
-
-def _parse_initial_state(text: str | None) -> dict[str, Any] | None:
-    if text is None:
-        return None
-    value = ast.literal_eval(text)
-    if not isinstance(value, dict):
-        raise ValueError("--state must evaluate to a dictionary.")
-    return value
-
 
 def run_pipeline(
     input_path: Path,
     *,
     output_ir: Path | None,
-    initial_state: dict[str, Any] | None,
     max_steps: int,
     print_ir: bool,
 ) -> int:
@@ -40,7 +27,7 @@ def run_pipeline(
         print(ir_text)
         print()
 
-    result = interpret_ir_text(ir_text, initial_state=initial_state, max_steps=max_steps)
+    result = interpret_ir_text(ir_text, max_steps=max_steps)
 
     print("Final state:")
     print(result.state)
@@ -68,12 +55,6 @@ def main() -> int:
         help="Write generated SelVerIR to file (uses --output-ir or input.svir)",
     )
     arg_parser.add_argument(
-        "--state",
-        type=str,
-        default=None,
-        help="Optional initial state as Python dict, e.g. '{\"x\": 3}'",
-    )
-    arg_parser.add_argument(
         "--max-steps",
         type=int,
         default=1_000_000,
@@ -86,7 +67,6 @@ def main() -> int:
     )
     args = arg_parser.parse_args()
 
-    initial_state = _parse_initial_state(args.state)
     output_ir = None
     if args.emit_ir:
         output_ir = args.output_ir if args.output_ir is not None else args.input.with_suffix(".svir")
@@ -94,7 +74,6 @@ def main() -> int:
     return run_pipeline(
         args.input,
         output_ir=output_ir,
-        initial_state=initial_state,
         max_steps=args.max_steps,
         print_ir=args.print_ir,
     )

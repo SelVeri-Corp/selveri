@@ -38,12 +38,6 @@ class _PatchRef:
     idx: int # instruction index to patch
 
 
-@dataclass
-class _CallPatchRef:
-    idx: int
-    func_name: str
-
-
 @dataclass(frozen=True)
 class _ListInfo:
     elem_type: TypeNode # the type of the elements in the list
@@ -141,9 +135,8 @@ class SelVeriCompiler:
         self.scope = _ScopeFrame() # parent scope
         self.scope.bindings["retvar"] = None
         self.current_return_type: Optional[TypeNode] = None
-        # functions to be compiled (declaration object, pc, scope)
-        self.functions: Dict[str, Tuple[FunctionDecl, int, _ScopeFrame]] = {}
-        self.pending_calls: Dict[str, List[_CallPatchRef]] = {}
+        # functions to be compiled (declaration object, pc)
+        self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
 
@@ -159,12 +152,6 @@ class SelVeriCompiler:
         instr = self.code[patch.idx]
         if instr.op not in ("JZ", "GOTO"):
             raise CompilerError(f"Internal: patching non-jump at {patch.idx}: {instr.op}")
-        self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,))
-
-    def patch_call(self, patch: _CallPatchRef, target_pc: int) -> None:
-        instr = self.code[patch.idx]
-        if instr.op != "CALL":
-            raise CompilerError(f"Internal: patching non-call at {patch.idx}: {instr.op}")
         self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,))
 
     def _create_scope(self, fresh_env: bool = False) -> None:
@@ -577,7 +564,7 @@ class SelVeriCompiler:
         if expected is not None and not self._are_list_types_compatible(actual_info, expected):
             raise CompilerError("List literal does not match the expected list type.")
         flat_values = self._flatten_list_literal(literal, literal_type)
-        for value in reversed(flat_values):
+        for value in flat_values:
             self.emit("PUSH", value)
         self.emit("PUSH", len(flat_values))
         return actual_info
@@ -591,7 +578,7 @@ class SelVeriCompiler:
         if flat_size is None:
             raise CompilerError("Cannot use a dynamically-sized sub-list as a first-class value.")
         base_index = self._build_flat_index_expr(base_name, info, indices)
-        for offset in reversed(range(flat_size)):
+        for offset in range(flat_size):
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
             self.emit("LLOAD", base_name)
@@ -674,13 +661,13 @@ class SelVeriCompiler:
         if isinstance(expr, AUnOp):
             if expr.op != "-":
                 raise CompilerError(f"Unsupported unary operator in arithmetic expression: {expr.op}")
-            self.CA(expr.rhs)
             self.emit("PUSH", 0)
+            self.CA(expr.rhs)
             self.emit("SUB")
             return
         if isinstance(expr, ABinOp):
-            self.CA(expr.right)
             self.CA(expr.left)
+            self.CA(expr.right)
             if expr.op == "+":
                 self.emit("ADD")
                 return
@@ -710,8 +697,8 @@ class SelVeriCompiler:
             self.emit("NEG")
             return
         if isinstance(expr, BCompare):
-            self.CA(expr.right)
             self.CA(expr.left)
+            self.CA(expr.right)
             if expr.op == "=":
                 self.emit("EQ")
                 return
@@ -733,8 +720,8 @@ class SelVeriCompiler:
             self.emit("NEG")
             return
         if isinstance(expr, BBinOp):
-            self.CB(expr.right)
             self.CB(expr.left)
+            self.CB(expr.right)
             if expr.op == "and":
                 self.emit("AND")
                 return
@@ -906,14 +893,13 @@ class SelVeriCompiler:
         if func_info is None:
             raise CompilerError(f"Undefined function: {call.name}")
 
-        func_decl, entry_pc = func_info
+        func_decl, _ = func_info
         if len(call.args) != len(func_decl.params):
             raise CompilerError(
                 f"Function '{call.name}' expects {len(func_decl.params)} arguments, got {len(call.args)}."
             )
 
-        # put parameters on the stack in reverse order so that the first parameter is on the top of the stack
-        for param, arg in reversed(list(zip(func_decl.params, call.args))):
+        for param, arg in zip(func_decl.params, call.args):
             if isinstance(param.type_node, (TypeList, TypeDynamicList)):
                 expected = self._list_info_from_type(param.type_node)
                 actual = self._get_list_expr_info(arg)
@@ -926,12 +912,7 @@ class SelVeriCompiler:
                     raise CompilerError(f"Argument for parameter '{param.name} : {param.type_node}' does not match the type provided {actual_type}.")
                 self.CA(arg)
 
-        if entry_pc == -1:
-            patch = _CallPatchRef(self.emit("CALL", -1), call.name)
-            self.pending_calls.setdefault(call.name, []).append(patch)
-        else:
-            self.emit("CALL", entry_pc)
-
+        self.emit("CALL", call.name)
         self._set_retvar_type(func_decl.return_type)
 
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
@@ -977,12 +958,14 @@ class SelVeriCompiler:
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
-        self.emit("FUNCENV", f"{func.return_type}")
+        self.emit("FUNCENV", func.name, f"{func.return_type}")
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
         self.current_return_type = func.return_type
 
-        for param in func.params:
+        # Parameters are pushed left-to-right by the caller, so bind them from the
+        # top of the stack back toward the first argument.
+        for param in reversed(func.params):
             if isinstance(param.type_node, (TypeInt, TypeFloat)):
                 self._declare_basic(param.name, param.type_node)
                 self.emit("STORE", param.name) # fetch parameter value from stack
@@ -1017,13 +1000,6 @@ class SelVeriCompiler:
             self.patch_jump(entry_jump, self.pc())
 
         self.C_stmt_seq(program.stmt_seq)
-
-        for func_name, patches in self.pending_calls.items():
-            entry_pc = self.functions[func_name][1]
-            if entry_pc == -1:
-                raise CompilerError(f"Internal: unresolved function label for '{func_name}'.")
-            for patch in patches:
-                self.patch_call(patch, entry_pc)
 
         return self.code
 
