@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from time import perf_counter
 
 from .compiler import compile_selveri_source_to_ir_text
 from .interpreter import interpret_ir_text
@@ -11,29 +12,23 @@ def run_pipeline(
     *,
     output_ir: Path | None,
     max_steps: int,
-    print_ir: bool,
 ) -> int:
     with input_path.open("r", encoding="utf-8") as f:
         source = f.read()
 
+    start_time = perf_counter()
     ir_text = compile_selveri_source_to_ir_text(source)
+    end_time = perf_counter()
+    print(f"Compilation time: {end_time - start_time:.6f} seconds")
 
     if output_ir is not None:
         output_ir.parent.mkdir(parents=True, exist_ok=True)
         output_ir.write_text(ir_text, encoding="utf-8")
 
-    if print_ir:
-        print("Generated SelVerIR:")
-        print(ir_text)
-        print()
-
-    result = interpret_ir_text(ir_text, max_steps=max_steps)
-
-    print("Final state:")
-    print(result.state)
-    print("\nFinal stack:")
-    print(result.stack)
-    print(f"\nSteps: {result.steps}")
+    start_time = perf_counter()
+    interpret_ir_text(ir_text, max_steps=max_steps)
+    end_time = perf_counter()
+    print(f"\nRunning time: {end_time - start_time:.6f} seconds")
     return 0
 
 
@@ -60,11 +55,6 @@ def main() -> int:
         default=1_000_000,
         help="Maximum number of interpreted instructions",
     )
-    arg_parser.add_argument(
-        "--print-ir",
-        action="store_true",
-        help="Print generated SelVerIR before interpretation",
-    )
     args = arg_parser.parse_args()
 
     output_ir = None
@@ -75,5 +65,4 @@ def main() -> int:
         args.input,
         output_ir=output_ir,
         max_steps=args.max_steps,
-        print_ir=args.print_ir,
     )
