@@ -739,18 +739,7 @@ class SelVerIRInterpreter:
             self._push(arg)
             return
 
-        # loading from a declared variable
-        name = str(arg).strip()
-        scope = self._find_scope_with_value(name)
-        if scope is not None:
-            value = self._get_value(name)
-            if isinstance(value, list):
-                self._push_list_packet(value)
-            else:
-                self._push(value)
-            return
-
-        raise IRRuntimeError(f"Cannot PUSH unknown identifier or immediate: {arg}")
+        raise IRRuntimeError(f"Cannot PUSH unknown immediate: {arg}")
 
     def _exec_load(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
