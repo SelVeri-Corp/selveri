@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "lark",
+    "ltlf2dfa",
+    "z3-solver",
 ]
 
 [project.scripts]

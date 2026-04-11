@@ -925,9 +925,9 @@ class SelVeriCompiler:
 
     def C_stmt_seq(self, stmts: List[Stmt], emit_step: bool = True) -> None:
         for stmt in stmts:
-            self.C_stmt(stmt)
             if emit_step:
                 self.emit("STEP")
+            self.C_stmt(stmt)
 
     def _register_functions(self, program: Program) -> None:
         for func in program.func_decls:

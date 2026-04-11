@@ -714,7 +714,7 @@ class SelVerIRInterpreter:
 
         if op == "STEP":
             if self.verifier is not None:
-                self.verifier.before_step(self._snapshot_runtime_configuration())
+                self.verifier.on_step(self._snapshot_runtime_configuration())
             self.pc += 1
             return
 
