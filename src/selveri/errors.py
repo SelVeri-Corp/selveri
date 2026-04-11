@@ -1,3 +1,7 @@
+class PreprocessorError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__("Preprocessor error: " + message)
+
 class CompilerError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__("Compiler error: " + message)
