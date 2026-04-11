@@ -1,0 +1,85 @@
+function append(lst: List[Int, 1], element: Int) -> List[Int, 1] ::
+    res : List[Int, 1, len(lst) + 1];
+    i : Int;
+    i := 0;
+    while i < len(lst) do
+        res[i] := lst[i];
+        i := i + 1;
+    od
+    res[len(lst)] := element;
+    return res;
+end
+
+function init(lst: List[Int, 1]) -> List[Int, 1] ::
+    res : List[Int, 1, len(lst) - 1];
+    i : Int;
+    i := 0;
+    while i < len(lst) - 1 do
+        res[i] := lst[i];
+        i := i + 1;
+    od
+    return res;
+end
+
+function partition(lst: List[Int, 1], low: Int, high: Int) -> List[Int, 1] ::
+    pivot : Int;
+    pivot := lst[high];
+
+    i : Int;
+    i := low - 1;
+
+    j : Int;
+    j := low;
+
+    while j < high do
+        if lst[j] < pivot then
+            i := i + 1;
+
+            temp : Int;
+            temp := lst[j];
+            lst[j] := lst[i];
+            lst[i] := temp;
+        fi
+        j := j + 1;
+    od
+
+    // place pivot into correct position
+    temp : Int;
+    temp := lst[high];
+    lst[high] := lst[i + 1];
+    lst[i + 1] := temp;
+
+    call append(lst, i + 1);
+    return retvar;
+end
+
+function quickSort(lst: List[Int, 1], low: Int, high: Int) -> List[Int, 1] ::
+    if low < high then
+        encoded : List[Int, 1, len(lst) + 1];
+        clean : List[Int, 1, len(lst)];
+        pi : Int;
+
+        call partition(lst, low, high);
+        encoded := retvar; // [a1, a2, ..., an, pi]
+
+        pi := encoded[len(lst)]; // extract
+
+        call init(encoded); // returns [a1, a2, ..., an]
+        clean := retvar;
+
+        call quickSort(clean, low, pi - 1);
+        clean := retvar;
+
+        call quickSort(clean, pi + 1, high);
+        clean := retvar;
+
+        return clean;
+    else
+        return lst;
+    fi
+end
+
+lst : List[Int, 1, 6];
+lst := [10, 7, 8, 9, 1, 5];
+call quickSort(lst, 0, 5);
+lst := retvar;

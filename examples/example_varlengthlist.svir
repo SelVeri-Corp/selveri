@@ -4,8 +4,8 @@
 3: DECL INT, _lst_len_1
 4: LOAD x
 5: STORE _lst_len_1
-6: LOAD x
-7: PUSH 1
+6: PUSH 1
+7: LOAD x
 8: MUL
 9: LDECL LIST[INT], lst
 10: DECL INT, i
@@ -14,20 +14,20 @@
 13: DECL INT, val
 14: PUSH 2
 15: STORE val
-16: LEN lst
-17: LOAD i
+16: LOAD i
+17: LEN lst
 18: LT
 19: JZ 34
 20: CSCOPE
 21: LOAD val
 22: LOAD i
 23: LSTORE lst
-24: PUSH 2
-25: LOAD val
+24: LOAD val
+25: PUSH 2
 26: MUL
 27: STORE val
-28: PUSH 1
-29: LOAD i
+28: LOAD i
+29: PUSH 1
 30: ADD
 31: STORE i
 32: PSCOPE

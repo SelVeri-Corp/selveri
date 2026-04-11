@@ -5,17 +5,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from parser import (
+from .parser import (
     parse_selveri,
     Program,
     Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
-    TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeListParam,
+    TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
     AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, FuncCall,
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
     FunctionDecl,
 )
 
-from errors import CompilerError
+from .errors import CompilerError
 
 # -----------------------
 # IR instruction model
@@ -36,12 +36,6 @@ class IRInstr:
 @dataclass
 class _PatchRef:
     idx: int # instruction index to patch
-
-
-@dataclass
-class _CallPatchRef:
-    idx: int
-    func_name: str
 
 
 @dataclass(frozen=True)
@@ -107,6 +101,24 @@ def is_empty_stmt_seq(stmts: Optional[List[Stmt]]) -> bool:
     return all(isinstance(stmt, Pass) for stmt in stmts)
 
 
+def stmt_guarantees_return(stmt: Stmt) -> bool:
+    if isinstance(stmt, Return):
+        return True
+    if isinstance(stmt, If):
+        return (
+            stmt.else_s is not None
+            and stmt_seq_guarantees_return(stmt.then_s)
+            and stmt_seq_guarantees_return(stmt.else_s)
+        )
+    return False
+
+
+def stmt_seq_guarantees_return(stmts: Optional[List[Stmt]]) -> bool:
+    if not stmts:
+        return False
+    return stmt_guarantees_return(stmts[-1])
+
+
 # -----------------------
 # Compiler
 # -----------------------
@@ -122,9 +134,9 @@ class SelVeriCompiler:
         # starting scope with retvar
         self.scope = _ScopeFrame() # parent scope
         self.scope.bindings["retvar"] = None
-        # functions to be compiled (declaration object, pc, scope)
-        self.functions: Dict[str, Tuple[FunctionDecl, int, _ScopeFrame]] = {}
-        self.pending_calls: Dict[str, List[_CallPatchRef]] = {}
+        self.current_return_type: Optional[TypeNode] = None
+        # functions to be compiled (declaration object, pc)
+        self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
 
@@ -140,12 +152,6 @@ class SelVeriCompiler:
         instr = self.code[patch.idx]
         if instr.op not in ("JZ", "GOTO"):
             raise CompilerError(f"Internal: patching non-jump at {patch.idx}: {instr.op}")
-        self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,))
-
-    def patch_call(self, patch: _CallPatchRef, target_pc: int) -> None:
-        instr = self.code[patch.idx]
-        if instr.op != "CALL":
-            raise CompilerError(f"Internal: patching non-call at {patch.idx}: {instr.op}")
         self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,))
 
     def _create_scope(self, fresh_env: bool = False) -> None:
@@ -174,9 +180,16 @@ class SelVeriCompiler:
 
     def _get_list_info(self, name: str) -> _ListInfo:
         info = self.scope.get_list(name)
-        if info is None:
-            raise CompilerError(f"'{name}' is not a declared list.")
-        return info
+        if info is not None:
+            return info
+
+        type_node = self.scope.get_binding(name)
+        if isinstance(type_node, (TypeList, TypeDynamicList)):
+            return self._list_info_from_type(type_node)
+
+        if type_node is None and self.scope.find_binding_owner(name) is None:
+            raise CompilerError(f"Undeclared variable: {name}")
+        raise CompilerError(f"'{name}' is not a declared list.")
 
     def _bind_name(self, name: str, type_node: Optional[TypeNode]) -> None:
         if name == "retvar":
@@ -191,6 +204,13 @@ class SelVeriCompiler:
 
     def _declare_list_len_slot(self, list_name: str, dim: int) -> None:
         self._declare_basic(self._list_len_name(list_name, dim), TypeInt())
+
+    def _set_retvar_type(self, type_node: Optional[TypeNode]) -> None:
+        self.scope.bindings["retvar"] = type_node
+        if isinstance(type_node, (TypeList, TypeDynamicList)):
+            self.scope.lists["retvar"] = self._list_info_from_type(type_node)
+            return
+        self.scope.lists.pop("retvar", None)
 
     def _try_eval_const_int(self, a: AExp) -> Optional[int]:
         """
@@ -247,7 +267,7 @@ class SelVeriCompiler:
         if not shape:
             return elem_type
         if any(dim is None for dim in shape):
-            return TypeListParam(
+            return TypeDynamicList(
                 elem_type,
                 IntLit(len(shape)),
                 [IntLit(dim) if dim is not None else None for dim in shape],
@@ -268,7 +288,7 @@ class SelVeriCompiler:
                 dimension=type_node.dimension.value,
                 shape=tuple(self._try_eval_const_int(dim_expr) for dim_expr in type_node.shape),
             )
-        if isinstance(type_node, TypeListParam):
+        if isinstance(type_node, TypeDynamicList):
             if type_node.shape:
                 raw_shape = list(type_node.shape)
                 if len(raw_shape) < type_node.dimension.value:
@@ -289,7 +309,7 @@ class SelVeriCompiler:
     def _get_list_expr_info(self, expr: AExp) -> _ListInfo:
         if isinstance(expr, AVar):
             type_node = self._get_declared_type(expr.name)
-            if not isinstance(type_node, (TypeList, TypeListParam)):
+            if not isinstance(type_node, (TypeList, TypeDynamicList)):
                 raise CompilerError(f"Expression '{expr.name}' is not a list.")
             owner = self.scope.find_list_owner(expr.name)
             if owner is not None:
@@ -322,7 +342,7 @@ class SelVeriCompiler:
         if actual.elem_type != expected.elem_type or actual.dimension != expected.dimension:
             return False
         for actual_dim, expected_dim in zip(actual.shape, expected.shape):
-            if expected_dim is not None and actual_dim != expected_dim:
+            if actual_dim is not None and expected_dim is not None and actual_dim != expected_dim:
                 return False
         return True
 
@@ -438,6 +458,8 @@ class SelVeriCompiler:
                     type_node.shape[1:],
                 )
             return ListLit([self._default_value_expr(sub_default) for _ in range(size)])
+        if isinstance(type_node, TypeDynamicList):
+            raise CompilerError("Functions returning dynamically-sized lists must end with an explicit return.")
         raise CompilerError("Unsupported function return type for the return rule.")
 
     def _extract_list_access(self, expr: AIndex) -> Tuple[str, List[AExp]]:
@@ -542,7 +564,7 @@ class SelVeriCompiler:
         if expected is not None and not self._are_list_types_compatible(actual_info, expected):
             raise CompilerError("List literal does not match the expected list type.")
         flat_values = self._flatten_list_literal(literal, literal_type)
-        for value in reversed(flat_values):
+        for value in flat_values:
             self.emit("PUSH", value)
         self.emit("PUSH", len(flat_values))
         return actual_info
@@ -556,7 +578,7 @@ class SelVeriCompiler:
         if flat_size is None:
             raise CompilerError("Cannot use a dynamically-sized sub-list as a first-class value.")
         base_index = self._build_flat_index_expr(base_name, info, indices)
-        for offset in reversed(range(flat_size)):
+        for offset in range(flat_size):
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
             self.emit("LLOAD", base_name)
@@ -639,13 +661,13 @@ class SelVeriCompiler:
         if isinstance(expr, AUnOp):
             if expr.op != "-":
                 raise CompilerError(f"Unsupported unary operator in arithmetic expression: {expr.op}")
-            self.CA(expr.rhs)
             self.emit("PUSH", 0)
+            self.CA(expr.rhs)
             self.emit("SUB")
             return
         if isinstance(expr, ABinOp):
-            self.CA(expr.right)
             self.CA(expr.left)
+            self.CA(expr.right)
             if expr.op == "+":
                 self.emit("ADD")
                 return
@@ -675,8 +697,8 @@ class SelVeriCompiler:
             self.emit("NEG")
             return
         if isinstance(expr, BCompare):
-            self.CA(expr.right)
             self.CA(expr.left)
+            self.CA(expr.right)
             if expr.op == "=":
                 self.emit("EQ")
                 return
@@ -698,8 +720,8 @@ class SelVeriCompiler:
             self.emit("NEG")
             return
         if isinstance(expr, BBinOp):
-            self.CB(expr.right)
             self.CB(expr.left)
+            self.CB(expr.right)
             if expr.op == "and":
                 self.emit("AND")
                 return
@@ -775,7 +797,7 @@ class SelVeriCompiler:
             self.emit("STORE", stmt.name)
             return
 
-        if isinstance(target_type, (TypeList, TypeListParam)):
+        if isinstance(target_type, (TypeList, TypeDynamicList)):
             expected = self._get_list_expr_info(AVar(stmt.name))
             actual = self._get_list_expr_info(stmt.aexp)
             if not self._are_list_types_compatible(actual, expected):
@@ -847,6 +869,22 @@ class SelVeriCompiler:
         self.patch_jump(jz_patch, noop_pc)
 
     def _compile_return(self, stmt: Return) -> None:
+        if self.current_return_type is None:
+            raise CompilerError("Internal: return statement outside of a function.")
+
+        expected_type = self.current_return_type
+        if isinstance(expected_type, (TypeList, TypeDynamicList)):
+            expected = self._list_info_from_type(expected_type)
+            actual = self._get_list_expr_info(stmt.value)
+            if not self._are_list_types_compatible(actual, expected):
+                raise CompilerError("Returned list value does not match the declared function return type.")
+            self._compile_list_value(stmt.value, expected)
+            self.emit("RET")
+            return
+
+        actual_type = self._type_of_aexp(stmt.value)
+        if not self._basic_types_compatible(actual_type, expected_type):
+            raise CompilerError("Returned value does not match the declared function return type.")
         self.CA(stmt.value)
         self.emit("RET")
 
@@ -855,15 +893,14 @@ class SelVeriCompiler:
         if func_info is None:
             raise CompilerError(f"Undefined function: {call.name}")
 
-        func_decl, entry_pc = func_info
+        func_decl, _ = func_info
         if len(call.args) != len(func_decl.params):
             raise CompilerError(
                 f"Function '{call.name}' expects {len(func_decl.params)} arguments, got {len(call.args)}."
             )
 
-        # put parameters on the stack in reverse order so that the first parameter is on the top of the stack
-        for param, arg in reversed(list(zip(func_decl.params, call.args))):
-            if isinstance(param.type_node, (TypeList, TypeListParam)):
+        for param, arg in zip(func_decl.params, call.args):
+            if isinstance(param.type_node, (TypeList, TypeDynamicList)):
                 expected = self._list_info_from_type(param.type_node)
                 actual = self._get_list_expr_info(arg)
                 if not self._are_list_types_compatible(actual, expected):
@@ -875,13 +912,8 @@ class SelVeriCompiler:
                     raise CompilerError(f"Argument for parameter '{param.name} : {param.type_node}' does not match the type provided {actual_type}.")
                 self.CA(arg)
 
-        if entry_pc == -1:
-            patch = _CallPatchRef(self.emit("CALL", -1), call.name)
-            self.pending_calls.setdefault(call.name, []).append(patch)
-        else:
-            self.emit("CALL", entry_pc)
-
-        self.scope.bindings["retvar"] = func_decl.return_type
+        self.emit("CALL", call.name)
+        self._set_retvar_type(func_decl.return_type)
 
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
         for stmt in stmts:
@@ -908,7 +940,7 @@ class SelVeriCompiler:
         self.emit("LDECL", self._ir_list_type(type_node.elem), name)
         self.emit("STORE", name)
 
-    def _declare_dynamic_list_param(self, name: str, type_node: TypeListParam) -> None:
+    def _declare_dynamic_list_param(self, name: str, type_node: TypeDynamicList) -> None:
         if type_node.dimension.value != 1:
             raise CompilerError("Only rank-1 variable-length list parameters are supported.")
         self._bind_name(name, type_node)
@@ -922,14 +954,18 @@ class SelVeriCompiler:
 
     def _compile_function_decl(self, func: FunctionDecl) -> None:
         old_scope = self.scope
+        old_return_type = self.current_return_type
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
-        self.emit("ENV")
+        self.emit("FUNCENV", func.name, f"{func.return_type}")
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
+        self.current_return_type = func.return_type
 
-        for param in func.params:
+        # Parameters are pushed left-to-right by the caller, so bind them from the
+        # top of the stack back toward the first argument.
+        for param in reversed(func.params):
             if isinstance(param.type_node, (TypeInt, TypeFloat)):
                 self._declare_basic(param.name, param.type_node)
                 self.emit("STORE", param.name) # fetch parameter value from stack
@@ -937,16 +973,17 @@ class SelVeriCompiler:
             if isinstance(param.type_node, TypeList):
                 self._declare_static_list_param(param.name, param.type_node)
                 continue
-            if isinstance(param.type_node, TypeListParam):
+            if isinstance(param.type_node, TypeDynamicList):
                 self._declare_dynamic_list_param(param.name, param.type_node)
                 continue
             raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
 
-        body = func.body # list of statements in the function body
-        if not body or not isinstance(body[-1], Return): # if the function does not return a value, add a default return value
+        body = list(func.body) # copy for appending return
+        if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value
             body.append(Return(self._default_value_expr(func.return_type)))
         self.C_stmt_seq(body)
         self.scope = old_scope # restore old scope
+        self.current_return_type = old_return_type
 
     def compile_program(self, program: Program) -> List[IRInstr]:
         self._register_functions(program)
@@ -963,13 +1000,6 @@ class SelVeriCompiler:
             self.patch_jump(entry_jump, self.pc())
 
         self.C_stmt_seq(program.stmt_seq)
-
-        for func_name, patches in self.pending_calls.items():
-            entry_pc = self.functions[func_name][1]
-            if entry_pc == -1:
-                raise CompilerError(f"Internal: unresolved function label for '{func_name}'.")
-            for patch in patches:
-                self.patch_call(patch, entry_pc)
 
         return self.code
 

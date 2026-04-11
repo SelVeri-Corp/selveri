@@ -4,20 +4,24 @@
 3: DECL INT, sum
 4: PUSH 0
 5: STORE sum
-6: PUSH 10
-7: LOAD i
+6: LOAD i
+7: PUSH 10
 8: LT
-9: JZ 22
+9: JZ 26
 10: CSCOPE
 11: DECL INT, square
 12: LOAD i
 13: LOAD i
 14: MUL
 15: STORE square
-16: LOAD square
-17: LOAD sum
+16: LOAD sum
+17: LOAD square
 18: ADD
 19: STORE sum
-20: PSCOPE
-21: GOTO 6
-22: NOOP
+20: LOAD i
+21: PUSH 1
+22: ADD
+23: STORE i
+24: PSCOPE
+25: GOTO 6
+26: NOOP

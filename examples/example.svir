@@ -1,8 +1,8 @@
 0: DECL INT, x
 1: PUSH 1
 2: STORE x
-3: PUSH 1
-4: LOAD x
+3: LOAD x
+4: PUSH 1
 5: EQ
 6: JZ 12
 7: CSCOPE

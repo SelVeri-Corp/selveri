@@ -1,0 +1,260 @@
+0: GOTO 239
+1: FUNCENV append, LIST[INT, 1]
+2: DECL INT, element
+3: STORE element
+4: DECL INT, _lst_len_1
+5: STORE _lst_len_1
+6: LOAD _lst_len_1
+7: LDECL LIST[INT], lst
+8: LOAD _lst_len_1
+9: STORE lst
+10: DECL INT, _res_len_1
+11: LEN lst
+12: PUSH 1
+13: ADD
+14: STORE _res_len_1
+15: PUSH 1
+16: LEN lst
+17: PUSH 1
+18: ADD
+19: MUL
+20: LDECL LIST[INT], res
+21: DECL INT, i
+22: PUSH 0
+23: STORE i
+24: LOAD i
+25: LEN lst
+26: LT
+27: JZ 39
+28: CSCOPE
+29: LOAD i
+30: LLOAD lst
+31: LOAD i
+32: LSTORE res
+33: LOAD i
+34: PUSH 1
+35: ADD
+36: STORE i
+37: PSCOPE
+38: GOTO 24
+39: NOOP
+40: LOAD element
+41: LEN lst
+42: LSTORE res
+43: LOAD res
+44: RET
+45: FUNCENV init, LIST[INT, 1]
+46: DECL INT, _lst_len_1
+47: STORE _lst_len_1
+48: LOAD _lst_len_1
+49: LDECL LIST[INT], lst
+50: LOAD _lst_len_1
+51: STORE lst
+52: DECL INT, _res_len_1
+53: LEN lst
+54: PUSH 1
+55: SUB
+56: STORE _res_len_1
+57: PUSH 1
+58: LEN lst
+59: PUSH 1
+60: SUB
+61: MUL
+62: LDECL LIST[INT], res
+63: DECL INT, i
+64: PUSH 0
+65: STORE i
+66: LOAD i
+67: LEN lst
+68: PUSH 1
+69: SUB
+70: LT
+71: JZ 83
+72: CSCOPE
+73: LOAD i
+74: LLOAD lst
+75: LOAD i
+76: LSTORE res
+77: LOAD i
+78: PUSH 1
+79: ADD
+80: STORE i
+81: PSCOPE
+82: GOTO 66
+83: NOOP
+84: LOAD res
+85: RET
+86: FUNCENV partition, LIST[INT, 1]
+87: DECL INT, high
+88: STORE high
+89: DECL INT, low
+90: STORE low
+91: DECL INT, _lst_len_1
+92: STORE _lst_len_1
+93: LOAD _lst_len_1
+94: LDECL LIST[INT], lst
+95: LOAD _lst_len_1
+96: STORE lst
+97: DECL INT, pivot
+98: LOAD high
+99: LLOAD lst
+100: STORE pivot
+101: DECL INT, i
+102: LOAD low
+103: PUSH 1
+104: SUB
+105: STORE i
+106: DECL INT, j
+107: LOAD low
+108: STORE j
+109: LOAD j
+110: LOAD high
+111: LT
+112: JZ 143
+113: CSCOPE
+114: LOAD j
+115: LLOAD lst
+116: LOAD pivot
+117: LT
+118: JZ 136
+119: CSCOPE
+120: LOAD i
+121: PUSH 1
+122: ADD
+123: STORE i
+124: DECL INT, temp
+125: LOAD j
+126: LLOAD lst
+127: STORE temp
+128: LOAD i
+129: LLOAD lst
+130: LOAD j
+131: LSTORE lst
+132: LOAD temp
+133: LOAD i
+134: LSTORE lst
+135: PSCOPE
+136: NOOP
+137: LOAD j
+138: PUSH 1
+139: ADD
+140: STORE j
+141: PSCOPE
+142: GOTO 109
+143: NOOP
+144: DECL INT, temp
+145: LOAD high
+146: LLOAD lst
+147: STORE temp
+148: LOAD i
+149: PUSH 1
+150: ADD
+151: LLOAD lst
+152: LOAD high
+153: LSTORE lst
+154: LOAD temp
+155: LOAD i
+156: PUSH 1
+157: ADD
+158: LSTORE lst
+159: LOAD lst
+160: LOAD i
+161: PUSH 1
+162: ADD
+163: CALL append
+164: LOAD retvar
+165: RET
+166: FUNCENV quickSort, LIST[INT, 1]
+167: DECL INT, high
+168: STORE high
+169: DECL INT, low
+170: STORE low
+171: DECL INT, _lst_len_1
+172: STORE _lst_len_1
+173: LOAD _lst_len_1
+174: LDECL LIST[INT], lst
+175: LOAD _lst_len_1
+176: STORE lst
+177: LOAD low
+178: LOAD high
+179: LT
+180: JZ 234
+181: CSCOPE
+182: DECL INT, _encoded_len_1
+183: LEN lst
+184: PUSH 1
+185: ADD
+186: STORE _encoded_len_1
+187: PUSH 1
+188: LEN lst
+189: PUSH 1
+190: ADD
+191: MUL
+192: LDECL LIST[INT], encoded
+193: DECL INT, _clean_len_1
+194: LEN lst
+195: STORE _clean_len_1
+196: PUSH 1
+197: LEN lst
+198: MUL
+199: LDECL LIST[INT], clean
+200: DECL INT, pi
+201: LOAD lst
+202: LOAD low
+203: LOAD high
+204: CALL partition
+205: LOAD retvar
+206: STORE encoded
+207: LEN lst
+208: LLOAD encoded
+209: STORE pi
+210: LOAD encoded
+211: CALL init
+212: LOAD retvar
+213: STORE clean
+214: LOAD clean
+215: LOAD low
+216: LOAD pi
+217: PUSH 1
+218: SUB
+219: CALL quickSort
+220: LOAD retvar
+221: STORE clean
+222: LOAD clean
+223: LOAD pi
+224: PUSH 1
+225: ADD
+226: LOAD high
+227: CALL quickSort
+228: LOAD retvar
+229: STORE clean
+230: LOAD clean
+231: RET
+232: PSCOPE
+233: GOTO 238
+234: CSCOPE
+235: LOAD lst
+236: RET
+237: PSCOPE
+238: NOOP
+239: DECL INT, _lst_len_1
+240: PUSH 6
+241: STORE _lst_len_1
+242: PUSH 1
+243: PUSH 6
+244: MUL
+245: LDECL LIST[INT], lst
+246: PUSH 10
+247: PUSH 7
+248: PUSH 8
+249: PUSH 9
+250: PUSH 1
+251: PUSH 5
+252: PUSH 6
+253: STORE lst
+254: LOAD lst
+255: PUSH 0
+256: PUSH 5
+257: CALL quickSort
+258: LOAD retvar
+259: STORE lst

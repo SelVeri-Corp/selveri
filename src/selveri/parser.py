@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from lark import Lark, Transformer, v_args, LarkError
-from errors import ParserError
+from .errors import ParserError
 
 # =========================
 # AST
@@ -63,10 +63,17 @@ class TypeList(ConcreteType):
         return f"LIST[{self.elem},{self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 @dataclass(frozen=True)
-class TypeListParam(TypeNode):
+class TypeDynamicList(TypeNode):
     elem: BasicType
     dimension: IntLit
     shape: List[Optional[AExp]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if len(self.shape) > self.dimension.value:
+            raise ParserError(
+                f"Dynamic list type dimension ({self.dimension.value}) cannot be smaller "
+                f"than declared shape count ({len(self.shape)})."
+            )
 
     def __str__(self) -> str:
         return f"LIST[{self.elem}, {self.dimension}{f', {self.shape}' if self.shape else ''}]"
@@ -304,13 +311,14 @@ class AstBuilder(Transformer):
     def type_int(self): return TypeInt()
     def type_float(self): return TypeFloat()
     def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
+    def dynamic_list_type(self, elem, dimension): return TypeDynamicList(elem, IntLit(int(dimension)))
 
     # function parameters
     def param_type(self, name, type_node):
         return Param(str(name), type_node)
 
-    def param_list_type(self, name, elem_type, dimension, *shape):
-        return Param(str(name), TypeListParam(elem_type, IntLit(int(dimension)), list(shape)))
+    def param_list(self, *params):
+        return list(params)
 
     # imm/aexp
     def aexp(self, expr): return expr
@@ -373,10 +381,18 @@ class AstBuilder(Transformer):
         return SpecQuant("Exists", str(var), domopt.domain, body)
 
     # functions
-    def func_decl(self, name, params, ret_type, body):
+    def func_decl(self, name, *rest):
+        if len(rest) == 2:
+            params = None
+            ret_type, body = rest
+        elif len(rest) == 3:
+            params, ret_type, body = rest
+        else:
+            raise ParserError("Invalid function declaration.")
+
         if params is None:
             normalized_params = []
-        elif isinstance(params, (Param, TypeListParam)): # single parameter case
+        elif isinstance(params, Param): # single parameter case
             normalized_params = [params]
         else:
             normalized_params = list(params)
@@ -388,6 +404,9 @@ class AstBuilder(Transformer):
     def func_if_stmt(self, cond, then_seq, else_seq=None):
         if else_seq is None:
             return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
+        return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+
+    def func_if_else_stmt(self, cond, then_seq, else_seq):
         return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
 
     def func_while_stmt(self, cond, body_seq):
