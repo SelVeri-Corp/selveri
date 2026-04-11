@@ -1,0 +1,110 @@
+%import common.WS
+%ignore WS
+
+%ignore /\/\/[^\n]*/
+%ignore /\/\*[\s\S]*?\*\//
+
+IDENT: /[A-Za-z_][A-Za-z0-9_]*/
+FLOAT_LIT: /[0-9]+\.[0-9]+/
+INT_LIT: /[0-9]+/
+
+COMP_OP: "=" | "<=" | "<" | ">=" | ">"
+
+start: spec
+
+?spec: spec_imp
+
+?spec_imp: spec_or "=>" spec_imp            -> simp
+         | spec_or
+
+?spec_or: spec_or "||" spec_and             -> sor
+        | spec_and
+
+?spec_and: spec_and "&&" spec_temp          -> sand
+         | spec_temp
+
+?spec_temp: spec_temp "Since" spec_unary    -> ssince
+          | spec_temp "Until" spec_unary    -> suntil
+          | spec_unary
+
+?spec_unary: "!" spec_unary                 -> snot
+           | "Previously" spec_unary        -> spreviously
+           | "Once" spec_unary              -> sonce
+           | "Historically" spec_unary      -> shistorically
+           | "Next" spec_unary              -> snext
+           | "Eventually" spec_unary        -> seventually
+           | "Always" spec_unary            -> salways
+           | "Forall" IDENT domain_opt "." spec -> sforall
+           | "Exists" IDENT domain_opt "." spec -> sexists
+           | bexp                           -> sbexp
+           | "(" spec ")"
+
+_domain_in: "in" domain
+domain_opt: _domain_in?                     -> domain_opt
+
+?domain: interval
+       | IDENT                              -> domain_ident
+       | set_lit
+       | type                               -> domain_type
+
+interval: "[" aexp "," aexp ")"            -> interval_halfopen
+        | "[" aexp "," aexp "]"            -> interval_closed
+
+set_lit: "{" aexp_list "}"                 -> set_lit
+
+?basic_type: "Int"                         -> type_int
+           | "Float"                       -> type_float
+?type: basic_type
+     | "List" "[" basic_type "," INT_LIT "," aexp_list "]" -> type_list
+
+aexp_list: aexp ("," aexp)*                -> aexp_list
+
+?imm: INT_LIT                              -> int_lit
+    | FLOAT_LIT                            -> float_lit
+    | list_lit
+
+list_lit: "[" [imm ("," imm)*] "]"        -> list_lit
+
+aexp: aexp_sum                             -> aexp
+
+?aexp_sum: aexp_sum "+" aexp_term          -> add
+         | aexp_sum "-" aexp_term          -> sub
+         | aexp_term
+
+?aexp_term: aexp_term "*" aexp_factor      -> mul
+          | aexp_term "/" aexp_factor      -> div
+          | aexp_factor
+
+?aexp_factor: "-" aexp_factor              -> neg
+            | aexp_atom
+
+?aexp_atom: imm
+         | IDENT                           -> a_var
+         | "len" "(" IDENT ")"             -> a_len
+         | indexed_value
+         | "(" aexp ")"
+
+?indexed_value: IDENT "[" aexp "]"         -> a_index
+              | indexed_value "[" aexp "]" -> a_index
+
+bexp: b_or                                 -> bexp
+
+?b_or: b_or "or" b_xor                     -> bor
+     | b_xor
+
+?b_xor: b_xor "xor" b_and                  -> bxor
+      | b_and
+
+?b_and: b_and "and" b_not                  -> band
+      | b_not
+
+?b_not: "not" b_not                        -> bnot
+      | b_atom
+
+?b_atom: "true"                            -> btrue
+      | "false"                            -> bfalse
+      | comparison
+      | aexp                               -> truthy
+      | "(" bexp ")"
+
+comparison: aexp COMP_OP aexp              -> compare
