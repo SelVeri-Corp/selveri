@@ -14,6 +14,7 @@ from .parser import (
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
     FunctionDecl,
 )
+from .specs import RawSpec
 
 from .errors import CompilerError
 
@@ -27,8 +28,13 @@ class IRInstr:
     args: Tuple[Union[str, int, float], ...] = () # arguments
 
     def render(self) -> str:
-        rendered_args = ", ".join(str(arg) for arg in self.args)
+        rendered_args = ", ".join(self._render_arg(index, arg) for index, arg in enumerate(self.args))
         return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
+
+    def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
+        if self.op == "VERI" and index == 1 and isinstance(arg, str):
+            return repr(arg)
+        return str(arg)
 
 
 # Patch reference for jumps
@@ -139,6 +145,7 @@ class SelVeriCompiler:
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
+        self.raw_specs: Dict[int, RawSpec] = {}
 
     # ---------- utilities ----------
     def pc(self) -> int:
@@ -748,7 +755,8 @@ class SelVeriCompiler:
             self.emit("NOOP")
             return
         if isinstance(stmt, SpecAnnot):
-            self.emit("VERI", stmt.spec)
+            self.raw_specs[stmt.spec.spec_id] = stmt.spec
+            self.emit("VERI", stmt.spec.spec_id, stmt.spec.text)
             return
         if isinstance(stmt, If):
             self._compile_if(stmt)
@@ -838,7 +846,7 @@ class SelVeriCompiler:
     def _compile_block(self, stmts: List[Stmt]) -> None:
         self.emit("CSCOPE")
         self._create_scope()
-        self.C_stmt_seq(stmts)
+        self.C_stmt_seq(stmts, emit_step=False)
         self._leave_scope()
         self.emit("PSCOPE")
 
@@ -915,9 +923,11 @@ class SelVeriCompiler:
         self.emit("CALL", call.name)
         self._set_retvar_type(func_decl.return_type)
 
-    def C_stmt_seq(self, stmts: List[Stmt]) -> None:
+    def C_stmt_seq(self, stmts: List[Stmt], emit_step: bool = True) -> None:
         for stmt in stmts:
             self.C_stmt(stmt)
+            if emit_step:
+                self.emit("STEP")
 
     def _register_functions(self, program: Program) -> None:
         for func in program.func_decls:
