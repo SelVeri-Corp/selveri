@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, Iterator, List, Optional
+from dataclasses import dataclass
+from typing import List, Optional
 
 
 @dataclass(frozen=True)
@@ -88,35 +88,3 @@ class SpecQuant(Spec):
 class ParsedSpec:
     raw_spec: RawSpec
     ast: Spec
-
-@dataclass
-class SpecRegistry:
-    _entries: Dict[int, ParsedSpec] = field(default_factory=dict)
-    _order: List[int] = field(default_factory=list)
-
-    def register(self, parsed_spec: ParsedSpec) -> None:
-        spec_id = parsed_spec.raw_spec.spec_id
-        if spec_id in self._entries:
-            raise ValueError(f"Duplicate specification id: {spec_id}")
-        self._entries[spec_id] = parsed_spec
-        self._order.append(spec_id)
-
-    def get(self, spec_id: int) -> ParsedSpec:
-        return self._entries[spec_id]
-
-    def values(self) -> List[ParsedSpec]:
-        return [self._entries[spec_id] for spec_id in self._order]
-
-    def items(self) -> Iterator[tuple[int, ParsedSpec]]:
-        for spec_id in self._order:
-            yield spec_id, self._entries[spec_id]
-
-    def clear(self) -> None:
-        self._entries.clear()
-        self._order.clear()
-
-    def __contains__(self, spec_id: int) -> bool:
-        return spec_id in self._entries
-
-    def __len__(self) -> int:
-        return len(self._entries)

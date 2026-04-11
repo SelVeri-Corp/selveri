@@ -6,16 +6,12 @@ import copy
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from .errors import IRRuntimeError, IRParseError
 from .compiler import IRInstr
-
-@dataclass(frozen=True)
-class DeclType:
-    kind: str                  # "INT" | "FLOAT" | "LIST"
-    elem_kind: Optional[str]   # for LIST: "INT" | "FLOAT"
-    size: Optional[int]        # for LIST: fixed size for DECL, None for LDECL
+from .runtime import DeclType, RuntimeScope, _UNSET
+from .verifier import RuntimeConfiguration, VerificationEngine
 
 
 @dataclass
@@ -26,15 +22,6 @@ class ExecutionResult:
     pc: int
     steps: int
     halted: bool
-
-
-_UNSET = object()
-
-
-@dataclass
-class RuntimeScope:
-    values: Dict[str, Any]
-    types: Dict[str, Optional[DeclType]]
 
 
 @dataclass(frozen=True)
@@ -119,6 +106,8 @@ def _split_top_level_commas(s: str) -> List[str]:
 # parse scalar token: INT | FLOAT
 def _parse_scalar_token(token: str) -> Any:
     t = token.strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in {"'", '"'}:
+        return ast.literal_eval(t)
     if _INT_RE.fullmatch(t):
         return int(t)
     if _FLOAT_RE.fullmatch(t):
@@ -141,7 +130,10 @@ def _parse_label_line(line: str) -> IRInstr:
         if len(args) != 2:
             raise IRParseError(f"Invalid {op} arguments: {line}")
     elif op == "VERI":
-        args = (rest,)
+        args = _split_top_level_commas(rest)
+        if len(args) != 2:
+            raise IRParseError(f"Invalid VERI arguments: {line}")
+        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
     else:
         args = [_parse_scalar_token(p) for p in _split_top_level_commas(rest)]
 
@@ -314,7 +306,7 @@ class SelVerIRInterpreter:
 
     def __init__(
         self,
-        verifier: Optional[Any] = None,
+        verifier: Optional[VerificationEngine] = None,
         max_steps: int = 1_000_000,
     ) -> None:
         self.verifier = verifier
@@ -348,6 +340,7 @@ class SelVerIRInterpreter:
                 raise IRParseError(f"Duplicate function environment: {name}")
             self.functions[name] = FunctionEntry(name=name, pc=instr.label, return_type=return_type)
         self.reset_runtime() # reset the runtime state
+        self._prepare_verifier()
 
     def reset_runtime(self) -> None:
         self.stack = [] # clear the stack
@@ -484,6 +477,16 @@ class SelVerIRInterpreter:
             raise IRRuntimeError(f"Unknown jump target label: {label}")
         self.pc = self.label_to_index[label]
 
+    def _snapshot_runtime_configuration(self) -> RuntimeConfiguration:
+        self._refresh_public_views()
+        return RuntimeConfiguration(
+            scope=RuntimeScope(
+                values=copy.deepcopy(self.state),
+                types=copy.deepcopy(self.types),
+            ),
+            stack=copy.deepcopy(self.stack),
+        )
+
     # ---------- execution ----------
     def run(
         self,
@@ -499,6 +502,8 @@ class SelVerIRInterpreter:
             self._step(instr)
             self._refresh_public_views()
             self.steps += 1
+
+        self._finish_verifier()
 
         return ExecutionResult(
             state=copy.deepcopy(self.state),
@@ -700,9 +705,16 @@ class SelVerIRInterpreter:
             return
 
         if op == "VERI":
-            spec = instr.args[0] if instr.args else None
+            spec_id = int(instr.args[0]) if instr.args else -1
+            raw_spec = instr.args[1] if len(instr.args) > 1 else None
             if self.verifier is not None:
-                self.verifier(spec, copy.deepcopy(self.state))
+                self._dispatch_verifier_spec(spec_id, raw_spec)
+            self.pc += 1
+            return
+
+        if op == "STEP":
+            if self.verifier is not None:
+                self.verifier.before_step(self._snapshot_runtime_configuration())
             self.pc += 1
             return
 
@@ -898,13 +910,28 @@ class SelVerIRInterpreter:
         self._set_retvar(return_value, return_type)
         self.pc = frame.return_pc
 
+    def _prepare_verifier(self) -> None:
+        if self.verifier is None:
+            return
+        self.verifier.prepare_program(self.code)
+        self.verifier.on_program_start()
+
+    def _finish_verifier(self) -> None:
+        if self.verifier is None:
+            return
+        self.verifier.on_program_end()
+
+    def _dispatch_verifier_spec(self, spec_id: int, raw_spec: Any) -> None:
+        assert self.verifier is not None
+        self.verifier.handle_veri(spec_id, self._snapshot_runtime_configuration())
+
 
 # -----------------------
 # Convenience API
 # -----------------------
 def interpret_ir_text(
     text: str,
-    verifier: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
+    verifier: Optional[VerificationEngine] = None,
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
     program = parse_ir_text(text)
@@ -916,7 +943,7 @@ def interpret_ir_text(
 
 def interpret_ir_code(
     code: Iterable[IRInstr],
-    verifier: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
+    verifier: Optional[VerificationEngine] = None,
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
     return SelVerIRInterpreter(verifier=verifier, max_steps=max_steps).run(program=code)
