@@ -44,22 +44,26 @@ class DomainInterval(Domain):
     def __str__(self) -> str:
         return f"[{self.lo}, {self.hi})" if self.right_open else f"[{self.lo}, {self.hi}]"
 
-class Spec:
-    pass
-
 @dataclass(frozen=True)
+class Spec:
+    uid: int
+
+    def __hash__(self) -> int:
+        return hash(self.uid)
+
+@dataclass(frozen=True, eq=False)
 class SpecFromBExp(Spec):
     bexp: object
 
     def __str__(self) -> str:
         return str(self.bexp)
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SpecUnOp(Spec):
     op: str
     rhs: Spec
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SpecBinOp(Spec):
     op: str
     left: Spec
@@ -68,7 +72,7 @@ class SpecBinOp(Spec):
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SpecQuant(Spec):
     kind: str
     var: str
