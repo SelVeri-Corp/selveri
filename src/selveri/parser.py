@@ -262,6 +262,9 @@ class AstBuilder(Transformer):
     def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
     def dynamic_list_type(self, elem, dimension): return TypeDynamicList(elem, IntLit(int(dimension)))
 
+    def aexp_list(self, *items):
+        return list(items)
+
     # function parameters
     def param_type(self, name, type_node):
         return Param(str(name), type_node)
