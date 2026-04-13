@@ -24,7 +24,6 @@ class Z3Mapper():
             elif type.kind == "FLOAT":
                 self.var_map[var] = Real(var)
             else: # LIST
-                self.var_map[Z3Mapper.get_length(var)] = IntVal(type.size)
                 if type.elem_kind == "INT":
                     self.var_map[var] = Array(var, IntSort(), IntSort())
                 elif type.elem_kind == "FLOAT":
@@ -77,7 +76,10 @@ class Z3Mapper():
         elif isinstance(aexp, ALen):
             if aexp.name not in self.var_map:
                 raise VerifierRuntimeError(f"Variable {aexp.name} not found in scope")
-            return self.var_map[Z3Mapper.get_length(aexp.name)]
+            if is_array(self.var_map[aexp.name]): # LIST
+                return self.var_map[Z3Mapper.get_length(aexp.name)]
+            else: # INT or FLOAT
+                return IntVal(0)
         elif isinstance(aexp, AIndex):
             pass # TODO: handle list-flattening here
         elif isinstance(aexp, AUnOp):
@@ -165,7 +167,7 @@ class Z3Mapper():
 
     @staticmethod
     def get_length(self, var_name: str) -> str:
-        return "_len_" + var_name
+        return "_" + var_name + "_len_1"
         
     
 
