@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from .errors import IRRuntimeError, IRParseError
 from .compiler import IRInstr
 from .runtime import DeclType, RuntimeScope, _UNSET
-from .verifier import RuntimeConfiguration, VerificationEngine
+from .SelVerifier.verifier import RuntimeConfiguration, VerificationEngine
 
 
 @dataclass
@@ -484,7 +484,7 @@ class SelVerIRInterpreter:
                 values=copy.deepcopy(self.state),
                 types=copy.deepcopy(self.types),
             ),
-            stack=copy.deepcopy(self.stack),
+            state=copy.deepcopy(self.state),
         )
 
     # ---------- execution ----------

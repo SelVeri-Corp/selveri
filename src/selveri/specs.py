@@ -49,7 +49,7 @@ class Spec:
     uid: int
 
     def __hash__(self) -> int:
-        return hash(self.uid)
+        return hash(self.uid) # TODO: hashing uid itself is unnecessary, as uids are already unique
 
 @dataclass(frozen=True, eq=False)
 class SpecFromBExp(Spec):

@@ -1,32 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
-import z3
+from z3 import *
 from ltlf2dfa.parser.ltlf import LTLfParser
 
-from .compiler import IRInstr
-from .errors import ParserError, VerificationError
-from .runtime import RuntimeScope
-from .spec_parser import parse_spec
-from .specs import ParsedSpec, RawSpec, Spec
-
-@dataclass(frozen=True)
-class RuntimeConfiguration:
-    scope: RuntimeScope
-    stack: List[Any]
-
-@dataclass(frozen=True)
-class Formula:
-    uid: int
-
-@dataclass
-class TemporalObligation:
-    kind: str
-    formula: Any
-    aux_formula: Any | None
-    created_at_step: int
-    source_spec: str
+from .defs import RuntimeConfiguration, TemporalObligation
+from ..compiler import IRInstr
+from ..errors import ParserError, VerificationError
+from ..spec_parser import parse_spec
+from ..specs import ParsedSpec, RawSpec, Spec
+from .mapper import Z3Mapper
 
 class VerificationEngine():
     def __init__(self):
@@ -34,6 +19,9 @@ class VerificationEngine():
         self.pending: list[TemporalObligation] = []
         self.specs_by_id: Dict[int, ParsedSpec] = {}
         self.prepared = False
+
+        self.solver : Solver = Solver()
+        self.mapper: Z3Mapper = None
 
     # the verifier owns spec parsing and caches parsed ASTs before execution starts.
     def prepare_program(
@@ -99,7 +87,25 @@ class VerificationEngine():
     def on_program_start(self) -> None: ...
     def on_step(self, snapshot: RuntimeConfiguration) -> None: ...
     def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None: ...
-    def verify_FOL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
+
+    # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
+    def verify(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: 
+        self.solver.reset()
+        self.mapper = Z3Mapper(snapshot, self.solver)
+
+        # TODO: check spec type here (FOL or LTL)
+        return self.verify_FOL(spec)
+        
+
+
+    def verify_FOL(self, spec: Spec) -> bool:
+        negated_assumption = simplify(Not(self.mapper.map_FOL(spec)))
+        result = self.solver.check(negated_assumption)
+        if result == unsat:
+            return True
+        else: # sat
+            return False
+
     def verify_past_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
     def verify_future_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
     def on_program_end(self) -> None: ...

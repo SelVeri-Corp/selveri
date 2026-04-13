@@ -93,6 +93,7 @@ class FloatLit(Imm, AExp):
     def __str__(self) -> str:
         return str(self.value)
 
+# TODO: we might remove this
 @dataclass(frozen=True)
 class ListLit(Imm, AExp):
     items: List[Imm]
@@ -124,11 +125,17 @@ class AUnOp(AExp):
     op: str
     rhs: AExp
 
+    def __str__(self) -> str:
+        return f"{self.op}{self.rhs}"
+
 @dataclass(frozen=True)
 class ABinOp(AExp):
     op: str
     left: AExp
     right: AExp
+
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
 
 # Boolean
 @dataclass(frozen=True)

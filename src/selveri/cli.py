@@ -6,7 +6,7 @@ from pathlib import Path
 from .compiler import SelVeriCompiler
 from .interpreter import interpret_ir_code
 from .parser import parse_selveri
-from .verifier import VerificationEngine
+from .SelVerifier.verifier import VerificationEngine
 
 def run_pipeline(
     input_path: Path,
