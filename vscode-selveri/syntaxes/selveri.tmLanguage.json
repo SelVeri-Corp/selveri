@@ -1,0 +1,158 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SelVeri",
+  "scopeName": "source.selveri",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#spec-block" },
+    { "include": "#keywords-control" },
+    { "include": "#keywords-function" },
+    { "include": "#keywords-io" },
+    { "include": "#boolean-literals" },
+    { "include": "#boolean-operators" },
+    { "include": "#special-variables" },
+    { "include": "#builtin-functions" },
+    { "include": "#types" },
+    { "include": "#function-definition-name" },
+    { "include": "#function-call-name" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.selveri",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.selveri",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.begin.selveri" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.comment.end.selveri" }
+          }
+        }
+      ]
+    },
+    "spec-block": {
+      "name": "meta.spec.selveri",
+      "begin": "\\{",
+      "end": "\\}\\s*;",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.spec.begin.selveri" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.spec.end.selveri" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "name": "keyword.other.spec.temporal.selveri",
+          "match": "\\b(Forall|Exists|Always|Eventually|Next|Historically|Once|Previously|Since|Until)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.spec.selveri",
+          "match": "=>|\\|\\||&&|!"
+        },
+        { "include": "#boolean-literals" },
+        { "include": "#boolean-operators" },
+        { "include": "#special-variables" },
+        { "include": "#builtin-functions" },
+        { "include": "#types" },
+        { "include": "#numbers" },
+        {
+          "name": "keyword.operator.selveri",
+          "match": ":=|->|::|<=|>=|<|>|="
+        },
+        { "include": "#punctuation" }
+      ]
+    },
+    "keywords-control": {
+      "name": "keyword.control.selveri",
+      "match": "\\b(if|then|else|fi|while|do|od)\\b"
+    },
+    "keywords-function": {
+      "name": "keyword.other.function.selveri",
+      "match": "\\b(function|end|return|call)\\b"
+    },
+    "keywords-io": {
+      "name": "keyword.other.selveri",
+      "match": "\\b(pass|read|write|writeline)\\b"
+    },
+    "boolean-literals": {
+      "name": "constant.language.boolean.selveri",
+      "match": "\\b(true|false)\\b"
+    },
+    "boolean-operators": {
+      "name": "keyword.operator.logical.selveri",
+      "match": "\\b(not|and|or|xor)\\b"
+    },
+    "special-variables": {
+      "name": "variable.language.selveri",
+      "match": "\\b(retvar|in)\\b"
+    },
+    "builtin-functions": {
+      "name": "support.function.builtin.selveri",
+      "match": "\\blen\\b(?=\\s*\\()"
+    },
+    "types": {
+      "name": "storage.type.selveri",
+      "match": "\\b(Int|Float|List)\\b"
+    },
+    "function-definition-name": {
+      "match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "keyword.other.function.selveri" },
+        "2": { "name": "entity.name.function.selveri" }
+      }
+    },
+    "function-call-name": {
+      "match": "\\b(call)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "keyword.other.function.selveri" },
+        "2": { "name": "entity.name.function.call.selveri" }
+      }
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.selveri",
+          "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.selveri",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "name": "keyword.operator.selveri",
+      "match": ":=|->|::|<=|>=|<|>|="
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.statement.selveri",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.selveri",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.selveri",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.definition.type.selveri",
+          "match": ":"
+        }
+      ]
+    }
+  }
+}
