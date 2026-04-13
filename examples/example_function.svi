@@ -27,5 +27,3 @@ lst := [1, 2, 3, 4, 5];
 result : Int;
 call sumFiveElements(lst);
 result := retvar;
-
-a := 5;

@@ -28,7 +28,7 @@ def run_pipeline(
     start_time = perf_counter()
     interpret_ir_text(ir_text, max_steps=max_steps)
     end_time = perf_counter()
-    print(f"\nRunning time: {end_time - start_time:.6f} seconds")
+    print(f"\nExecution time: {end_time - start_time:.6f} seconds")
     return 0
 
 

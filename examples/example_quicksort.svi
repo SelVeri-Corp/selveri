@@ -83,4 +83,4 @@ lst : List[Int, 1, 6];
 lst := [10, 7, 8, 9, 1, 5];
 call quickSort(lst, 0, 5);
 lst := retvar;
-write lst;
+write(lst);
