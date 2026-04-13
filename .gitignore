@@ -3,3 +3,4 @@ __pycache__/
 *.egg-info/
 node_modules/
 package-lock.json
+vscode-selveri/client/out/
