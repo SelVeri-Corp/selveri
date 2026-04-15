@@ -10,7 +10,7 @@ from .defs import RuntimeConfiguration, TemporalObligation
 from ..compiler import IRInstr
 from ..errors import ParserError, VerificationError
 from ..spec_parser import parse_spec
-from ..specs import ParsedSpec, RawSpec, Spec
+from ..specs import ParsedSpec, RawSpec, Spec, SpecType
 from .mapper import Z3Mapper
 
 class VerificationEngine():
@@ -92,19 +92,20 @@ class VerificationEngine():
         self.history.append(snapshot)
         self.last_step += 1
     
-    
-    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
-        self.verify(spec, snapshot)
-
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
-    def verify(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: 
+    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
         self.solver.reset()
         self.mapper = Z3Mapper(snapshot, self.solver)
-        # TODO: check spec type here (FOL or LTL)
-        return self.verify_FOL(spec)
+        self.verify(spec)
+
+    def verify(self, spec: Spec) -> bool: 
+        if spec.type == SpecType.FOL:
+            return self.verify_FOL(spec)
+        elif spec.type == SpecType.pLTL:
+            return self.verify_past_LTL(spec)
+        else: # spec.type == SpecType.fLTL:
+            return self.verify_future_LTL(spec)
         
-
-
     def verify_FOL(self, spec: Spec) -> bool:
         negated_assumption = simplify(Not(self.mapper.map_FOL(spec)))
         result = self.solver.check(negated_assumption)

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from lark import Lark, LarkError, Transformer, v_args
 
-from .errors import ParserError
+from .errors import ParserError, VerifierRuntimeError
 from .parser import (
     ABinOp,
     ALen,
@@ -89,18 +89,18 @@ class SpecAstBuilder(Transformer):
 
     # specs
     def sbexp(self, bexp: BExp): return SpecFromBExp(self._next_uid(), SpecType.FOL, bexp)
-    def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.FOL, "!", rhs)
+    def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), rhs.type, "!", rhs)
     def spreviously(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Previously", rhs)
     def sonce(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Once", rhs)
     def shistorically(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Historically", rhs)
     def snext(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Next", rhs)
     def seventually(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Eventually", rhs)
     def salways(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Always", rhs)
-    def ssince(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.pLTL, "Since", l, r)
-    def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.fLTL, "Until", l, r)
-    def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.FOL, "&&", l, r)
-    def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.FOL, "||", l, r)
-    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", SpecType.FOL, l, r)
+    def ssince(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "Since", l, r)
+    def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "Until", l, r)
+    def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "&&", l, r)
+    def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "||", l, r)
+    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", self.deduce_spec_type(l,r), l, r)
     # domains
     def domain_opt(self, *children): return children[0] if children else None
     def domain_ident(self, name): return DomainIdent(str(name))
@@ -108,8 +108,26 @@ class SpecAstBuilder(Transformer):
     def set_lit(self, items): return DomainSet(items)
     def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, True)
     def interval_closed(self, lo, hi): return DomainInterval(lo, hi, False)
-    def sforall(self, var, domain, body): return SpecQuant(self._next_uid(), SpecType.FOL, "Forall", str(var), domain, body)
-    def sexists(self, var, domain, body): return SpecQuant(self._next_uid(), SpecType.FOL, "Exists", str(var), domain, body)
+
+    def sforall(self, var, domain, body): 
+        if body.type != SpecType.FOL:
+            return VerifierRuntimeError("LTL formulae cannot be quantified!")
+        return SpecQuant(self._next_uid(), SpecType.FOL, "Forall", str(var), domain, body)
+
+    def sexists(self, var, domain, body): 
+        if body.type != SpecType.FOL:
+            return VerifierRuntimeError("LTL formulae cannot be quantified!")
+        return SpecQuant(self._next_uid(), SpecType.FOL, "Exists", str(var), domain, body)
+
+
+    def deduce_spec_type(spec1 : Spec, spec2: Spec) -> SpecType:
+        if spec1.type == spec2.type:
+            return spec1.type
+        if spec1.type == SpecType.FOL:
+            return spec2.type
+        if spec2.type == SpecType.FOL:
+            return spec2.type
+        return VerifierRuntimeError("Mixed LTL formulae are not allowed!")
 
 
 SPEC_PARSER = Lark.open(
@@ -126,3 +144,4 @@ def parse_spec(src: str) -> Spec:
     except LarkError as e:
         raise ParserError("Failed to parse SelVeri specification. " + str(e)) from None
     return SpecAstBuilder().transform(tree)
+    
