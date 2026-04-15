@@ -102,7 +102,7 @@ class VerificationEngine():
             return self.verify_FOL(spec, snapshot)
         elif spec.type == SpecType.pLTL:
             self.on_step(snapshot) # TODO: check the possible negative effects of this artificial step
-            return self.verify_past_LTL(spec, self.last_step)
+            return self.verify_past_LTL(spec, self.last_step - 1) # decrement one as it was just incremented
         else: # spec.type == SpecType.fLTL:
             return self.verify_future_LTL(spec, snapshot)
         
@@ -131,7 +131,7 @@ class VerificationEngine():
                 if step == start_step:
                     result = False
                 else:
-                    result = self.verify_past_LTL(spec, step - 1, start_step)
+                    result = self.verify_past_LTL(spec.rhs, step - 1, start_step)
             elif spec.op == "Once":
                 if step == start_step:
                     result = self.verify_past_LTL(spec.rhs, step, start_step)
@@ -151,12 +151,12 @@ class VerificationEngine():
             elif spec.op == "=>":
                 result = (not self.verify_past_LTL(spec.left, step, start_step)) or self.verify_past_LTL(spec.right, step, start_step)
             elif spec.op == "Since":
-                left = self.verify_past_LTL(spec.left, step, start_step)
+                right = self.verify_past_LTL(spec.right, step, start_step)
                 if step == start_step:
-                    result = left
+                    result = right
                 else:
-                    right = self.verify_past_LTL(spec.right, step, start_step)
-                    result = left or (right and self.verify_past_LTL(spec, step - 1, start_step))
+                    left = self.verify_past_LTL(spec.left, step, start_step)
+                    result = right or (left and self.verify_past_LTL(spec, step - 1, start_step))
         
         else:
             raise VerificationError(f"Unexpected specification type for pLTL: {spec.type}")
