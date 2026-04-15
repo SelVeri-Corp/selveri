@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -87,20 +86,20 @@ class VerificationEngine():
         return parsed_spec
 
     def on_program_start(self) -> None: ...
-    
+
     def on_step(self, snapshot: RuntimeConfiguration) -> None:
         # TODO: investigate the memory management here
-        self.history[self.last_step] = snapshot
+        self.history.append(snapshot)
         self.last_step += 1
     
     
-    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None: ...
+    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
+        self.verify(spec, snapshot)
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
     def verify(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: 
         self.solver.reset()
         self.mapper = Z3Mapper(snapshot, self.solver)
-
         # TODO: check spec type here (FOL or LTL)
         return self.verify_FOL(spec)
         
@@ -114,6 +113,9 @@ class VerificationEngine():
         else: # sat
             return False
 
-    def verify_past_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
+    def verify_past_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool:
+        pass
+    
+    
     def verify_future_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
     def on_program_end(self) -> None: ...

@@ -37,6 +37,7 @@ from .specs import (
     SpecFromBExp,
     SpecQuant,
     SpecUnOp,
+    SpecType
 )
 
 # Keep formula-node identities distinct even across separate parse_spec calls.
@@ -87,19 +88,19 @@ class SpecAstBuilder(Transformer):
     def truthy(self, aexp): return BTruthy(aexp)
 
     # specs
-    def sbexp(self, bexp: BExp): return SpecFromBExp(self._next_uid(), bexp)
-    def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), "!", rhs)
-    def spreviously(self, rhs: Spec): return SpecUnOp(self._next_uid(), "Previously", rhs)
-    def sonce(self, rhs: Spec): return SpecUnOp(self._next_uid(), "Once", rhs)
-    def shistorically(self, rhs: Spec): return SpecUnOp(self._next_uid(), "Historically", rhs)
-    def snext(self, rhs: Spec): return SpecUnOp(self._next_uid(), "Next", rhs)
-    def seventually(self, rhs: Spec): return SpecUnOp(self._next_uid(), "Eventually", rhs)
-    def salways(self, rhs: Spec): return SpecUnOp(self._next_uid(), "Always", rhs)
-    def ssince(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "Since", l, r)
-    def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "Until", l, r)
-    def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "&&", l, r)
-    def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "||", l, r)
-    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", l, r)
+    def sbexp(self, bexp: BExp): return SpecFromBExp(self._next_uid(), SpecType.FOL, bexp)
+    def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.FOL, "!", rhs)
+    def spreviously(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Previously", rhs)
+    def sonce(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Once", rhs)
+    def shistorically(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Historically", rhs)
+    def snext(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Next", rhs)
+    def seventually(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Eventually", rhs)
+    def salways(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Always", rhs)
+    def ssince(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.pLTL, "Since", l, r)
+    def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.fLTL, "Until", l, r)
+    def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.FOL, "&&", l, r)
+    def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.FOL, "||", l, r)
+    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", SpecType.FOL, l, r)
     # domains
     def domain_opt(self, *children): return children[0] if children else None
     def domain_ident(self, name): return DomainIdent(str(name))
@@ -107,8 +108,8 @@ class SpecAstBuilder(Transformer):
     def set_lit(self, items): return DomainSet(items)
     def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, True)
     def interval_closed(self, lo, hi): return DomainInterval(lo, hi, False)
-    def sforall(self, var, domain, body): return SpecQuant(self._next_uid(), "Forall", str(var), domain, body)
-    def sexists(self, var, domain, body): return SpecQuant(self._next_uid(), "Exists", str(var), domain, body)
+    def sforall(self, var, domain, body): return SpecQuant(self._next_uid(), SpecType.FOL, "Forall", str(var), domain, body)
+    def sexists(self, var, domain, body): return SpecQuant(self._next_uid(), SpecType.FOL, "Exists", str(var), domain, body)
 
 
 SPEC_PARSER = Lark.open(

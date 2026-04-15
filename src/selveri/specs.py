@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional
+
+
+class SpecType(Enum):
+    FOL = 0
+    pLTL = 1
+    fLTL = 2
 
 
 @dataclass(frozen=True)
@@ -47,6 +54,7 @@ class DomainInterval(Domain):
 @dataclass(frozen=True)
 class Spec:
     uid: int
+    type : SpecType
 
     def __hash__(self) -> int:
         return self.uid
