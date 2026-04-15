@@ -129,9 +129,9 @@ class VerificationEngine():
                 result = not self.verify_past_LTL(spec.rhs, step, start_step)
             elif spec.op == "Previously":
                 if step == start_step:
-                    result = True
+                    result = False
                 else:
-                    result = self.verify_past_LTL(spec.rhs, step, start_step) and self.verify_past_LTL(spec, step - 1, start_step)
+                    result = self.verify_past_LTL(spec, step - 1, start_step)
             elif spec.op == "Once":
                 if step == start_step:
                     result = self.verify_past_LTL(spec.rhs, step, start_step)
