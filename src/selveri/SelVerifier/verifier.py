@@ -10,19 +10,17 @@ from .defs import RuntimeConfiguration, TemporalObligation
 from ..compiler import IRInstr
 from ..errors import ParserError, VerificationError
 from ..spec_parser import parse_spec
-from ..specs import ParsedSpec, RawSpec, Spec, SpecType
+from ..specs import ParsedSpec, RawSpec, Spec, SpecType, SpecUnOp, SpecBinOp, SpecQuant
 from .mapper import Z3Mapper
 
 class VerificationEngine():
     def __init__(self):
         self.last_step = 0
         self.history: list[RuntimeConfiguration] = []
+        self.pltl_memo : Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
         self.pending: list[TemporalObligation] = []
         self.specs_by_id: Dict[int, ParsedSpec] = {}
         self.prepared = False
-
-        self.solver : Solver = Solver()
-        self.mapper: Z3Mapper = None
 
     # the verifier owns spec parsing and caches parsed ASTs before execution starts.
     def prepare_program(
@@ -90,6 +88,7 @@ class VerificationEngine():
     def on_step(self, snapshot: RuntimeConfiguration) -> None:
         # TODO: investigate the memory management here
         self.history.append(snapshot)
+        self.pltl_memo[self.last_step] = dict()
         self.last_step += 1
     
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
@@ -98,25 +97,82 @@ class VerificationEngine():
         self.mapper = Z3Mapper(snapshot, self.solver)
         self.verify(spec)
 
-    def verify(self, spec: Spec) -> bool: 
+    def verify(self, spec: Spec, snapshot : RuntimeConfiguration) -> bool: 
         if spec.type == SpecType.FOL:
-            return self.verify_FOL(spec)
+            return self.verify_FOL(spec, snapshot)
         elif spec.type == SpecType.pLTL:
-            return self.verify_past_LTL(spec)
+            self.on_step(snapshot) # TODO: check the possible negative effects of this artificial step
+            return self.verify_past_LTL(spec, self.last_step)
         else: # spec.type == SpecType.fLTL:
-            return self.verify_future_LTL(spec)
+            return self.verify_future_LTL(spec, snapshot)
         
-    def verify_FOL(self, spec: Spec) -> bool:
-        negated_assumption = simplify(Not(self.mapper.map_FOL(spec)))
-        result = self.solver.check(negated_assumption)
+    def verify_FOL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool:
+        solver = Solver()
+        mapper = Z3Mapper(snapshot, solver)
+        negated_assumption = simplify(Not(mapper.map_FOL(spec)))
+        result = solver.check(negated_assumption)
         if result == unsat:
             return True
         else: # sat
             return False
 
-    def verify_past_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool:
-        pass
-    
+    # TODO: check the base cases
+    def verify_past_LTL(self, spec: Spec, step : int, start_step : int = 0) -> bool:
+        if spec in self.pltl_memo[step]: # memoization for efficiency
+            return self.pltl_memo[step][spec]
+
+        if spec.type == SpecType.FOL:
+            result = self.verify_FOL(spec, self.history[step])
+        
+        elif isinstance(spec, SpecUnOp):
+            if spec.op == "!":
+                result = not self.verify_past_LTL(spec.rhs, step, start_step)
+            elif spec.op == "Previously":
+                if step == start_step:
+                    result = True
+                else:
+                    result = self.verify_past_LTL(spec.rhs, step, start_step) and self.verify_past_LTL(spec, step - 1, start_step)
+            elif spec.op == "Once":
+                if step == start_step:
+                    result = self.verify_past_LTL(spec.rhs, step, start_step)
+                else:
+                    result = self.verify_past_LTL(spec.rhs, step, start_step) or self.verify_past_LTL(spec, step - 1, start_step)
+            elif spec.op == "Historically":
+                if step == start_step:
+                    result = self.verify_past_LTL(spec.rhs, step, start_step)
+                else:
+                    result = self.verify_past_LTL(spec.rhs, step, start_step) and self.verify_past_LTL(spec, step - 1, start_step)
+
+        elif isinstance(spec, SpecBinOp):
+            if spec.op == "&&":
+                result = self.verify_past_LTL(spec.left, step, start_step) and self.verify_past_LTL(spec.right, step, start_step)
+            elif spec.op == "||":
+                result = self.verify_past_LTL(spec.left, step, start_step) or self.verify_past_LTL(spec.right, step, start_step)
+            elif spec.op == "=>":
+                result = (not self.verify_past_LTL(spec.left, step, start_step)) or self.verify_past_LTL(spec.right, step, start_step)
+            elif spec.op == "Since":
+                left = self.verify_past_LTL(spec.left, step, start_step)
+                if step == start_step:
+                    result = left
+                else:
+                    right = self.verify_past_LTL(spec.right, step, start_step)
+                    result = left or (right and self.verify_past_LTL(spec, step - 1, start_step))
+        
+        else:
+            raise VerificationError(f"Unexpected specification type for pLTL: {spec.type}")
+
+        self.pltl_memo[step][spec] = result
+        return result
+                    
+                
+
+            
+            
+                
+            
+
+        
+        
     
     def verify_future_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
     def on_program_end(self) -> None: ...
