@@ -480,11 +480,8 @@ class SelVerIRInterpreter:
     def _snapshot_runtime_configuration(self) -> RuntimeConfiguration:
         self._refresh_public_views()
         return RuntimeConfiguration(
-            scope=RuntimeScope(
-                values=copy.deepcopy(self.state),
-                types=copy.deepcopy(self.types),
-            ),
-            state=copy.deepcopy(self.state),
+            scope=copy.deepcopy(self.types),
+            state=copy.deepcopy(self.values)
         )
 
     # ---------- execution ----------

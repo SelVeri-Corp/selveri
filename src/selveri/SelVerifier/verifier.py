@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from .mapper import Z3Mapper
 
 class VerificationEngine():
     def __init__(self):
+        self.last_step = 0
         self.history: list[RuntimeConfiguration] = []
         self.pending: list[TemporalObligation] = []
         self.specs_by_id: Dict[int, ParsedSpec] = {}
@@ -85,7 +87,13 @@ class VerificationEngine():
         return parsed_spec
 
     def on_program_start(self) -> None: ...
-    def on_step(self, snapshot: RuntimeConfiguration) -> None: ...
+    
+    def on_step(self, snapshot: RuntimeConfiguration) -> None:
+        # TODO: investigate the memory management here
+        self.history[self.last_step] = snapshot
+        self.last_step += 1
+    
+    
     def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None: ...
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
