@@ -108,7 +108,8 @@ class Z3Mapper():
             raise VerifierRuntimeError(f"Unsupported FOL arithmetic expression: {aexp}")
 
 
-    def map_FOL_bexp(self, bexp: BExp) -> z3types.ExprRef :
+    def map_FOL_bexp(self, spec: SpecFromBExp) -> z3types.ExprRef :
+        bexp = spec.bexp
         if isinstance(bexp, BBool):
             return BoolVal(bexp.value)
         elif isinstance(bexp, BNot):
