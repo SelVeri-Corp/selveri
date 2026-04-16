@@ -7,7 +7,7 @@ from z3 import *
 from .defs import RuntimeConfiguration
 from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
 from ..errors import VerifierRuntimeError
-from ..parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, AVar
+from ..parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
 
 @dataclass
 class Z3Mapper():
@@ -15,6 +15,10 @@ class Z3Mapper():
     var_map : Dict[str, z3types.Sort]
     
     def __init__(self, config : RuntimeConfiguration, solver : Solver):
+        self.var_map = {}
+        scope = config.scope
+        state = config.state
+
         # map the scope
         # TODO: does this also handle parent scopes and states?
 
@@ -35,8 +39,8 @@ class Z3Mapper():
             else:
                 raise VerifierRuntimeError(f"Unsupported variable type: {vartype.kind}")
 
-        for var, value in config.state.items():
-            if var not in config.scope:
+        for var, value in state.items():
+            if var not in scope:
                 raise VerifierRuntimeError(f"Variable {var} not found in scope")
             try:
                 vartype = scope[var]
@@ -83,7 +87,10 @@ class Z3Mapper():
             if aexp.name not in self.var_map:
                 raise VerifierRuntimeError(f"Variable {aexp.name} not found in scope")
             if is_array(self.var_map[aexp.name]): # LIST
-                return self.var_map[Z3Mapper.get_length(aexp.name)]
+                len_name = Z3Mapper.get_length(aexp.name)
+                if len_name not in self.var_map:
+                    raise VerifierRuntimeError(f"Variable {len_name} not found in scope")
+                return self.var_map[len_name]
             else: # INT or FLOAT
                 return IntVal(0)
         elif isinstance(aexp, AIndex):
