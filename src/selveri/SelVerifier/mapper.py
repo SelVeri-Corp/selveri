@@ -94,7 +94,7 @@ class Z3Mapper():
             else: # INT or FLOAT
                 return IntVal(0)
         elif isinstance(aexp, AIndex):
-            pass # TODO: handle list-flattening here
+            return self.map_FOL_aindex(aexp)
         elif isinstance(aexp, AUnOp):
             if aexp.op == "-":
                 return (-(self.map_FOL_aexp(aexp.rhs)))
@@ -114,6 +114,57 @@ class Z3Mapper():
         else:
             raise VerifierRuntimeError(f"Unsupported FOL arithmetic expression: {aexp}")
 
+    def map_FOL_listlit(self, aexp: ListLit) -> z3types.ExprRef:
+        stack: list = [aexp]
+        flat_imms: list = []
+        while stack:
+            node = stack.pop()
+            if isinstance(node, ListLit):
+                for item in reversed(node.items):
+                    stack.append(item)
+            elif isinstance(node, IntLit):
+                flat_imms.append(node)
+            elif isinstance(node, FloatLit):
+                flat_imms.append(node)
+            else:
+                raise VerifierRuntimeError(f"Unsupported list literal element: {node}")
+        if not flat_imms:
+            raise VerifierRuntimeError("Empty list literal is not supported in specifications")
+        use_real = any(isinstance(x, FloatLit) for x in flat_imms)
+        if use_real:
+            arr = K(IntSort(), RealVal(0))
+            for i, imm in enumerate(flat_imms):
+                arr = Store(arr, IntVal(i), RealVal(imm.value))
+        else:
+            arr = K(IntSort(), IntVal(0))
+            for i, imm in enumerate(flat_imms):
+                arr = Store(arr, IntVal(i), IntVal(imm.value))
+        return arr
+
+    def map_FOL_aindex(self, aexp: AIndex) -> z3types.ExprRef:
+        indices: list[z3types.ExprRef] = []
+        cur = aexp
+        while isinstance(cur, AIndex): # flatten the index expression
+            indices.append(self.map_FOL_aexp(cur.index))
+            cur = cur.base
+        base_name = cur.name
+        if base_name not in self.var_map:
+            raise VerifierRuntimeError(f"Variable {base_name} not found in scope")
+
+        indices.reverse() # collect indices
+        flat_index: z3types.ExprRef | None = None
+        for pos, index_expr in enumerate(indices):
+            term = index_expr
+            for dim in range(pos + 2, self.get_list_dimension(base_name) + 1):
+                len_name = Z3Mapper.get_dimension_length(base_name, dim)
+                if len_name not in self.var_map:
+                    raise VerifierRuntimeError(
+                        f"Variable {len_name} not found in scope"
+                    )
+                term = term * self.var_map[len_name]
+            flat_index = term if flat_index is None else flat_index + term
+
+        return self.var_map[base_name][flat_index]
 
     def map_FOL_bexp(self, spec: SpecFromBExp) -> z3types.ExprRef :
         bexp = spec.bexp
@@ -174,14 +225,29 @@ class Z3Mapper():
         else:
             raise VerifierRuntimeError(f"Unsupported FOL quantifier: {spec.kind}")
 
+    def get_list_dimension(self, name: str) -> int:
+        if name not in self.var_map or self.var_map[name] is None:
+            raise VerifierRuntimeError(f"Variable {name} not found in scope")
+        if not is_array(self.var_map[name]):
+            raise VerifierRuntimeError(f"Variable {name} is not a list")
+
+        dim = 0
+        while Z3Mapper.get_dimension_length(name, dim + 1) in self.var_map:
+            dim += 1
+        return dim if dim > 0 else 1
+
     def generate_temp(self) -> str:
         temp = "_temp_" + str(self.temp_count)
         self.temp_count += 1
         return temp
 
     @staticmethod
-    def get_length(self, var_name: str) -> str:
-        return "_" + var_name + "_len_1"
+    def get_length(var_name: str) -> str:
+        return Z3Mapper.get_dimension_length(var_name, 1)
+
+    @staticmethod
+    def get_dimension_length(var_name: str, dim: int) -> str:
+        return f"_{var_name}_len_{dim}"
         
     
 
