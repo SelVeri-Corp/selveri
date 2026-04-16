@@ -101,6 +101,14 @@ class SpecAstBuilder(Transformer):
     def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "&&", l, r)
     def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "||", l, r)
     def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", self.deduce_spec_type(l,r), l, r)
+    # state_spec subgrammar (non-temporal quantified bodies; same AST as temporal-level operators)
+    def state_snot(self, rhs: Spec): return self.snot(rhs)
+    def state_sand(self, l: Spec, r: Spec): return self.sand(l, r)
+    def state_sor(self, l: Spec, r: Spec): return self.sor(l, r)
+    def state_simp(self, l: Spec, r: Spec): return self.simp(l, r)
+    def state_sbexp(self, bexp: BExp): return self.sbexp(bexp)
+    def state_forall(self, var, domain, body): return self.sforall(var, domain, body)
+    def state_exists(self, var, domain, body): return self.sexists(var, domain, body)
     # domains
     def domain_opt(self, *children): return children[0] if children else None
     def domain_ident(self, name): return DomainIdent(str(name))
