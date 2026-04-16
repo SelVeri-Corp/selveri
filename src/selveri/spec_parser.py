@@ -30,8 +30,10 @@ from .parser import (
 from .specs import (
     DomainIdent,
     DomainInterval,
-    DomainSet,
+    DomainRange,
     DomainType,
+    DomainValues,
+    DomainVar,
     Spec,
     SpecBinOp,
     SpecFromBExp,
@@ -110,13 +112,27 @@ class SpecAstBuilder(Transformer):
     def state_forall(self, var, domain, body): return self.sforall(var, domain, body)
     def state_exists(self, var, domain, body): return self.sexists(var, domain, body)
     # domains
-    def domain_opt(self, *children): return children[0] if children else None
     def domain_ident(self, name): return DomainIdent(str(name))
-    def domain_type(self, type_node): return DomainType(type_node)
-    def set_lit(self, items): return DomainSet(items)
-    def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, True)
-    def interval_closed(self, lo, hi): return DomainInterval(lo, hi, False)
-
+    def domain_range(self, lo, hi): return DomainRange(IntLit(int(lo)), IntLit(int(hi)))
+    def domain_values(self, lit: ListLit): return DomainValues(list(lit.items))
+    def domain_type(self, type_node: BasicType): return DomainType(type_node)
+    def domain_var(self, elem_ty: BasicType): return DomainVar(elem_ty)
+    def interval_closed(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=True, right_closed=True
+        )
+    def interval_open(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=False, right_closed=False
+        )
+    def interval_halfopen(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=True, right_closed=False
+        )
+    def interval_halfclosed(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=False, right_closed=True
+        )
     def sforall(self, var, domain, body): 
         if body.type != SpecType.FOL:
             return VerifierRuntimeError("LTL formulae cannot be quantified!")

@@ -56,15 +56,19 @@ start: spec
              | bexp                           -> state_sbexp
              | "(" state_spec ")"
 
-?domain: value_domain
+?domain: list_lit                           -> domain_values
+       | range_domain
+       | interval_domain
        | IDENT                              -> domain_ident
-       | set_lit
-       | type                               -> domain_type
+       | basic_type                         -> domain_type
+       | "Var" "[" basic_type "]"           -> domain_var
 
-interval: "[" aexp "," aexp ")"            -> interval_halfopen
-        | "[" aexp "," aexp "]"            -> interval_closed
+?range_domain: "[" INT_LIT "..." INT_LIT "]" -> domain_range
 
-set_lit: "{" aexp_list "}"                 -> set_lit
+?interval_domain: "[" FLOAT_LIT "..." FLOAT_LIT "]" -> interval_closed
+               | "(" FLOAT_LIT "..." FLOAT_LIT ")" -> interval_open
+               | "[" FLOAT_LIT "..." FLOAT_LIT ")" -> interval_halfopen
+               | "(" FLOAT_LIT "..." FLOAT_LIT "]" -> interval_halfclosed
 
 ?basic_type: "Int"                         -> type_int
            | "Float"                       -> type_float
@@ -77,7 +81,7 @@ aexp_list: aexp ("," aexp)*                -> aexp_list
     | FLOAT_LIT                            -> float_lit
     | list_lit
 
-list_lit: "[" [imm ("," imm)*] "]"        -> list_lit
+list_lit: "[" [imm ("," imm)*] "]"
 
 aexp: aexp_sum                             -> aexp
 
