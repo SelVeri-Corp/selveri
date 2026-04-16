@@ -18,28 +18,34 @@ class Z3Mapper():
         # map the scope
         # TODO: does this also handle parent scopes and states?
 
-        for var, type in config.scope.items():
-            if type.kind == "INT":
+        for var, vartype in scope.items():
+            if vartype is None:
+                continue
+            if vartype.kind == "INT":
                 self.var_map[var] = Int(var)
-            elif type.kind == "FLOAT":
+            elif vartype.kind == "FLOAT":
                 self.var_map[var] = Real(var)
-            else: # LIST
-                if type.elem_kind == "INT":
+            elif vartype.kind == "LIST":
+                if vartype.elem_kind == "INT":
                     self.var_map[var] = Array(var, IntSort(), IntSort())
-                elif type.elem_kind == "FLOAT":
+                elif vartype.elem_kind == "FLOAT":
                     self.var_map[var] = Array(var, IntSort(), RealSort())
                 else:
-                    raise VerifierRuntimeError(f"Unsupported list element type: {type.elem_kind}")
+                    raise VerifierRuntimeError(f"Unsupported list element type: {vartype.elem_kind}")
+            else:
+                raise VerifierRuntimeError(f"Unsupported variable type: {vartype.kind}")
 
         for var, value in config.state.items():
             if var not in config.scope:
                 raise VerifierRuntimeError(f"Variable {var} not found in scope")
             try:
-                type = config.scope[var]
-                if type.kind == "LIST":
-                    if len(value) != type.size:
+                vartype = scope[var]
+                if vartype is None:
+                    continue
+                if vartype.kind == "LIST":
+                    if len(value) != vartype.size:
                         raise VerifierRuntimeError(f"Variable {var} has size mismatch")
-                    for i in range(type.size):
+                    for i in range(vartype.size):
                         solver.add(self.var_map[var][i] == value[i])
                 else: # INT or FLOAT
                     solver.add(self.var_map[var] == value)
