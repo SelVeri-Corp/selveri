@@ -117,7 +117,7 @@ class SpecBinOp(Spec):
 class SpecQuant(Spec):
     kind: str
     var: str
-    domain: Optional[Domain]
+    domain: Domain
     body: Spec
 
     def __str__(self) -> str:
