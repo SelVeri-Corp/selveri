@@ -218,6 +218,7 @@ class Z3Mapper():
 
     # TODO: implement after the 'domain' change
     def map_FOL_quant(self, spec: SpecQuant) -> z3types.ExprRef:
+        # TODO: spec.var is the name of the bound variable and must be used in the body as &{name}
         if spec.king == "Forall":
             pass
         elif spec.kind == "Exists":

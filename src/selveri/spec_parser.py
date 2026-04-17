@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
 
@@ -42,6 +43,13 @@ from .specs import (
     SpecType
 )
 
+@dataclass(frozen=True)
+class ABoundVar(AExp):
+    name: str
+
+    def __str__(self) -> str:
+        return f"&{self.name}"
+
 # Keep formula-node identities distinct even across separate parse_spec calls.
 _SPEC_NODE_UIDS = count()
 
@@ -66,12 +74,13 @@ class SpecAstBuilder(Transformer):
     def float_lit(self, tok): return FloatLit(float(tok))
     def list_lit(self, *args): return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
+    def a_bound_var(self, name): return ABoundVar(str(name))
 
     def a_len(self, name): return ALen(str(name))
     def a_index(self, base, idx): 
         if not isinstance(base, AExp): 
             base = AVar(str(base)) 
-            return AIndex(base, idx)  
+        return AIndex(base, idx)  
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)

@@ -98,6 +98,7 @@ aexp: aexp_sum                             -> aexp
 
 ?aexp_atom: imm
          | IDENT                           -> a_var
+         | "&" IDENT                       -> a_bound_var
          | "len" "(" IDENT ")"             -> a_len
          | indexed_value
          | "(" aexp ")"
