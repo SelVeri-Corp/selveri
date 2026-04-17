@@ -65,10 +65,10 @@ start: spec
 
 ?range_domain: "[" INT_LIT "..." INT_LIT "]" -> domain_range
 
-?interval_domain: "[" FLOAT_LIT "..." FLOAT_LIT "]" -> interval_closed
-               | "(" FLOAT_LIT "..." FLOAT_LIT ")" -> interval_open
-               | "[" FLOAT_LIT "..." FLOAT_LIT ")" -> interval_halfopen
-               | "(" FLOAT_LIT "..." FLOAT_LIT "]" -> interval_halfclosed
+?interval_domain: "[" FLOAT_LIT ";" FLOAT_LIT "]" -> interval_closed
+               | "(" FLOAT_LIT ";" FLOAT_LIT ")" -> interval_open
+               | "[" FLOAT_LIT ";" FLOAT_LIT ")" -> interval_halfopen
+               | "(" FLOAT_LIT ";" FLOAT_LIT "]" -> interval_halfclosed
 
 ?basic_type: "Int"                         -> type_int
            | "Float"                       -> type_float

@@ -15,7 +15,7 @@ class Z3Mapper():
     var_map : Dict[str, z3types.Sort]
     
     def __init__(self, config : RuntimeConfiguration, solver : Solver):
-        self.var_map = {}
+        self.var_map = dict()
         scope = config.scope
         state = config.state
 
