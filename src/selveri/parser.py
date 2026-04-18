@@ -8,6 +8,7 @@ from typing import Dict, Iterator, List, Optional
 from lark import Lark, LarkError, Token, Transformer, v_args
 
 from .errors import ParserError
+from .defs import AExp, BExp, Stmt
 from .specs import RawSpec
 from .preprocessor import extract_raw_specs
 
@@ -19,9 +20,8 @@ class Program:
     func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
 
-class Stmt: pass
-class AExp: pass
-class BExp: pass
+
+
 class TypeNode: 
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")

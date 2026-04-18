@@ -1,28 +1,29 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Set
 from z3 import *
 
-from .defs import RuntimeConfiguration
-from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+from ..defs import RuntimeConfiguration
+from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
+from ..spec_parser import ABoundVar
 from ..errors import VerifierRuntimeError
 from ..parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
 
-@dataclass
 class Z3Mapper():
 
     var_map : Dict[str, z3types.Sort]
+    bound_vars_map : Dict[str, z3types.ExprRef] = dict()
+
     
     def __init__(self, config : RuntimeConfiguration, solver : Solver):
         self.var_map = dict()
-        scope = config.scope
-        state = config.state
+        self.scope = config.scope
+        self.state = config.state
 
         # map the scope
         # TODO: does this also handle parent scopes and states?
 
-        for var, vartype in scope.items():
+        for var, vartype in self.scope.items():
             if vartype is None:
                 continue
             if vartype.kind == "INT":
@@ -39,11 +40,11 @@ class Z3Mapper():
             else:
                 raise VerifierRuntimeError(f"Unsupported variable type: {vartype.kind}")
 
-        for var, value in state.items():
-            if var not in scope:
+        for var, value in self.state.items():
+            if var not in self.scope:
                 raise VerifierRuntimeError(f"Variable {var} not found in scope")
             try:
-                vartype = scope[var]
+                vartype = self.scope[var]
                 if vartype is None:
                     continue
                 if vartype.kind == "LIST":
@@ -83,6 +84,8 @@ class Z3Mapper():
             if aexp.name not in self.var_map:
                 raise VerifierRuntimeError(f"Variable {aexp.name} not found in scope")
             return self.var_map[aexp.name]
+        elif isinstance(aexp, ABoundVar):
+            return self.bound_vars_map[aexp.name]
         elif isinstance(aexp, ALen):
             if aexp.name not in self.var_map:
                 raise VerifierRuntimeError(f"Variable {aexp.name} not found in scope")
@@ -114,6 +117,7 @@ class Z3Mapper():
         else:
             raise VerifierRuntimeError(f"Unsupported FOL arithmetic expression: {aexp}")
 
+    # TODO: this is unused for now, consider its usecases
     def map_FOL_listlit(self, aexp: ListLit) -> z3types.ExprRef:
         stack: list = [aexp]
         flat_imms: list = []
@@ -166,19 +170,21 @@ class Z3Mapper():
 
         return self.var_map[base_name][flat_index]
 
-    def map_FOL_bexp(self, spec: SpecFromBExp) -> z3types.ExprRef :
-        bexp = spec.bexp
+    def map_FOL_bexp(self, spec: SpecFromBExp) -> z3types.ExprRef:
+        return self._map_bexp(spec.bexp)
+
+    def _map_bexp(self, bexp: BExp) -> z3types.ExprRef:
         if isinstance(bexp, BBool):
             return BoolVal(bexp.value)
         elif isinstance(bexp, BNot):
-            return Not(self.map_FOL_bexp(bexp.rhs))
+            return Not(self._map_bexp(bexp.rhs))
         elif isinstance(bexp, BBinOp):
             if bexp.op == "and":
-                return And(self.map_FOL_bexp(bexp.left), self.map_FOL_bexp(bexp.right))
+                return And(self._map_bexp(bexp.left), self._map_bexp(bexp.right))
             elif bexp.op == "or":
-                return Or(self.map_FOL_bexp(bexp.left), self.map_FOL_bexp(bexp.right))
+                return Or(self._map_bexp(bexp.left), self._map_bexp(bexp.right))
             elif bexp.op == "xor":
-                return Xor(self.map_FOL_bexp(bexp.left), self.map_FOL_bexp(bexp.right))
+                return Xor(self._map_bexp(bexp.left), self._map_bexp(bexp.right))
             else:
                 raise VerifierRuntimeError(f"Unsupported boolean operator: {bexp.op}")
         elif isinstance(bexp, BCompare):
@@ -216,16 +222,99 @@ class Z3Mapper():
         else:
             raise VerifierRuntimeError(f"Unsupported FOL binary operator: {spec.op}")
 
-    # TODO: implement after the 'domain' change
     def map_FOL_quant(self, spec: SpecQuant) -> z3types.ExprRef:
         # TODO: spec.var is the name of the bound variable and must be used in the body as &{name}
-        if spec.king == "Forall":
-            pass
+        if spec.kind == "Forall":
+            return self.map_quantification(spec, ForAll)
         elif spec.kind == "Exists":
-            pass
+            return self.map_quantification(spec, Exists)
         else:
             raise VerifierRuntimeError(f"Unsupported FOL quantifier: {spec.kind}")
 
+    
+    def map_quantification(self, spec : SpecQuant, quantifier : function) -> z3types.ExprRef:
+        if spec.var in self.bound_vars_map:
+            raise VerifierRuntimeError(f"Variable {spec.var} is already bound by a quantifier")
+        
+        domain : Domain = spec.domain
+        bound_var = Z3Mapper.get_bound_var(spec.var)
+
+        if quantifier is ForAll:
+            finite_connector = And
+            membership_connector = Implies
+        else: # Exists
+            finite_connector = Or
+            membership_connector = And
+
+        
+
+        # uses Z3 quantifier
+        if isinstance(domain, DomainType):
+            if domain.ty.kind == "LIST":
+                raise VerifierRuntimeError("List domain is not supported for Z3 quantifier")
+            elif domain.ty.kind == "INT":
+                bound_var_z3 = Int(bound_var)
+            elif domain.ty.kind == "FLOAT":
+                bound_var_z3 = Real(bound_var)
+            else:
+                raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
+            self.bound_vars_map[bound_var] = bound_var_z3
+            result = quantifier(bound_var_z3, self.map_FOL(spec.body))
+            del self.bound_vars_map[bound_var]
+            return result
+        elif isinstance(domain, DomainRange):
+            bound_var_z3 = Int(bound_var)
+            self.bound_vars_map[bound_var] = bound_var_z3
+            lo = self.map_FOL_aexp(domain.lo)
+            hi = self.map_FOL_aexp(domain.hi)
+            domain_z3 = And(lo <= bound_var_z3, bound_var_z3 <= hi)
+            result = quantifier(bound_var_z3, membership_connector(domain_z3, self.map_FOL(spec.body)))
+            del self.bound_vars_map[bound_var]
+            return result
+        elif isinstance(domain, DomainInterval):
+            bound_var_z3 = Real(bound_var)
+            self.bound_vars_map[bound_var] = bound_var_z3
+            lo = self.map_FOL_aexp(domain.lo)
+            hi = self.map_FOL_aexp(domain.hi)
+            if domain.left_closed:
+                lower_endpoint = (lo <= bound_var_z3)
+            else:
+                lower_endpoint = (lo < bound_var_z3)
+            if domain.right_closed:
+                upper_endpoint = (bound_var_z3 <= hi)
+            else:
+                upper_endpoint = (bound_var_z3 < hi)
+            domain_z3 = And(lower_endpoint, upper_endpoint)
+            result = quantifier(bound_var_z3, membership_connector(domain_z3, self.map_FOL(spec.body)))
+            del self.bound_vars_map[bound_var]
+            return result
+        else: # uses finite_connector over finite domain
+            result_list = list()
+            if isinstance(domain, DomainIdent):
+                if not is_array(self.var_map[domain.name]):
+                    raise VerifierRuntimeError(f"Variable {domain.name} is not a list")
+                # TODO: consider multi-dim lists
+                for i in range(self.state[Z3Mapper.get_dimension_length(domain.name, 1)]):
+                    self.bound_vars_map[bound_var] = self.map_FOL_aexp(AIndex(AVar(domain.name), IntLit(i)))
+                    result_list.append(self.map_FOL(spec.body))     
+                del self.bound_vars_map[bound_var]
+            elif isinstance(domain, DomainValues):
+                for val in domain.items:
+                    self.bound_vars_map[bound_var] = self.map_FOL_aexp(val)
+                    result_list.append(self.map_FOL(spec.body))     
+                del self.bound_vars_map[bound_var]
+            elif isinstance(domain, DomainVar):
+                for var, vartype in self.scope.items():
+                    if vartype == domain.elem:
+                        self.bound_vars_map[bound_var] = self.var_map[var]
+                        result_list.append(self.map_FOL(spec.body))     
+                        del self.bound_vars_map[bound_var]
+            else:
+                raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
+            return finite_connector(result_list)
+            
+
+                
     def get_list_dimension(self, name: str) -> int:
         if name not in self.var_map or self.var_map[name] is None:
             raise VerifierRuntimeError(f"Variable {name} not found in scope")
@@ -237,11 +326,6 @@ class Z3Mapper():
             dim += 1
         return dim if dim > 0 else 1
 
-    def generate_temp(self) -> str:
-        temp = "_temp_" + str(self.temp_count)
-        self.temp_count += 1
-        return temp
-
     @staticmethod
     def get_length(var_name: str) -> str:
         return Z3Mapper.get_dimension_length(var_name, 1)
@@ -249,11 +333,10 @@ class Z3Mapper():
     @staticmethod
     def get_dimension_length(var_name: str, dim: int) -> str:
         return f"_{var_name}_len_{dim}"
-        
-    
 
-
-        
+    @staticmethod
+    def get_bound_var(var_name: str) -> str:
+        return "&" + var_name
             
         
         

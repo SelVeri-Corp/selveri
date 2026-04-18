@@ -111,7 +111,7 @@ class SpecAstBuilder(Transformer):
     def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "Until", l, r)
     def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "&&", l, r)
     def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "||", l, r)
-    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", self.deduce_spec_type(l,r), l, r)
+    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "=>", l, r)
     # state_spec subgrammar (non-temporal quantified bodies; same AST as temporal-level operators)
     def state_snot(self, rhs: Spec): return self.snot(rhs)
     def state_sand(self, l: Spec, r: Spec): return self.sand(l, r)
@@ -144,23 +144,23 @@ class SpecAstBuilder(Transformer):
         )
     def sforall(self, var, domain, body): 
         if body.type != SpecType.FOL:
-            return VerifierRuntimeError("LTL formulae cannot be quantified!")
+            raise VerifierRuntimeError("LTL formulae cannot be quantified!")
         return SpecQuant(self._next_uid(), SpecType.FOL, "Forall", str(var), domain, body)
 
     def sexists(self, var, domain, body): 
         if body.type != SpecType.FOL:
-            return VerifierRuntimeError("LTL formulae cannot be quantified!")
+            raise VerifierRuntimeError("LTL formulae cannot be quantified!")
         return SpecQuant(self._next_uid(), SpecType.FOL, "Exists", str(var), domain, body)
 
 
-    def deduce_spec_type(spec1 : Spec, spec2: Spec) -> SpecType:
+    def deduce_spec_type(self, spec1 : Spec, spec2: Spec) -> SpecType:
         if spec1.type == spec2.type:
             return spec1.type
         if spec1.type == SpecType.FOL:
             return spec2.type
         if spec2.type == SpecType.FOL:
             return spec2.type
-        return VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+        raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
 
 
 SPEC_PARSER = Lark.open(

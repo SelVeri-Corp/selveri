@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from z3 import *
 from ltlf2dfa.parser.ltlf import LTLfParser
 
-from .defs import RuntimeConfiguration, TemporalObligation
+from ..defs import RuntimeConfiguration, TemporalObligation
 from ..compiler import IRInstr
 from ..errors import ParserError, VerificationError
 from ..spec_parser import parse_spec
@@ -93,9 +93,7 @@ class VerificationEngine():
     
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
     def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
-        self.solver.reset()
-        self.mapper = Z3Mapper(snapshot, self.solver)
-        self.verify(spec)
+        self.verify(spec, snapshot)
 
     def verify(self, spec: Spec, snapshot : RuntimeConfiguration) -> bool: 
         if spec.type == SpecType.FOL:

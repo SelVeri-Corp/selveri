@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from ..runtime import DeclType
+from .runtime import DeclType
 
 
+class AExp: pass
+class BExp: pass
+class Stmt: pass
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:

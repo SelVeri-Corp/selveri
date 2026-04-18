@@ -3,6 +3,8 @@ from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional
+from .parser import AExp, BExp
+from .runtime import DeclType
 
 
 class SpecType(Enum):
@@ -41,7 +43,7 @@ class DomainIdent(Domain):
 @dataclass(frozen=True)
 class DomainValues(Domain):
     """Domain of values drawn from a list of literals."""   
-    items: List[object]
+    items: List[AExp]
 
     def __str__(self) -> str:
         return "[" + ", ".join(str(item) for item in self.items) + "]"
@@ -49,8 +51,8 @@ class DomainValues(Domain):
 @dataclass(frozen=True)
 class DomainRange(Domain):
     """Domain of values drawn from a range of integers."""
-    lo: object
-    hi: object
+    lo: AExp
+    hi: AExp
 
     def __str__(self) -> str:
         return f"{self.lo}...{self.hi}"
@@ -58,8 +60,8 @@ class DomainRange(Domain):
 @dataclass(frozen=True)
 class DomainInterval(Domain):
     """Real interval with independent open/closed endpoints (float bounds)."""
-    lo: object
-    hi: object
+    lo: AExp
+    hi: AExp
     left_closed: bool
     right_closed: bool
 
@@ -71,7 +73,7 @@ class DomainInterval(Domain):
 @dataclass(frozen=True)
 class DomainType(Domain):
     """Domain given by a scalar type (e.g. Int, Float)."""
-    ty: object
+    ty: DeclType
 
     def __str__(self) -> str:
         return str(self.ty)
@@ -79,7 +81,7 @@ class DomainType(Domain):
 @dataclass(frozen=True)
 class DomainVar(Domain):
     """Domain of values drawn from variables typed as `Var[elem]`."""
-    elem: object
+    elem: DeclType
 
     def __str__(self) -> str:
         return f"Var[{self.elem}]"
@@ -94,7 +96,7 @@ class Spec:
 
 @dataclass(frozen=True, eq=False)
 class SpecFromBExp(Spec):
-    bexp: object
+    bexp: BExp
 
     def __str__(self) -> str:
         return str(self.bexp)
