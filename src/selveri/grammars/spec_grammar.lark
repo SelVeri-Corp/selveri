@@ -12,45 +12,63 @@ COMP_OP: "=" | "<=" | "<" | ">=" | ">"
 
 start: spec
 
-?spec: spec_imp
+?spec: temporal_imp
 
-?spec_imp: spec_or "=>" spec_imp            -> simp
-         | spec_or
+?temporal_imp: temporal_or "=>" temporal_imp            -> simp
+             | temporal_or
 
-?spec_or: spec_or "||" spec_and             -> sor
-        | spec_and
+?temporal_or: temporal_or "||" temporal_and             -> sor
+             | temporal_and
 
-?spec_and: spec_and "&&" spec_temp          -> sand
-         | spec_temp
+?temporal_and: temporal_and "&&" temporal_temp          -> sand
+              | temporal_temp
 
-?spec_temp: spec_temp "Since" spec_unary    -> ssince
-          | spec_temp "Until" spec_unary    -> suntil
-          | spec_unary
+?temporal_temp: temporal_temp "Since" temporal_unary    -> ssince
+               | temporal_temp "Until" temporal_unary    -> suntil
+               | temporal_unary
 
-?spec_unary: "!" spec_unary                 -> snot
-           | "Previously" spec_unary        -> spreviously
-           | "Once" spec_unary              -> sonce
-           | "Historically" spec_unary      -> shistorically
-           | "Next" spec_unary              -> snext
-           | "Eventually" spec_unary        -> seventually
-           | "Always" spec_unary            -> salways
-           | "Forall" IDENT domain_opt "." spec -> sforall
-           | "Exists" IDENT domain_opt "." spec -> sexists
-           | bexp                           -> sbexp
-           | "(" spec ")"
+?temporal_unary: "!" temporal_unary                 -> snot
+                | "Previously" temporal_unary        -> spreviously
+                | "Once" temporal_unary              -> sonce
+                | "Historically" temporal_unary      -> shistorically
+                | "Next" temporal_unary              -> snext
+                | "Eventually" temporal_unary        -> seventually
+                | "Always" temporal_unary            -> salways
+                | "Forall" IDENT "in" domain "." state_spec -> sforall
+                | "Exists" IDENT "in" domain "." state_spec -> sexists
+                | bexp                           -> sbexp
+                | "(" spec ")"
 
-_domain_in: "in" domain
-domain_opt: _domain_in?                     -> domain_opt
+?state_spec: state_imp
 
-?domain: interval
+?state_imp: state_or "=>" state_imp         -> state_simp
+           | state_or
+
+?state_or: state_or "||" state_and          -> state_sor
+          | state_and
+
+?state_and: state_and "&&" state_unary      -> state_sand
+          | state_unary
+
+?state_unary: "!" state_unary               -> state_snot
+             | "Forall" IDENT "in" domain "." state_spec -> state_forall
+             | "Exists" IDENT "in" domain "." state_spec -> state_exists
+             | bexp                           -> state_sbexp
+             | "(" state_spec ")"
+
+?domain: list_lit                           -> domain_values
+       | range_domain
+       | interval_domain
        | IDENT                              -> domain_ident
-       | set_lit
-       | type                               -> domain_type
+       | basic_type                         -> domain_type
+       | "Var" "[" basic_type "]"           -> domain_var
 
-interval: "[" aexp "," aexp ")"            -> interval_halfopen
-        | "[" aexp "," aexp "]"            -> interval_closed
+?range_domain: "[" INT_LIT "..." INT_LIT "]" -> domain_range
 
-set_lit: "{" aexp_list "}"                 -> set_lit
+?interval_domain: "[" FLOAT_LIT ";" FLOAT_LIT "]" -> interval_closed
+               | "(" FLOAT_LIT ";" FLOAT_LIT ")" -> interval_open
+               | "[" FLOAT_LIT ";" FLOAT_LIT ")" -> interval_halfopen
+               | "(" FLOAT_LIT ";" FLOAT_LIT "]" -> interval_halfclosed
 
 ?basic_type: "Int"                         -> type_int
            | "Float"                       -> type_float
@@ -63,7 +81,7 @@ aexp_list: aexp ("," aexp)*                -> aexp_list
     | FLOAT_LIT                            -> float_lit
     | list_lit
 
-list_lit: "[" [imm ("," imm)*] "]"        -> list_lit
+list_lit: "[" [imm ("," imm)*] "]"
 
 aexp: aexp_sum                             -> aexp
 
@@ -80,6 +98,7 @@ aexp: aexp_sum                             -> aexp
 
 ?aexp_atom: imm
          | IDENT                           -> a_var
+         | "&" IDENT                       -> a_bound_var
          | "len" "(" IDENT ")"             -> a_len
          | indexed_value
          | "(" aexp ")"

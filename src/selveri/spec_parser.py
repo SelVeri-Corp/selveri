@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
 
@@ -30,8 +31,10 @@ from .parser import (
 from .specs import (
     DomainIdent,
     DomainInterval,
-    DomainSet,
+    DomainRange,
     DomainType,
+    DomainValues,
+    DomainVar,
     Spec,
     SpecBinOp,
     SpecFromBExp,
@@ -39,6 +42,13 @@ from .specs import (
     SpecUnOp,
     SpecType
 )
+
+@dataclass(frozen=True)
+class ABoundVar(AExp):
+    name: str
+
+    def __str__(self) -> str:
+        return f"&{self.name}"
 
 # Keep formula-node identities distinct even across separate parse_spec calls.
 _SPEC_NODE_UIDS = count()
@@ -64,12 +74,13 @@ class SpecAstBuilder(Transformer):
     def float_lit(self, tok): return FloatLit(float(tok))
     def list_lit(self, *args): return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
+    def a_bound_var(self, name): return ABoundVar(str(name))
 
     def a_len(self, name): return ALen(str(name))
     def a_index(self, base, idx): 
         if not isinstance(base, AExp): 
             base = AVar(str(base)) 
-            return AIndex(base, idx)  
+        return AIndex(base, idx)  
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)
@@ -101,14 +112,36 @@ class SpecAstBuilder(Transformer):
     def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "&&", l, r)
     def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "||", l, r)
     def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), "=>", self.deduce_spec_type(l,r), l, r)
+    # state_spec subgrammar (non-temporal quantified bodies; same AST as temporal-level operators)
+    def state_snot(self, rhs: Spec): return self.snot(rhs)
+    def state_sand(self, l: Spec, r: Spec): return self.sand(l, r)
+    def state_sor(self, l: Spec, r: Spec): return self.sor(l, r)
+    def state_simp(self, l: Spec, r: Spec): return self.simp(l, r)
+    def state_sbexp(self, bexp: BExp): return self.sbexp(bexp)
+    def state_forall(self, var, domain, body): return self.sforall(var, domain, body)
+    def state_exists(self, var, domain, body): return self.sexists(var, domain, body)
     # domains
-    def domain_opt(self, *children): return children[0] if children else None
     def domain_ident(self, name): return DomainIdent(str(name))
-    def domain_type(self, type_node): return DomainType(type_node)
-    def set_lit(self, items): return DomainSet(items)
-    def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, True)
-    def interval_closed(self, lo, hi): return DomainInterval(lo, hi, False)
-
+    def domain_range(self, lo, hi): return DomainRange(IntLit(int(lo)), IntLit(int(hi)))
+    def domain_values(self, lit: ListLit): return DomainValues(list(lit.items))
+    def domain_type(self, type_node: BasicType): return DomainType(type_node)
+    def domain_var(self, elem_ty: BasicType): return DomainVar(elem_ty)
+    def interval_closed(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=True, right_closed=True
+        )
+    def interval_open(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=False, right_closed=False
+        )
+    def interval_halfopen(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=True, right_closed=False
+        )
+    def interval_halfclosed(self, lo, hi):
+        return DomainInterval(
+            FloatLit(float(lo)), FloatLit(float(hi)), left_closed=False, right_closed=True
+        )
     def sforall(self, var, domain, body): 
         if body.type != SpecType.FOL:
             return VerifierRuntimeError("LTL formulae cannot be quantified!")

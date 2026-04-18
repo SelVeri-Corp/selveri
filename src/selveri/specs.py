@@ -32,24 +32,57 @@ class Domain:
 
 @dataclass(frozen=True)
 class DomainIdent(Domain):
+    """Domain of values drawn from an identifier."""
     name: str
 
-@dataclass(frozen=True)
-class DomainType(Domain):
-    type_node: object
+    def __str__(self) -> str:
+        return self.name
 
 @dataclass(frozen=True)
-class DomainSet(Domain):
+class DomainValues(Domain):
+    """Domain of values drawn from a list of literals."""   
     items: List[object]
+
+    def __str__(self) -> str:
+        return "[" + ", ".join(str(item) for item in self.items) + "]"
+
+@dataclass(frozen=True)
+class DomainRange(Domain):
+    """Domain of values drawn from a range of integers."""
+    lo: object
+    hi: object
+
+    def __str__(self) -> str:
+        return f"{self.lo}...{self.hi}"
 
 @dataclass(frozen=True)
 class DomainInterval(Domain):
+    """Real interval with independent open/closed endpoints (float bounds)."""
     lo: object
     hi: object
-    right_open: bool
+    left_closed: bool
+    right_closed: bool
 
     def __str__(self) -> str:
-        return f"[{self.lo}, {self.hi})" if self.right_open else f"[{self.lo}, {self.hi}]"
+        left = "[" if self.left_closed else "("
+        right = "]" if self.right_closed else ")"
+        return f"{left}{self.lo}...{self.hi}{right}"
+
+@dataclass(frozen=True)
+class DomainType(Domain):
+    """Domain given by a scalar type (e.g. Int, Float)."""
+    ty: object
+
+    def __str__(self) -> str:
+        return str(self.ty)
+
+@dataclass(frozen=True)
+class DomainVar(Domain):
+    """Domain of values drawn from variables typed as `Var[elem]`."""
+    elem: object
+
+    def __str__(self) -> str:
+        return f"Var[{self.elem}]"
 
 @dataclass(frozen=True)
 class Spec:
@@ -84,7 +117,7 @@ class SpecBinOp(Spec):
 class SpecQuant(Spec):
     kind: str
     var: str
-    domain: Optional[Domain]
+    domain: Domain
     body: Spec
 
     def __str__(self) -> str:
