@@ -216,7 +216,7 @@ class VerificationEngine:
         Evaluate the future atoms based on the snapshot.
         '''
         return {
-            atom_name: self.verify_FOL(atom_spec, snapshot)
+            atom_name: self.verify_FOL(atom_spec, snapshot) # for each atom, verify the FOL specification
             for atom_name, atom_spec in atom_table.items()
         }
 

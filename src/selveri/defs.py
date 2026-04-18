@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from sympy.core.basic import Basic
 from .runtime import DeclType
-from .specs import Spec
+if TYPE_CHECKING: # this runs only during type checking and does not import the specs module
+    # defs -> specs -> parser -> defs
+    from .specs import Spec
 
 class AExp: pass
 class BExp: pass
