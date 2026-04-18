@@ -920,7 +920,7 @@ class SelVerIRInterpreter:
     def _finish_verifier(self) -> None:
         if self.verifier is None:
             return
-        self.verifier.on_program_end()
+        self.verifier.on_program_end(self._snapshot_runtime_configuration())
 
     def _dispatch_verifier_spec(self, spec_id: int, raw_spec: Any) -> None:
         assert self.verifier is not None

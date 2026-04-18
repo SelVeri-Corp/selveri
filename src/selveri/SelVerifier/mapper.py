@@ -18,11 +18,12 @@ class QuantifierType(Enum):
 class Z3Mapper():
 
     var_map : Dict[str, z3types.Sort]
-    bound_vars_map : Dict[str, z3types.ExprRef] = dict()
+    bound_vars_map : Dict[str, z3types.ExprRef]
 
     
     def __init__(self, config : RuntimeConfiguration, solver : Solver):
         self.var_map = dict()
+        self.bound_vars_map = dict()
         self.scope = config.scope
         self.state = config.state
 
