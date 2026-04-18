@@ -246,8 +246,6 @@ class Z3Mapper():
             finite_connector = Or
             membership_connector = And
 
-        
-
         # uses Z3 quantifier
         if isinstance(domain, DomainType):
             if domain.ty.kind == "LIST":
@@ -297,20 +295,18 @@ class Z3Mapper():
                 for i in range(self.state[Z3Mapper.get_dimension_length(domain.name, 1)]):
                     self.bound_vars_map[bound_var] = self.map_FOL_aexp(AIndex(AVar(domain.name), IntLit(i)))
                     result_list.append(self.map_FOL(spec.body))     
-                del self.bound_vars_map[bound_var]
             elif isinstance(domain, DomainValues):
                 for val in domain.items:
                     self.bound_vars_map[bound_var] = self.map_FOL_aexp(val)
                     result_list.append(self.map_FOL(spec.body))     
-                del self.bound_vars_map[bound_var]
             elif isinstance(domain, DomainVar):
                 for var, vartype in self.scope.items():
                     if vartype == domain.elem:
                         self.bound_vars_map[bound_var] = self.var_map[var]
-                        result_list.append(self.map_FOL(spec.body))     
-                        del self.bound_vars_map[bound_var]
+                        result_list.append(self.map_FOL(spec.body))                  
             else:
                 raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
+            del self.bound_vars_map[bound_var]
             return finite_connector(result_list)
             
 
