@@ -82,17 +82,19 @@ class Z3Mapper():
             return self.map_FOL_listlit(aexp)
         elif isinstance(aexp, AVar):
             if aexp.name not in self.var_map:
-                raise VerifierRuntimeError(f"Variable {aexp.name} not found in scope")
+                raise VerifierRuntimeError(f"Free variable {aexp.name} not found in scope")
             return self.var_map[aexp.name]
         elif isinstance(aexp, ABoundVar):
+            if aexp.name not in self.bound_vars_map:
+                raise VerifierRuntimeError(f"Bound variable &{aexp.name} not found in scope")
             return self.bound_vars_map[aexp.name]
         elif isinstance(aexp, ALen):
             if aexp.name not in self.var_map:
-                raise VerifierRuntimeError(f"Variable {aexp.name} not found in scope")
+                raise VerifierRuntimeError(f"List variable {aexp.name} not found in scope")
             if is_array(self.var_map[aexp.name]): # LIST
                 len_name = Z3Mapper.get_length(aexp.name)
                 if len_name not in self.var_map:
-                    raise VerifierRuntimeError(f"Variable {len_name} not found in scope")
+                    raise VerifierRuntimeError(f"Length shadow variable {len_name} of the list {aexp.name} not found in scope")
                 return self.var_map[len_name]
             else: # INT or FLOAT
                 return IntVal(0)
@@ -223,7 +225,8 @@ class Z3Mapper():
             raise VerifierRuntimeError(f"Unsupported FOL binary operator: {spec.op}")
 
     def map_FOL_quant(self, spec: SpecQuant) -> z3types.ExprRef:
-        # TODO: spec.var is the name of the bound variable and must be used in the body as &{name}
+        # Note: spec.var is the name of the bound variable
+        #       and must be used in the body as &{name}
         if spec.kind == "Forall":
             return self.map_quantification(spec, ForAll)
         elif spec.kind == "Exists":
@@ -237,7 +240,7 @@ class Z3Mapper():
             raise VerifierRuntimeError(f"Variable {spec.var} is already bound by a quantifier")
         
         domain : Domain = spec.domain
-        bound_var = Z3Mapper.get_bound_var(spec.var)
+        bound_var = spec.var
 
         if quantifier is ForAll:
             finite_connector = And
@@ -329,10 +332,6 @@ class Z3Mapper():
     @staticmethod
     def get_dimension_length(var_name: str, dim: int) -> str:
         return f"_{var_name}_len_{dim}"
-
-    @staticmethod
-    def get_bound_var(var_name: str) -> str:
-        return "&" + var_name
             
         
         
