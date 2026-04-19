@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Set
+from enum import Enum
+from typing import Any, Dict
 from z3 import *
 
 from ..defs import RuntimeConfiguration
@@ -8,6 +9,11 @@ from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, 
 from ..spec_parser import ABoundVar
 from ..errors import VerifierRuntimeError
 from ..parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
+
+class QuantifierType(Enum):
+    Forall = 0
+    Exists = 1
+
 
 class Z3Mapper():
 
@@ -235,19 +241,13 @@ class Z3Mapper():
             raise VerifierRuntimeError(f"Unsupported FOL quantifier: {spec.kind}")
 
     
-    def map_quantification(self, spec : SpecQuant, quantifier : function) -> z3types.ExprRef:
+    def map_quantification(self, spec : SpecQuant, quantifier : QuantifierType) -> z3types.ExprRef:
         if spec.var in self.bound_vars_map:
             raise VerifierRuntimeError(f"Variable {spec.var} is already bound by a quantifier")
         
         domain : Domain = spec.domain
         bound_var = spec.var
 
-        if quantifier is ForAll:
-            finite_connector = And
-            membership_connector = Implies
-        else: # Exists
-            finite_connector = Or
-            membership_connector = And
 
         # uses Z3 quantifier
         if isinstance(domain, DomainType):
@@ -260,7 +260,10 @@ class Z3Mapper():
             else:
                 raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
             self.bound_vars_map[bound_var] = bound_var_z3
-            result = quantifier(bound_var_z3, self.map_FOL(spec.body))
+            if quantifier == QuantifierType.Forall:
+                result = ForAll(bound_var_z3, self.map_FOL(spec.body))
+            else: # QuantifierType.Exists
+                result = Exists(bound_var_z3, self.map_FOL(spec.body))
             del self.bound_vars_map[bound_var]
             return result
         elif isinstance(domain, DomainRange):
@@ -269,7 +272,10 @@ class Z3Mapper():
             lo = self.map_FOL_aexp(domain.lo)
             hi = self.map_FOL_aexp(domain.hi)
             domain_z3 = And(lo <= bound_var_z3, bound_var_z3 <= hi)
-            result = quantifier(bound_var_z3, membership_connector(domain_z3, self.map_FOL(spec.body)))
+            if quantifier == QuantifierType.Forall:
+                result = ForAll(bound_var_z3, Implies(domain_z3, self.map_FOL(spec.body)))
+            else: # QuantifierType.Exists
+                result = Exists(bound_var_z3, And(domain_z3, self.map_FOL(spec.body)))
             del self.bound_vars_map[bound_var]
             return result
         elif isinstance(domain, DomainInterval):
@@ -286,7 +292,10 @@ class Z3Mapper():
             else:
                 upper_endpoint = (bound_var_z3 < hi)
             domain_z3 = And(lower_endpoint, upper_endpoint)
-            result = quantifier(bound_var_z3, membership_connector(domain_z3, self.map_FOL(spec.body)))
+            if quantifier == QuantifierType.Forall:
+                result = ForAll(bound_var_z3, Implies(domain_z3, self.map_FOL(spec.body)))
+            else: # QuantifierType.Exists
+                result = Exists(bound_var_z3, And(domain_z3, self.map_FOL(spec.body)))
             del self.bound_vars_map[bound_var]
             return result
         else: # uses finite_connector over finite domain
@@ -309,8 +318,12 @@ class Z3Mapper():
                         result_list.append(self.map_FOL(spec.body))                  
             else:
                 raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
+                
             del self.bound_vars_map[bound_var]
-            return finite_connector(result_list)
+            if quantifier == QuantifierType.Forall:
+                return And(result_list)
+            else: # QuantifierType.Exists
+                return Or(result_list)
             
 
                 
