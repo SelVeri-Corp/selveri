@@ -93,7 +93,8 @@ class VerificationEngine():
     
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
     def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
-        self.verify(spec, snapshot)
+        if not self.verify(spec, snapshot):
+            raise VerificationError(f"Specification '{spec}' failed")
 
     def verify(self, spec: Spec, snapshot : RuntimeConfiguration) -> bool: 
         if spec.type == SpecType.FOL:

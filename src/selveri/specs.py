@@ -106,6 +106,9 @@ class SpecUnOp(Spec):
     op: str
     rhs: Spec
 
+    def __str__(self) -> str:
+        return f"{self.op} {self.rhs}"
+
 @dataclass(frozen=True, eq=False)
 class SpecBinOp(Spec):
     op: str

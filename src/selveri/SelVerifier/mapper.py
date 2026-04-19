@@ -254,9 +254,9 @@ class Z3Mapper():
             if domain.ty.kind == "LIST":
                 raise VerifierRuntimeError("List domain is not supported for Z3 quantifier")
             elif domain.ty.kind == "INT":
-                bound_var_z3 = Int(bound_var)
+                bound_var_z3 = Int("&" + bound_var)
             elif domain.ty.kind == "FLOAT":
-                bound_var_z3 = Real(bound_var)
+                bound_var_z3 = Real("&" + bound_var)
             else:
                 raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
             self.bound_vars_map[bound_var] = bound_var_z3
@@ -267,7 +267,7 @@ class Z3Mapper():
             del self.bound_vars_map[bound_var]
             return result
         elif isinstance(domain, DomainRange):
-            bound_var_z3 = Int(bound_var)
+            bound_var_z3 = Int("&" + bound_var)
             self.bound_vars_map[bound_var] = bound_var_z3
             lo = self.map_FOL_aexp(domain.lo)
             hi = self.map_FOL_aexp(domain.hi)
@@ -279,7 +279,7 @@ class Z3Mapper():
             del self.bound_vars_map[bound_var]
             return result
         elif isinstance(domain, DomainInterval):
-            bound_var_z3 = Real(bound_var)
+            bound_var_z3 = Real("&" + bound_var)
             self.bound_vars_map[bound_var] = bound_var_z3
             lo = self.map_FOL_aexp(domain.lo)
             hi = self.map_FOL_aexp(domain.hi)
