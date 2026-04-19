@@ -81,7 +81,7 @@ class VerificationEngine:
 
     def handle_veri(self, spec_id: int, snapshot: RuntimeConfiguration) -> ParsedSpec:
         parsed_spec = self.resolve_spec(spec_id) # resolve the spec by its id
-        result = self.on_veri(parsed_spec, snapshot) # call the on_veri callback
+        result = self.on_veri(parsed_spec.ast, snapshot) # call the on_veri callback
         if parsed_spec.ast.type != SpecType.fLTL and not result:
             self.raise_spec_failure(
                 parsed_spec.raw_spec,
@@ -103,9 +103,8 @@ class VerificationEngine:
         self.advance_future_obligations(snapshot)
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
-    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
-        if not self.verify(spec, snapshot):
-            raise VerificationError(f"Specification '{spec}' failed")
+    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool:
+        return self.verify(spec, snapshot)
 
     def verify(
         self,
