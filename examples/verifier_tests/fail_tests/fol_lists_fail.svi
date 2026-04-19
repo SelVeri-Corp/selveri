@@ -1,0 +1,16 @@
+// =====================================================
+// FOL Lists: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+lst : List[Int, 1, 5];
+lst := [10, 20, 30, 40, 50];
+
+// { lst[0] = 99 };          // False
+
+// { len(lst) = 3 };      // False
+// { lst[4] < lst[0] };   // False
+
+// --- After mutation ---
+lst[2] := 99;
+{ lst[2] = 30 };       // False (was mutated to 99)

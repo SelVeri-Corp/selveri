@@ -8,6 +8,7 @@ from typing import Dict, Iterator, List, Optional
 from lark import Lark, LarkError, Token, Transformer, v_args
 
 from .errors import ParserError
+from .defs import AExp, BExp, Stmt
 from .specs import RawSpec
 from .preprocessor import extract_raw_specs
 
@@ -19,9 +20,8 @@ class Program:
     func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
 
-class Stmt: pass
-class AExp: pass
-class BExp: pass
+
+
 class TypeNode: 
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
@@ -93,6 +93,7 @@ class FloatLit(Imm, AExp):
     def __str__(self) -> str:
         return str(self.value)
 
+# TODO: we might remove this
 @dataclass(frozen=True)
 class ListLit(Imm, AExp):
     items: List[Imm]
@@ -124,11 +125,17 @@ class AUnOp(AExp):
     op: str
     rhs: AExp
 
+    def __str__(self) -> str:
+        return f"{self.op}{self.rhs}"
+
 @dataclass(frozen=True)
 class ABinOp(AExp):
     op: str
     left: AExp
     right: AExp
+
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
 
 # Boolean
 @dataclass(frozen=True)

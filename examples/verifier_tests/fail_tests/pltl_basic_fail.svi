@@ -1,0 +1,21 @@
+// =====================================================
+// pLTL Basic: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+x : Int;
+x := 0;
+
+x := 5;
+// --- Step 1: x = 5 ---
+
+{ Previously (x = 5) };        // False (at step 0, x was 0, not 5)
+
+// { Once (x = 99) };          // False (x was never 99)
+// { Historically (x = 5) };   // False (x was 0 at step 0)
+
+// x := 10;
+// --- Step 2: x = 10 ---
+
+// { Previously (x = 0) };     // False (at step 1, x was 5, not 0)
+// { Historically (x > 0) };   // False (x was 0 at step 0)

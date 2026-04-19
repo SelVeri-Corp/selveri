@@ -1,0 +1,46 @@
+// =====================================================
+// pLTL Since + Combined: all specs should PASS (True)
+// =====================================================
+
+x : Int;
+x := 0;
+
+// --- x = 0 ---
+{ (x = 0) Since (x = 0) };           // True (psi holds now)
+
+x := 1;
+// --- x = 1 ---
+
+{ (x >= 0) Since (x = 0) };          // True
+{ (x > 0) Since (x = 0) };           // True
+
+x := 2;
+// --- x = 2 ---
+
+{ (x >= 0) Since (x = 0) };          // True
+{ (x > 0) Since (x = 0) };           // True
+{ (x > 0) Since (x = 1) };           // True
+{ (x = 2) Since (x = 2) };           // True (psi holds now)
+
+// =====================================================
+// Combined temporal operators
+// =====================================================
+
+{ Once (x = 0) && Once (x = 1) };              // True
+{ Historically ((x >= 0)) };          // True
+{ Historically ((x >= 0) || (x = 99)) };         // True (left is True)
+{ Historically ((x >= 0) => (x = 2)) };          // True (T => T)
+
+// Nested temporal
+{ Once (Previously (x = 0)) };                   // True
+{ Previously (Previously (x = 0)) };             // True
+
+// =====================================================
+// Temporal + FOL mix
+// =====================================================
+
+lst : List[Int, 1, 3];
+lst := [10, 20, 30];
+
+{ Once ((x = 0) && (Forall i in [0...2] . lst[&i] > 0)) };  // True
+{ Historically ((x >= 0) && (Exists i in [0...2] . lst[&i] = 20)) }; // True

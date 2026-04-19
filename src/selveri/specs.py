@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional
+from .parser import AExp, BExp
+from .runtime import DeclType
+
+
+class SpecType(Enum):
+    FOL = 0
+    pLTL = 1
+    fLTL = 2
 
 
 @dataclass(frozen=True)
@@ -25,35 +34,69 @@ class Domain:
 
 @dataclass(frozen=True)
 class DomainIdent(Domain):
+    """Domain of values drawn from an identifier."""
     name: str
 
-@dataclass(frozen=True)
-class DomainType(Domain):
-    type_node: object
+    def __str__(self) -> str:
+        return self.name
 
 @dataclass(frozen=True)
-class DomainSet(Domain):
-    items: List[object]
+class DomainValues(Domain):
+    """Domain of values drawn from a list of literals."""   
+    items: List[AExp]
+
+    def __str__(self) -> str:
+        return "[" + ", ".join(str(item) for item in self.items) + "]"
+
+@dataclass(frozen=True)
+class DomainRange(Domain):
+    """Domain of values drawn from a range of integers."""
+    lo: AExp
+    hi: AExp
+
+    def __str__(self) -> str:
+        return f"{self.lo}...{self.hi}"
 
 @dataclass(frozen=True)
 class DomainInterval(Domain):
-    lo: object
-    hi: object
-    right_open: bool
+    """Real interval with independent open/closed endpoints (float bounds)."""
+    lo: AExp
+    hi: AExp
+    left_closed: bool
+    right_closed: bool
 
     def __str__(self) -> str:
-        return f"[{self.lo}, {self.hi})" if self.right_open else f"[{self.lo}, {self.hi}]"
+        left = "[" if self.left_closed else "("
+        right = "]" if self.right_closed else ")"
+        return f"{left}{self.lo}...{self.hi}{right}"
+
+@dataclass(frozen=True)
+class DomainType(Domain):
+    """Domain given by a scalar type (e.g. Int, Float)."""
+    ty: DeclType
+
+    def __str__(self) -> str:
+        return str(self.ty)
+
+@dataclass(frozen=True)
+class DomainVar(Domain):
+    """Domain of values drawn from variables typed as `Var[elem]`."""
+    elem: DeclType
+
+    def __str__(self) -> str:
+        return f"Var[{self.elem}]"
 
 @dataclass(frozen=True)
 class Spec:
     uid: int
+    type : SpecType
 
     def __hash__(self) -> int:
-        return hash(self.uid)
+        return self.uid
 
 @dataclass(frozen=True, eq=False)
 class SpecFromBExp(Spec):
-    bexp: object
+    bexp: BExp
 
     def __str__(self) -> str:
         return str(self.bexp)
@@ -62,6 +105,9 @@ class SpecFromBExp(Spec):
 class SpecUnOp(Spec):
     op: str
     rhs: Spec
+
+    def __str__(self) -> str:
+        return f"{self.op} {self.rhs}"
 
 @dataclass(frozen=True, eq=False)
 class SpecBinOp(Spec):
@@ -76,7 +122,7 @@ class SpecBinOp(Spec):
 class SpecQuant(Spec):
     kind: str
     var: str
-    domain: Optional[Domain]
+    domain: Domain
     body: Spec
 
     def __str__(self) -> str:

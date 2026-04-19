@@ -1,0 +1,28 @@
+// =====================================================
+// pLTL Basic: all specs should PASS (True)
+// Previously, Once, Historically
+// =====================================================
+
+x : Int;
+x := 0;
+
+// --- Step 0: x = 0 ---
+{ x = 0 };                     // True (FOL baseline)
+
+x := 5;
+// --- Step 1: x = 5 ---
+
+{ Previously (x = 0) };        // True  (at step 0, x was 0)
+{ Once (x = 0) };              // True  (x was 0 at step 0)
+{ Once (x = 5) };              // True  (x is 5 at current step)
+{ Historically (x >= 0) };     // True  (x was 0, now 5 — always >= 0)
+
+x := 10;
+// --- Step 2: x = 10 ---
+
+{ Previously (x = 5) };        // True  (at step 1, x was 5)
+{ Once (x = 0) };              // True  (step 0)
+{ Once (x = 5) };              // True  (step 1)
+{ Once (x = 10) };             // True  (current step)
+{ Historically (x >= 0) };     // True  (0, 5, 10 all >= 0)
+{ Historically (x <= 10) };    // True
