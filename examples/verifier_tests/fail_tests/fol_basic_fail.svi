@@ -13,7 +13,7 @@ z := 10;
 
 // ---- Uncomment one at a time to test each failure ----
 
-{ x = 5 };            // False
+//{ x = 5 };            // False
 // { x < y };         // False
 // { x < z };         // False (not strict)
 // { x <= y };        // False

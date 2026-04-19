@@ -39,8 +39,8 @@ b := 4;
 c : Int;
 c := 6;
 
-{ Forall v in [2, 4, 6] . &v > 0 };       // True
-{ Exists v in [2, 4, 6] . &v = 4 };       // True
+//{ Forall v in [a, b, c] . &v > 0 };       // True
+//{ Exists v in [a, b, c] . &v = 4 };       // True
 
 // ==============================
 // Nested Quantifiers

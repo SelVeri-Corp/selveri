@@ -30,6 +30,7 @@ z := 10;
 
 // --- Boolean constants ---
 { true };             // True
+{ not false };             // True
 
 // --- Arithmetic in specs ---
 { x = y + 7 };        // True  (10 = 3 + 7)

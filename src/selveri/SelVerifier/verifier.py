@@ -8,7 +8,7 @@ from ltlf2dfa.parser.ltlf import LTLfParser
 
 from ..defs import RuntimeConfiguration, TemporalObligation
 from ..compiler import IRInstr
-from ..errors import ParserError, VerificationError
+from ..errors import ParserError, VerificationError, VerifierRuntimeError
 from ..spec_parser import parse_spec
 from ..specs import ParsedSpec, RawSpec, Spec, SpecType, SpecUnOp, SpecBinOp, SpecQuant
 from .mapper import Z3Mapper
@@ -64,7 +64,7 @@ class VerificationEngine():
                 raise VerificationError(
                     f"Failed to parse specification #{raw_spec.spec_id}: {exc}"
                 ) from None
-            raise VerificationError(
+            raise VerifierRuntimeError(
                 "Failed to parse specification "
                 f"#{raw_spec.spec_id} at "
                 f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
