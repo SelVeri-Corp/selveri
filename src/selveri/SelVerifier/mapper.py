@@ -234,9 +234,9 @@ class Z3Mapper():
         # Note: spec.var is the name of the bound variable
         #       and must be used in the body as &{name}
         if spec.kind == "Forall":
-            return self.map_quantification(spec, ForAll)
+            return self.map_quantification(spec, QuantifierType.Forall)
         elif spec.kind == "Exists":
-            return self.map_quantification(spec, Exists)
+            return self.map_quantification(spec, QuantifierType.Exists)
         else:
             raise VerifierRuntimeError(f"Unsupported FOL quantifier: {spec.kind}")
 
