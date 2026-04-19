@@ -1,0 +1,36 @@
+// =====================================================
+// FOL Boolean Operators: all specs should PASS (True)
+// =====================================================
+
+x : Int;
+x := 5;
+y : Int;
+y := 10;
+
+// --- Negation (!) ---
+{ !(x = 10) };              // True  (x is 5)
+
+// --- Conjunction (&&) ---
+{ (x = 5) && (y = 10) };    // True
+
+// --- Disjunction (||) ---
+{ (x = 5) || (y = 0) };     // True
+{ (x = 0) || (y = 10) };    // True
+
+// --- Implication (=>) ---
+{ (x = 5) => (y = 10) };    // True  (T => T)
+{ (x = 0) => (y = 0) };     // True  (F => anything)
+{ (x = 0) => (y = 10) };    // True  (F => anything)
+
+// --- Boolean operators from bexp level ---
+{ x = 5 and y = 10 };       // True
+{ x = 5 or y = 0 };         // True
+{ not x = 10 };             // True
+
+// --- xor ---
+{ x = 5 xor y = 0 };        // True  (T xor F)
+
+// --- Nested combinations ---
+{ !(x = 5) || (y > 5) };                   // True  (F || T)
+{ (x < 10) && (y >= 10) && (x + y = 15) }; // True
+{ ((x = 5) => (y = 10)) && (y >= x) };     // True

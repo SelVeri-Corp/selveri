@@ -1,0 +1,17 @@
+// =====================================================
+// FOL Boolean Operators: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+x : Int;
+x := 5;
+y : Int;
+y := 10;
+
+{ !(x = 5) };               // False
+
+// { (x = 5) && (y = 5) };  // False
+// { (x = 0) && (y = 0) };  // False
+// { (x = 0) || (y = 0) };  // False
+// { (x = 5) => (y = 0) };  // False (T => F)
+// { x = 5 xor y = 10 };    // False (T xor T)

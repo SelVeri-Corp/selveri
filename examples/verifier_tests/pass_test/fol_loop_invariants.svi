@@ -1,0 +1,62 @@
+// =====================================================
+// FOL Loop Invariants: specs inside loops
+// =====================================================
+
+// --- Summation loop with invariant ---
+lst : List[Int, 1, 5];
+lst := [1, 2, 3, 4, 5];
+sum : Int;
+sum := 0;
+i : Int;
+i := 0;
+
+while i < len(lst) do
+    sum := sum + lst[i];
+    i := i + 1;
+
+    // Loop invariant: sum = sum of lst[0..i-1]
+    // We check partial sums at each iteration
+    { (i = 1) => (sum = 1) };   // True (after 1st iter)
+    { (i = 2) => (sum = 3) };   // True (1+2)
+    { (i = 3) => (sum = 6) };   // True (1+2+3)
+    { (i = 4) => (sum = 10) };  // True (1+2+3+4)
+    { (i = 5) => (sum = 15) };  // True (1+2+3+4+5)
+
+    // General invariant: i > 0 and sum > 0 at every step
+    { i > 0 };                  // True
+    { sum > 0 };                // True
+od
+
+// --- Post-loop conditions ---
+{ sum = 15 };                   // True
+{ i = 5 };                     // True
+
+// --- Counting loop ---
+count : Int;
+count := 0;
+j : Int;
+j := 0;
+
+while j < 5 do
+    count := count + 1;
+    j := j + 1;
+    { count = j };              // True (count tracks j)
+od
+
+{ count = 5 };                  // True
+
+// --- Loop building a list ---
+result : List[Int, 1, 4];
+k : Int;
+k := 0;
+while k < 4 do
+    result[k] := k * k;
+    k := k + 1;
+od
+
+// result = [0, 1, 4, 9]
+{ result[0] = 0 };             // True
+{ result[1] = 1 };             // True
+{ result[2] = 4 };             // True
+{ result[3] = 9 };             // True
+{ Forall idx in [0...3] . result[&idx] >= 0 };  // True (squares are non-negative)

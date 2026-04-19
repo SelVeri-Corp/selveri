@@ -125,7 +125,6 @@ class Z3Mapper():
         else:
             raise VerifierRuntimeError(f"Unsupported FOL arithmetic expression: {aexp}")
 
-    # TODO: this is unused for now, consider its usecases
     def map_FOL_listlit(self, aexp: ListLit) -> z3types.ExprRef:
         stack: list = [aexp]
         flat_imms: list = []
@@ -222,11 +221,11 @@ class Z3Mapper():
 
     def map_FOL_binop(self, spec: SpecBinOp) -> z3types.ExprRef:
         if spec.op == "&&":
-            return And(self.map_FOL(spec.lhs), self.map_FOL(spec.rhs))
+            return And(self.map_FOL(spec.left), self.map_FOL(spec.right))
         elif spec.op == "||":
-            return Or(self.map_FOL(spec.lhs), self.map_FOL(spec.rhs))
+            return Or(self.map_FOL(spec.left), self.map_FOL(spec.right))
         elif spec.op == "=>":
-            return Implies(self.map_FOL(spec.lhs), self.map_FOL(spec.rhs))
+            return Implies(self.map_FOL(spec.left), self.map_FOL(spec.right))
         else:
             raise VerifierRuntimeError(f"Unsupported FOL binary operator: {spec.op}")
 

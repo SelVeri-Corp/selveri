@@ -1,0 +1,42 @@
+// =====================================================
+// FOL Basic: comparisons, boolean constants, arithmetic
+// All specs should PASS (True)
+// =====================================================
+
+x : Int;
+x := 10;
+y : Int;
+y := 3;
+z : Int;
+z := 10;
+
+// --- Equality ---
+{ x = 10 };           // True
+{ x = z };            // True
+
+// --- Less than ---
+{ y < x };            // True
+
+// --- Less or equal ---
+{ y <= x };           // True
+{ x <= z };           // True
+
+// --- Greater than ---
+{ x > y };            // True
+
+// --- Greater or equal ---
+{ x >= y };           // True
+{ x >= z };           // True
+
+// --- Boolean constants ---
+{ true };             // True
+
+// --- Arithmetic in specs ---
+{ x = y + 7 };        // True  (10 = 3 + 7)
+{ x - y = 7 };        // True
+{ y * 3 = 9 };        // True
+{ x = y * 3 + 1 };    // True  (10 = 9 + 1)
+
+// --- Negation (unary minus) ---
+{ -y = -3 };          // True
+{ -y < 0 };           // True

@@ -100,7 +100,6 @@ class VerificationEngine():
         if spec.type == SpecType.FOL:
             return self.verify_FOL(spec, snapshot)
         elif spec.type == SpecType.pLTL:
-            self.on_step(snapshot) # TODO: check the possible negative effects of this artificial step
             return self.verify_past_LTL(spec, self.last_step - 1) # decrement one as it was just incremented
         else: # spec.type == SpecType.fLTL:
             return self.verify_future_LTL(spec, snapshot)
@@ -113,6 +112,8 @@ class VerificationEngine():
         if result == unsat:
             return True
         else: # sat
+            # TODO: consider giving a counter-example, using the model
+            # model : ModelRef = solver.model()
             return False
 
     # TODO: check the base cases
