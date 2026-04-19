@@ -20,8 +20,8 @@ class DeclType:
 
 @dataclass
 class ExecutionResult:
-    state: Dict[str, Any]
-    types: Dict[str, DeclType]
+    state: Dict[str, float | int | List[float | int]]
+    scope: Dict[str, DeclType]
     stack: List[Any]
     pc: int
     steps: int
@@ -259,10 +259,7 @@ def _type_from_funcenv_arg(obj: Any) -> DeclType:
 
         raise IRParseError(f"Unknown FUNCENV return type: {obj}")
 
-    decl_type = _type_from_object(obj)
-    if decl_type.kind == "LIST":
-        return DeclType("LIST", decl_type.elem_kind, None)
-    return decl_type
+    return _type_from_object(obj)
 
 
 def _funcenv_metadata(args: Tuple[Any, ...]) -> Tuple[Optional[str], Optional[DeclType]]:
@@ -324,8 +321,8 @@ class SelVerIRInterpreter:
         self.label_to_index: Dict[int, int] = {}
         self.functions: Dict[str, FunctionEntry] = {}
 
-        self.state: Dict[str, Any] = {}
-        self.types: Dict[str, DeclType] = {}
+        self.state: Dict[str, float | int | List[float | int]] = {}
+        self.scope: Dict[str, DeclType] = {}
         self.stack: List[Union[int, float]] = []
         self.scopes: List[RuntimeScope] = []
         self.call_stack: List[CallFrame] = []
@@ -388,7 +385,7 @@ class SelVerIRInterpreter:
                     visible_types[name] = decl_type
 
         self.state = visible_state
-        self.types = visible_types
+        self.scope = visible_types
 
     def _find_scope_with_type(self, name: str) -> Optional[RuntimeScope]:
         for scope in reversed(self.scopes):
@@ -460,7 +457,14 @@ class SelVerIRInterpreter:
 
         coerced_value = _coerce_value(value, decl_type)
         scope.values["retvar"] = copy.deepcopy(coerced_value)
-        scope.types["retvar"] = decl_type
+        stored_type = decl_type
+        if (
+            decl_type.kind == "LIST"
+            and decl_type.size is None
+            and isinstance(coerced_value, list)
+        ):
+            stored_type = DeclType("LIST", decl_type.elem_kind or "INT", len(coerced_value))
+        scope.types["retvar"] = stored_type
 
     def _push_list_packet(self, values: List[Any]) -> None:
         for item in values:
@@ -502,7 +506,7 @@ class SelVerIRInterpreter:
 
         return ExecutionResult(
             state=copy.deepcopy(self.state),
-            types=copy.deepcopy(self.types),
+            scope=copy.deepcopy(self.scope),
             stack=copy.deepcopy(self.stack),
             pc=self.pc,
             steps=self.steps,
