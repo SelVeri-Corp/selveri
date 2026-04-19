@@ -63,12 +63,12 @@ start: spec
        | basic_type                         -> domain_type
        | "Var" "[" basic_type "]"           -> domain_var
 
-?range_domain: "[" INT_LIT "..." INT_LIT "]" -> domain_range
+?range_domain: "[" aexp "..." aexp "]" -> domain_range
 
-?interval_domain: "[" FLOAT_LIT ";" FLOAT_LIT "]" -> interval_closed
-               | "(" FLOAT_LIT ";" FLOAT_LIT ")" -> interval_open
-               | "[" FLOAT_LIT ";" FLOAT_LIT ")" -> interval_halfopen
-               | "(" FLOAT_LIT ";" FLOAT_LIT "]" -> interval_halfclosed
+?interval_domain: "[" aexp ";" aexp "]" -> interval_closed
+               | "(" aexp ";" aexp ")" -> interval_open
+               | "[" aexp ";" aexp ")" -> interval_halfopen
+               | "(" aexp ";" aexp "]" -> interval_halfclosed
 
 ?basic_type: "Int"                         -> type_int
            | "Float"                       -> type_float
