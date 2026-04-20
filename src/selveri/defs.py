@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
-from .runtime import DeclType
+from .runtime import Scope, State
 
 
 class AExp: pass
@@ -12,8 +12,8 @@ class Stmt: pass
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:
-    state: Dict[str, Any]
-    scope: Dict[str, Optional[DeclType]]
+    state: State
+    scope: Scope
     
 @dataclass(frozen=True)
 class Formula:
