@@ -9,10 +9,10 @@ x := 1;
 x := 2;
 
 // --- Since failures ---
-{ (x = 1) Since (x = 99) };          // False (x was never 99)
+//{ (x = 1) Since (x = 99) };          // False (x was never 99)
 
 // { Once (x = 0) && Once (x = 99) };   // False (x was never 99)
 
-// { Historically (x >= 0) => (x = 99) }; // False (T => F)
+{ Historically ((x >= 0) => (x = 99)) }; // False (T => F)
 
-// { Previously Previously (x = 1) };    // False (at step 0, x was 0)
+//{ Previously Previously (x = 1) };    // False (at step 0, x was 0)
