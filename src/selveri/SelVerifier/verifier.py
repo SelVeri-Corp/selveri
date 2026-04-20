@@ -98,18 +98,21 @@ class VerificationEngine():
             raise VerificationError(f"Specification '{spec}' failed")
 
     def verify(self, spec: Spec, snapshot : RuntimeConfiguration, start_step : Optional[int] = None) -> bool: 
+        # lexical_depth captures the depth at which the spec is defined. This is passed to 
+        # historical evaluations to ensure we don't resolve inner-scope variables that the spec shouldn't see.
+        lexical_depth = snapshot.scope.depth
         if spec.type == SpecType.FOL:
-            return self.verify_FOL(spec, snapshot)
+            return self.verify_FOL(spec, snapshot, lexical_depth)
         elif spec.type == SpecType.pLTL:
             if start_step is None:
-                start_step = self.pltl_deduce_inital_step(spec)
-            return self.verify_past_LTL(spec, self.last_step - 1, start_step)
+                start_step = self.pltl_deduce_inital_step(spec, snapshot.scope)
+            return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
         else: # spec.type == SpecType.fLTL:
-            return self.verify_future_LTL(spec, snapshot)
+            return self.verify_future_LTL(spec, snapshot, snapshot.scope.depth)
         
-    def verify_FOL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool:
+    def verify_FOL(self, spec: Spec, snapshot: RuntimeConfiguration, lexical_depth: int) -> bool:
         solver = Solver()
-        mapper = Z3Mapper(snapshot, solver)
+        mapper = Z3Mapper(snapshot, solver, lexical_depth)
         negated_assumption = simplify(Not(mapper.map_FOL(spec)))
         result = solver.check(negated_assumption)
         if result == unsat:
@@ -120,46 +123,46 @@ class VerificationEngine():
             return False
 
     # TODO: check the base cases
-    def verify_past_LTL(self, spec: Spec, step : int, start_step : int) -> bool:
+    def verify_past_LTL(self, spec: Spec, step : int, start_step : int, lexical_depth: int = 0) -> bool:
         if spec in self.pltl_memo[step]: # memoization for efficiency
             return self.pltl_memo[step][spec]
         
         if spec.type == SpecType.FOL:
-            result = self.verify_FOL(spec, self.history[step])
+            result = self.verify_FOL(spec, self.history[step], lexical_depth)
         
         elif isinstance(spec, SpecUnOp):
             if spec.op == "!":
-                result = not self.verify_past_LTL(spec.rhs, step, start_step)
+                result = not self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth)
             elif spec.op == "Previously":
                 if step == start_step:
                     result = False
                 else:
-                    result = self.verify_past_LTL(spec.rhs, step - 1, start_step)
+                    result = self.verify_past_LTL(spec.rhs, step - 1, start_step, lexical_depth)
             elif spec.op == "Once":
                 if step == start_step:
-                    result = self.verify_past_LTL(spec.rhs, step, start_step)
+                    result = self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth)
                 else:
-                    result = self.verify_past_LTL(spec.rhs, step, start_step) or self.verify_past_LTL(spec, step - 1, start_step)
+                    result = self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth) or self.verify_past_LTL(spec, step - 1, start_step, lexical_depth)
             elif spec.op == "Historically":
                 if step == start_step:
-                    result = self.verify_past_LTL(spec.rhs, step, start_step)
+                    result = self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth)
                 else:
-                    result = self.verify_past_LTL(spec.rhs, step, start_step) and self.verify_past_LTL(spec, step - 1, start_step)
+                    result = self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth) and self.verify_past_LTL(spec, step - 1, start_step, lexical_depth)
 
         elif isinstance(spec, SpecBinOp):
             if spec.op == "&&":
-                result = self.verify_past_LTL(spec.left, step, start_step) and self.verify_past_LTL(spec.right, step, start_step)
+                result = self.verify_past_LTL(spec.left, step, start_step, lexical_depth) and self.verify_past_LTL(spec.right, step, start_step, lexical_depth)
             elif spec.op == "||":
-                result = self.verify_past_LTL(spec.left, step, start_step) or self.verify_past_LTL(spec.right, step, start_step)
+                result = self.verify_past_LTL(spec.left, step, start_step, lexical_depth) or self.verify_past_LTL(spec.right, step, start_step, lexical_depth)
             elif spec.op == "=>":
-                result = (not self.verify_past_LTL(spec.left, step, start_step)) or self.verify_past_LTL(spec.right, step, start_step)
+                result = (not self.verify_past_LTL(spec.left, step, start_step, lexical_depth)) or self.verify_past_LTL(spec.right, step, start_step, lexical_depth)
             elif spec.op == "Since":
-                right = self.verify_past_LTL(spec.right, step, start_step)
+                right = self.verify_past_LTL(spec.right, step, start_step, lexical_depth)
                 if step == start_step:
                     result = right
                 else:
-                    left = self.verify_past_LTL(spec.left, step, start_step)
-                    result = right or (left and self.verify_past_LTL(spec, step - 1, start_step))
+                    left = self.verify_past_LTL(spec.left, step, start_step, lexical_depth)
+                    result = right or (left and self.verify_past_LTL(spec, step - 1, start_step, lexical_depth))
         
         else:
             raise VerificationError(f"Unexpected specification type for pLTL: {spec.type}")
@@ -168,14 +171,19 @@ class VerificationEngine():
         return result
 
 
-    def pltl_deduce_inital_step(self, spec: Spec) -> int:
+    def pltl_deduce_inital_step(self, spec: Spec, lexical_scope: Any) -> int:
         variables = self._spec_get_free_variables(spec, set())
         inital_step = 0
+        from .mapper import Z3Mapper
         for var in variables:
-            if var in self.initialization_steps:
-                inital_step = max(inital_step, self.initialization_steps[var])
-            elif var in self.declaration_steps:
-                inital_step = max(inital_step, self.declaration_steps[var])
+            owner = lexical_scope.find_owner(var)
+            if owner is None:
+                raise VerificationError(f"Variable {var} not found in scope")
+            var_z3_name = Z3Mapper.get_z3_var_name(var, owner.scope_id)
+            if var_z3_name in self.initialization_steps:
+                inital_step = max(inital_step, self.initialization_steps[var_z3_name])
+            elif var_z3_name in self.declaration_steps:
+                inital_step = max(inital_step, self.declaration_steps[var_z3_name])
             else:
                 raise VerificationError(f"Variable {var} has no initialization or declaration step")
         return inital_step

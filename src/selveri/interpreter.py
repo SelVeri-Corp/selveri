@@ -13,6 +13,7 @@ from .errors import IRRuntimeError, IRParseError
 from .compiler import IRInstr
 from .runtime import DeclType, Scope, State, _UNSET
 from .SelVerifier.verifier import VerificationEngine
+from .SelVerifier.mapper import Z3Mapper
 
 
 @dataclass
@@ -361,10 +362,12 @@ class SelVerIRInterpreter:
 
     # ---------- lookup ----------
     def _fresh_scope(self, parent: Optional[Scope] = None) -> Scope:
-        return Scope(types={"retvar": None}, parent=parent)
+        depth = parent.depth + 1 if parent is not None else 0
+        return Scope(types={"retvar": None}, depth=depth, parent=parent)
 
     def _fresh_state(self, parent: Optional[State] = None) -> State:
-        return State(values={"retvar": _UNSET}, parent=parent)
+        depth = parent.depth + 1 if parent is not None else 0
+        return State(values={"retvar": _UNSET}, depth=depth, parent=parent)
 
     def _fresh_runtime(
         self,
@@ -734,16 +737,18 @@ class SelVerIRInterpreter:
             self._declare(name, decl_type, 0)
 
             # record the declaration step of the variable
-            if self.verifier is not None and name not in self.verifier.declaration_steps:
-                self.verifier.declaration_steps[name] = self.verifier.last_step
+            name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
+            if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name_z3] = self.verifier.last_step
             return
 
         if decl_type.kind == "FLOAT":
             self._declare(name, decl_type, 0.0)
 
             # record the declaration step of the variable
-            if self.verifier is not None and name not in self.verifier.declaration_steps:
-                self.verifier.declaration_steps[name] = self.verifier.last_step
+            name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
+            if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name_z3] = self.verifier.last_step
             return
 
         if decl_type.kind == "LIST":
@@ -753,8 +758,9 @@ class SelVerIRInterpreter:
             self._declare(name, decl_type, [zero for _ in range(decl_type.size)])
 
             # record the declaration step of the variable
-            if self.verifier is not None and name not in self.verifier.declaration_steps:
-                self.verifier.declaration_steps[name] = self.verifier.last_step
+            name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
+            if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name_z3] = self.verifier.last_step
             return
 
         raise IRRuntimeError(f"Unsupported DECL type: {decl_type}")
@@ -779,8 +785,9 @@ class SelVerIRInterpreter:
         self._declare(name, runtime_type, [zero for _ in range(size)])
 
         # record the declaration step of the variable
-        if self.verifier is not None and name not in self.verifier.declaration_steps:
-            self.verifier.declaration_steps[name] = self.verifier.last_step
+        name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
+        if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
+            self.verifier.declaration_steps[name_z3] = self.verifier.last_step
 
     def _exec_push(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -816,9 +823,11 @@ class SelVerIRInterpreter:
             self._set_value(name, _coerce_value(value, decl_type))
 
             # record the initialization step of the variable
-            if self.verifier is not None and name not in self.verifier.initialization_steps:
-                self.verifier.initialization_steps[name] = self.verifier.last_step
-                del self.verifier.declaration_steps[name]
+            owner = self.runtime.scope.find_owner(name)
+            name_z3 = Z3Mapper.get_z3_var_name(name, owner.scope_id if owner else self.runtime.scope.scope_id)
+            if self.verifier is not None and name_z3 not in self.verifier.initialization_steps:
+                self.verifier.initialization_steps[name_z3] = self.verifier.last_step
+                self.verifier.declaration_steps.pop(name_z3, None)
 
             return
 
@@ -830,9 +839,11 @@ class SelVerIRInterpreter:
             self._set_value(name, list_value)
 
             # record the initialization step of the variable
-            if self.verifier is not None and name not in self.verifier.initialization_steps:
-                self.verifier.initialization_steps[name] = self.verifier.last_step
-                del self.verifier.declaration_steps[name]
+            owner = self.runtime.scope.find_owner(name)
+            name_z3 = Z3Mapper.get_z3_var_name(name, owner.scope_id if owner else self.runtime.scope.scope_id)
+            if self.verifier is not None and name_z3 not in self.verifier.initialization_steps:
+                self.verifier.initialization_steps[name_z3] = self.verifier.last_step
+                self.verifier.declaration_steps.pop(name_z3, None)
 
             return
 
@@ -872,9 +883,11 @@ class SelVerIRInterpreter:
         arr[idx] = _coerce_value(value, elem_type)
 
         # record the initialization step of the variable
-        if self.verifier is not None and name not in self.verifier.initialization_steps:
-            self.verifier.initialization_steps[name] = self.verifier.last_step
-            del self.verifier.declaration_steps[name]
+        owner = self.runtime.scope.find_owner(name)
+        name_z3 = Z3Mapper.get_z3_var_name(name, owner.scope_id if owner else self.runtime.scope.scope_id)
+        if self.verifier is not None and name_z3 not in self.verifier.initialization_steps:
+            self.verifier.initialization_steps[name_z3] = self.verifier.last_step
+            self.verifier.declaration_steps.pop(name_z3, None)
 
     def _exec_len(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:

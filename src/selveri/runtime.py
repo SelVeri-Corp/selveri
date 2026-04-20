@@ -19,6 +19,7 @@ _UNSET = object()
 @dataclass
 class State:
     values: Dict[str, Any]
+    depth: int
     parent: Optional["State"] = None
 
     def __contains__(self, name: str) -> bool:
@@ -60,11 +61,21 @@ class State:
             cur = cur.parent
         return visible
 
+import itertools
+_scope_id_counter = itertools.count()
 
 @dataclass
 class Scope:
     types: Dict[str, Optional[DeclType]]
+    depth: int
     parent: Optional["Scope"] = None
+    # scope_id provides horizontal isolation: distinguishing between different 
+    # blocks at the same depth (e.g. consecutive if-blocks or while-loop iterations)
+    scope_id: int = -1
+
+    def __post_init__(self):
+        if self.scope_id == -1:
+            object.__setattr__(self, 'scope_id', next(_scope_id_counter))
 
     def __contains__(self, name: str) -> bool:
         return self.find_owner(name) is not None
