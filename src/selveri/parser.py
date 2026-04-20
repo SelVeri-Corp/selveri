@@ -93,7 +93,6 @@ class FloatLit(Imm, AExp):
     def __str__(self) -> str:
         return str(self.value)
 
-# TODO: we might remove this
 @dataclass(frozen=True)
 class ListLit(Imm, AExp):
     items: List[Imm]

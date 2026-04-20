@@ -14,8 +14,7 @@ from .mapper import Z3Mapper
 class VerificationEngine():
     def __init__(self):
         self.last_step = 0
-        self.declaration_steps: Dict[str, int] = dict() # stores the declaration steps of variables
-        # TODO: initialization_steps needs to support nested scopes/states
+        self.declaration_steps: Dict[str, int] = dict() # stores the declaration steps of variable
         self.initialization_steps : Dict[str, int] = dict() # stores the initial assignment steps of variables
         self.history: list[RuntimeConfiguration] = list()
         self.pltl_memo : Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
@@ -122,7 +121,6 @@ class VerificationEngine():
             # model : ModelRef = solver.model()
             return False
 
-    # TODO: check the base cases
     def verify_past_LTL(self, spec: Spec, step : int, start_step : int, lexical_depth: int = 0) -> bool:
         if spec in self.pltl_memo[step]: # memoization for efficiency
             return self.pltl_memo[step][spec]
