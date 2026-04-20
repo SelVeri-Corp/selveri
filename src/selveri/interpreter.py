@@ -735,10 +735,18 @@ class SelVerIRInterpreter:
         decl_type = _type_from_object(type_obj)
         if decl_type.kind == "INT":
             self._declare(name, decl_type, 0)
+
+            # record the declaration step of the variable
+            if self.verifier is not None and name not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name] = self.verifier.last_step
             return
 
         if decl_type.kind == "FLOAT":
             self._declare(name, decl_type, 0.0)
+
+            # record the declaration step of the variable
+            if self.verifier is not None and name not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name] = self.verifier.last_step
             return
 
         if decl_type.kind == "LIST":
@@ -746,6 +754,10 @@ class SelVerIRInterpreter:
                 raise IRRuntimeError("Static list declaration requires a size.")
             zero = 0 if decl_type.elem_kind == "INT" else 0.0
             self._declare(name, decl_type, [zero for _ in range(decl_type.size)])
+
+            # record the declaration step of the variable
+            if self.verifier is not None and name not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name] = self.verifier.last_step
             return
 
         raise IRRuntimeError(f"Unsupported DECL type: {decl_type}")
@@ -768,6 +780,10 @@ class SelVerIRInterpreter:
         runtime_type = DeclType("LIST", decl_type.elem_kind, size)
         zero = 0 if decl_type.elem_kind == "INT" else 0.0
         self._declare(name, runtime_type, [zero for _ in range(size)])
+
+        # record the declaration step of the variable
+        if self.verifier is not None and name not in self.verifier.declaration_steps:
+            self.verifier.declaration_steps[name] = self.verifier.last_step
 
     def _exec_push(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -801,6 +817,12 @@ class SelVerIRInterpreter:
         if decl_type.kind in {"INT", "FLOAT"}:
             value = self._pop()
             self._set_value(name, _coerce_value(value, decl_type))
+
+            # record the initialization step of the variable
+            if self.verifier is not None and name not in self.verifier.initialization_steps:
+                self.verifier.initialization_steps[name] = self.verifier.last_step
+                del self.verifier.declaration_steps[name]
+
             return
 
         if decl_type.kind == "LIST":
@@ -809,6 +831,12 @@ class SelVerIRInterpreter:
             items = self._pop_list_packet(expected_size=decl_type.size)
             list_value = _coerce_value(items, decl_type)
             self._set_value(name, list_value)
+
+            # record the initialization step of the variable
+            if self.verifier is not None and name not in self.verifier.initialization_steps:
+                self.verifier.initialization_steps[name] = self.verifier.last_step
+                del self.verifier.declaration_steps[name]
+
             return
 
         raise IRRuntimeError(f"Unsupported STORE target type: {decl_type}")
@@ -845,6 +873,11 @@ class SelVerIRInterpreter:
 
         elem_type = DeclType(decl_type.elem_kind or "INT", None, None)
         arr[idx] = _coerce_value(value, elem_type)
+
+        # record the initialization step of the variable
+        if self.verifier is not None and name not in self.verifier.initialization_steps:
+            self.verifier.initialization_steps[name] = self.verifier.last_step
+            del self.verifier.declaration_steps[name]
 
     def _exec_len(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:

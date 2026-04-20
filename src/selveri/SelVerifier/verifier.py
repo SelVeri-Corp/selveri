@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional
 from z3 import *
 from ltlf2dfa.parser.ltlf import LTLfParser
@@ -10,16 +8,19 @@ from ..defs import RuntimeConfiguration, TemporalObligation
 from ..compiler import IRInstr
 from ..errors import ParserError, VerificationError, VerifierRuntimeError
 from ..spec_parser import parse_spec
-from ..specs import ParsedSpec, RawSpec, Spec, SpecType, SpecUnOp, SpecBinOp, SpecQuant
+from ..specs import ParsedSpec, RawSpec, Spec, SpecType, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
 from .mapper import Z3Mapper
 
 class VerificationEngine():
     def __init__(self):
         self.last_step = 0
-        self.history: list[RuntimeConfiguration] = []
+        self.declaration_steps: Dict[str, int] = dict() # stores the declaration steps of variables
+        # TODO: initialization_steps needs to support nested scopes/states
+        self.initialization_steps : Dict[str, int] = dict() # stores the initial assignment steps of variables
+        self.history: list[RuntimeConfiguration] = list()
         self.pltl_memo : Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
-        self.pending: list[TemporalObligation] = []
-        self.specs_by_id: Dict[int, ParsedSpec] = {}
+        self.pending: list[TemporalObligation] = list()
+        self.specs_by_id: Dict[int, ParsedSpec] = dict()
         self.prepared = False
 
     # the verifier owns spec parsing and caches parsed ASTs before execution starts.
@@ -96,11 +97,13 @@ class VerificationEngine():
         if not self.verify(spec, snapshot):
             raise VerificationError(f"Specification '{spec}' failed")
 
-    def verify(self, spec: Spec, snapshot : RuntimeConfiguration) -> bool: 
+    def verify(self, spec: Spec, snapshot : RuntimeConfiguration, start_step : Optional[int] = None) -> bool: 
         if spec.type == SpecType.FOL:
             return self.verify_FOL(spec, snapshot)
         elif spec.type == SpecType.pLTL:
-            return self.verify_past_LTL(spec, self.last_step - 1) # decrement one as it was just incremented
+            if start_step is None:
+                start_step = self.pltl_deduce_inital_step(spec)
+            return self.verify_past_LTL(spec, self.last_step - 1, start_step)
         else: # spec.type == SpecType.fLTL:
             return self.verify_future_LTL(spec, snapshot)
         
@@ -117,10 +120,10 @@ class VerificationEngine():
             return False
 
     # TODO: check the base cases
-    def verify_past_LTL(self, spec: Spec, step : int, start_step : int = 0) -> bool:
+    def verify_past_LTL(self, spec: Spec, step : int, start_step : int) -> bool:
         if spec in self.pltl_memo[step]: # memoization for efficiency
             return self.pltl_memo[step][spec]
-
+        
         if spec.type == SpecType.FOL:
             result = self.verify_FOL(spec, self.history[step])
         
@@ -163,16 +166,85 @@ class VerificationEngine():
 
         self.pltl_memo[step][spec] = result
         return result
-                    
-                
 
-            
-            
-                
-            
 
-        
-        
+    def pltl_deduce_inital_step(self, spec: Spec) -> int:
+        variables = self._spec_get_free_variables(spec, set())
+        inital_step = 0
+        for var in variables:
+            if var in self.initialization_steps:
+                inital_step = max(inital_step, self.initialization_steps[var])
+            elif var in self.declaration_steps:
+                inital_step = max(inital_step, self.declaration_steps[var])
+            else:
+                raise VerificationError(f"Variable {var} has no initialization or declaration step")
+        return inital_step
+
+    
+    def _spec_get_free_variables(self, spec: Spec, variables: set[str]) -> set[str]:
+        if isinstance(spec, SpecFromBExp):
+            self._bexp_get_free_variables(spec.bexp, variables)
+        elif isinstance(spec, SpecUnOp):
+            self._spec_get_free_variables(spec.rhs, variables)
+        elif isinstance(spec, SpecBinOp):
+            self._spec_get_free_variables(spec.left, variables)
+            self._spec_get_free_variables(spec.right, variables)
+        elif isinstance(spec, SpecQuant):
+            self._domain_get_free_variables(spec.domain, variables)
+            self._spec_get_free_variables(spec.body, variables)
+            variables.discard(spec.var)  # bound variable is not free
+        return variables
+
+    def _bexp_get_free_variables(self, bexp: Any, variables: set[str]) -> None:
+        from ..parser import BNot, BBinOp, BCompare, BTruthy, BBool
+        if isinstance(bexp, BNot):
+            self._bexp_get_free_variables(bexp.rhs, variables)
+        elif isinstance(bexp, BBinOp):
+            self._bexp_get_free_variables(bexp.left, variables)
+            self._bexp_get_free_variables(bexp.right, variables)
+        elif isinstance(bexp, BCompare):
+            self._aexp_get_free_variables(bexp.left, variables)
+            self._aexp_get_free_variables(bexp.right, variables)
+        elif isinstance(bexp, BTruthy):
+            self._aexp_get_free_variables(bexp.aexp, variables)
+
+    def _aexp_get_free_variables(self, aexp: Any, variables: set[str]) -> None:
+        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, FloatLit, FuncCall
+        if isinstance(aexp, AVar):
+            variables.add(aexp.name)
+        elif isinstance(aexp, ALen):
+            variables.add(aexp.name)
+        elif isinstance(aexp, AIndex):
+            self._aexp_get_free_variables(aexp.base, variables)
+            self._aexp_get_free_variables(aexp.index, variables)
+        elif isinstance(aexp, AUnOp):
+            self._aexp_get_free_variables(aexp.rhs, variables)
+        elif isinstance(aexp, ABinOp):
+            self._aexp_get_free_variables(aexp.left, variables)
+            self._aexp_get_free_variables(aexp.right, variables)
+        elif isinstance(aexp, FuncCall):
+            for arg in aexp.args:
+                self._aexp_get_free_variables(arg, variables)
+        # IntLit, FloatLit, ListLit — no variables
+
+    def _domain_get_free_variables(self, domain: Any, variables: set[str]) -> None:
+        from ..specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        if domain is None:
+            return
+        elif isinstance(domain, DomainIdent):
+            variables.add(domain.name)
+        elif isinstance(domain, DomainValues):
+            for item in domain.items:
+                self._aexp_get_free_variables(item, variables)
+        elif isinstance(domain, DomainRange):
+            self._aexp_get_free_variables(domain.lo, variables)
+            self._aexp_get_free_variables(domain.hi, variables)
+        elif isinstance(domain, DomainInterval):
+            self._aexp_get_free_variables(domain.lo, variables)
+            self._aexp_get_free_variables(domain.hi, variables)
+        # DomainType, DomainVar — no runtime variables
+
+
     
     def verify_future_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
     def on_program_end(self) -> None: ...

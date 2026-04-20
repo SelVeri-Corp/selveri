@@ -846,7 +846,7 @@ class SelVeriCompiler:
     def _compile_block(self, stmts: List[Stmt]) -> None:
         self.emit("CSCOPE")
         self._create_scope()
-        self.C_stmt_seq(stmts, emit_step=False)
+        self.C_stmt_seq(stmts, emit_step=True)
         self._leave_scope()
         self.emit("PSCOPE")
 

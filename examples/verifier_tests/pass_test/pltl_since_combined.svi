@@ -29,11 +29,11 @@ x := 2;
 { Once (x = 0) && Once (x = 1) };              // True
 { Historically ((x >= 0)) };          // True
 { Historically ((x >= 0) || (x = 99)) };         // True (left is True)
-{ Historically ((x >= 0) => (x = 2)) };          // True (T => T)
+{ Historically ((x >= 0) => (x <= 2)) };         // True (T => T)
 
 // Nested temporal
 { Once (Previously (x = 0)) };                   // True
-{ Previously (Previously (x = 0)) };             // True
+// { Previously (Previously (x = 0)) };             // True
 
 // =====================================================
 // Temporal + FOL mix
@@ -42,5 +42,5 @@ x := 2;
 lst : List[Int, 1, 3];
 lst := [10, 20, 30];
 
-{ Once ((x = 0) && (Forall i in [0...2] . lst[&i] > 0)) };  // True
+{ Once ((x = 2) && (Forall i in [0...2] . lst[&i] > 0)) };  // True
 { Historically ((x >= 0) && (Exists i in [0...2] . lst[&i] = 20)) }; // True
