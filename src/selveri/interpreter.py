@@ -821,6 +821,7 @@ class SelVerIRInterpreter:
             # record the initialization step of the variable
             if self.verifier is not None and name not in self.verifier.initialization_steps:
                 self.verifier.initialization_steps[name] = self.verifier.last_step
+                del self.verifier.declaration_steps[name]
 
             return
 
@@ -834,6 +835,7 @@ class SelVerIRInterpreter:
             # record the initialization step of the variable
             if self.verifier is not None and name not in self.verifier.initialization_steps:
                 self.verifier.initialization_steps[name] = self.verifier.last_step
+                del self.verifier.declaration_steps[name]
 
             return
 
@@ -875,6 +877,7 @@ class SelVerIRInterpreter:
         # record the initialization step of the variable
         if self.verifier is not None and name not in self.verifier.initialization_steps:
             self.verifier.initialization_steps[name] = self.verifier.last_step
+            del self.verifier.declaration_steps[name]
 
     def _exec_len(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
