@@ -735,10 +735,18 @@ class SelVerIRInterpreter:
         decl_type = _type_from_object(type_obj)
         if decl_type.kind == "INT":
             self._declare(name, decl_type, 0)
+
+            # record the declaration step of the variable
+            if name not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name] = self.verifier.last_step - 1 # TODO: do we need a -1 here?
             return
 
         if decl_type.kind == "FLOAT":
             self._declare(name, decl_type, 0.0)
+
+            # record the declaration step of the variable
+            if name not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name] = self.verifier.last_step - 1 # TODO: do we need a -1 here?
             return
 
         if decl_type.kind == "LIST":
@@ -746,6 +754,10 @@ class SelVerIRInterpreter:
                 raise IRRuntimeError("Static list declaration requires a size.")
             zero = 0 if decl_type.elem_kind == "INT" else 0.0
             self._declare(name, decl_type, [zero for _ in range(decl_type.size)])
+
+            # record the declaration step of the variable
+            if name not in self.verifier.declaration_steps:
+                self.verifier.declaration_steps[name] = self.verifier.last_step - 1 # TODO: do we need a -1 here?
             return
 
         raise IRRuntimeError(f"Unsupported DECL type: {decl_type}")
@@ -801,6 +813,11 @@ class SelVerIRInterpreter:
         if decl_type.kind in {"INT", "FLOAT"}:
             value = self._pop()
             self._set_value(name, _coerce_value(value, decl_type))
+
+            # record the initialization step of the variable
+            if name not in self.verifier.initialization_steps:
+                self.verifier.initialization_steps[name] = self.verifier.last_step - 1 # TODO: do we need a -1 here?
+
             return
 
         if decl_type.kind == "LIST":
