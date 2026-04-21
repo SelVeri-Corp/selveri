@@ -318,12 +318,13 @@ class VerificationEngine:
             spec_id=raw_spec.spec_id,
             source_spec=raw_spec.text,
             created_at_step=self.last_step,
+            lexical_depth=lexical_depth,
             automaton=automaton,
             atom_table=mapped_formula.atom_table,
             current_state=automaton.initial_state,
             steps_to_skip=0,
         )
-        self.advance_future_obligation(obligation, snapshot)
+        self.advance_future_obligation(obligation, snapshot) # TODO: is it correct to directly move from the initial state?
         self.fltl_pending.append(obligation)
         return True
 
@@ -331,12 +332,13 @@ class VerificationEngine:
         self,
         snapshot: RuntimeConfiguration,
         atom_table: Dict[str, Spec],
+        lexical_depth: int,
     ) -> Dict[str, bool]:
         '''
         Evaluate the future atoms based on the snapshot.
         '''
         return {
-            atom_name: self.verify_FOL(atom_spec, snapshot) # for each atom, verify the FOL specification
+            atom_name: self.verify_FOL(atom_spec, snapshot, lexical_depth) # for each atom, verify the FOL specification
             for atom_name, atom_spec in atom_table.items()
         }
 
@@ -358,7 +360,11 @@ class VerificationEngine:
         '''
         Advance the future obligation by one step.
         '''
-        atom_values = self.evaluate_future_atoms(snapshot, obligation.atom_table)
+        atom_values = self.evaluate_future_atoms(
+            snapshot,
+            obligation.atom_table,
+            obligation.lexical_depth,
+        )
         transition = self.select_future_transition(obligation, atom_values)
         obligation.current_state = transition.target_state
 
