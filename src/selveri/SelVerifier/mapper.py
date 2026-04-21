@@ -111,18 +111,32 @@ class Z3Mapper():
             return self.map_FOL_quant(spec)
         raise VerifierRuntimeError(f"Unsupported FOL specification")
 
-    def get_lexical_owner_scope_id(self, name: str) -> int:
-        # lexical_depth ensures we don't accidentally resolve variables from inner scopes
-        # that were not visible when/where the specification was defined (vertical isolation).
+    def _get_lexical_scope(self) -> Scope:
+        """
+        Traverses up the scope hierarchy to find the scope matching the current lexical depth.
+        This ensures we don't accidentally resolve variables from inner scopes that were not visible
+        when/where the specification was defined (vertical isolation).
+        """
         lex_scope = self.scope
         while lex_scope is not None and lex_scope.depth > self.lexical_depth:
             lex_scope = lex_scope.parent
         if lex_scope is None:
             raise VerifierRuntimeError(f"Lexical depth {self.lexical_depth} not found")
+        return lex_scope
+
+    def get_lexical_owner_scope_id(self, name: str) -> int:
+        lex_scope = self._get_lexical_scope()
         owner = lex_scope.find_owner(name)
         if owner is None:
             raise VerifierRuntimeError(f"Variable {name} not found in lexical scope")
         return owner.scope_id
+
+    def get_scoped_z3_var_name(self, name: str) -> str:
+        """
+        Resolves the lexical owner scope of a given variable name and returns its fully qualified
+        Z3 variable name, ensuring accurate mapping to the correct isolated execution context.
+        """
+        return Z3Mapper.get_z3_var_name(name, self.get_lexical_owner_scope_id(name))
 
     def map_FOL_aexp(self, aexp: AExp) -> z3types.ExprRef :
         if isinstance(aexp, IntLit):
@@ -132,7 +146,7 @@ class Z3Mapper():
         elif isinstance(aexp, ListLit):
             return self.map_FOL_listlit(aexp)
         elif isinstance(aexp, AVar):
-            var_z3_name = Z3Mapper.get_z3_var_name(aexp.name, self.get_lexical_owner_scope_id(aexp.name))
+            var_z3_name = self.get_scoped_z3_var_name(aexp.name)
             if var_z3_name not in self.free_var_map:
                 raise VerifierRuntimeError(f"Free variable {aexp.name} (Z3 name: {var_z3_name}) not mapped")
             return self.free_var_map[var_z3_name]
@@ -141,7 +155,7 @@ class Z3Mapper():
                 raise VerifierRuntimeError(f"Bound variable &{aexp.name} not found in scope")
             return self.bound_var_map[aexp.name]
         elif isinstance(aexp, ALen):
-            var_z3_name = Z3Mapper.get_z3_var_name(aexp.name, self.get_lexical_owner_scope_id(aexp.name))
+            var_z3_name = self.get_scoped_z3_var_name(aexp.name)
             if var_z3_name not in self.free_var_map:
                 raise VerifierRuntimeError(f"List variable {aexp.name} (Z3 name: {var_z3_name}) not mapped")
             if is_array(self.free_var_map[var_z3_name]): # LIST
@@ -206,7 +220,7 @@ class Z3Mapper():
             indices.append(self.map_FOL_aexp(cur.index))
             cur = cur.base
         base_name = cur.name
-        base_z3_name = Z3Mapper.get_z3_var_name(base_name, self.get_lexical_owner_scope_id(base_name))
+        base_z3_name = self.get_scoped_z3_var_name(base_name)
         if base_z3_name not in self.free_var_map:
             raise VerifierRuntimeError(f"Variable {base_name} (Z3 name: {base_z3_name}) not mapped")
 
@@ -347,7 +361,7 @@ class Z3Mapper():
         else: # uses finite_connector over finite domain
             result_list = list()
             if isinstance(domain, DomainIdent):
-                domain_z3_name = Z3Mapper.get_z3_var_name(domain.name, self.get_lexical_owner_scope_id(domain.name))
+                domain_z3_name = self.get_scoped_z3_var_name(domain.name)
                 if domain_z3_name not in self.free_var_map:
                     raise VerifierRuntimeError(f"Variable {domain.name} (Z3 name: {domain_z3_name}) not mapped")
                 if not is_array(self.free_var_map[domain_z3_name]):
@@ -361,11 +375,7 @@ class Z3Mapper():
                     self.bound_var_map[bound_var] = self.map_FOL_aexp(val)
                     result_list.append(self.map_FOL(spec.body))     
             elif isinstance(domain, DomainVar):
-                lex_scope = self.scope
-                while lex_scope is not None and lex_scope.depth > self.lexical_depth:
-                    lex_scope = lex_scope.parent
-                if lex_scope is None:
-                    raise VerifierRuntimeError(f"Lexical depth {self.lexical_depth} not found")
+                lex_scope = self._get_lexical_scope()
                 for var, vartype in lex_scope.items():
                     if vartype == domain.elem:
                         owner = lex_scope.find_owner(var)

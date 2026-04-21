@@ -737,18 +737,16 @@ class SelVerIRInterpreter:
             self._declare(name, decl_type, 0)
 
             # record the declaration step of the variable
-            name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
-            if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
-                self.verifier.declaration_steps[name_z3] = self.verifier.last_step
+            if self.verifier is not None:
+                self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
         if decl_type.kind == "FLOAT":
             self._declare(name, decl_type, 0.0)
 
             # record the declaration step of the variable
-            name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
-            if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
-                self.verifier.declaration_steps[name_z3] = self.verifier.last_step
+            if self.verifier is not None:
+                self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
         if decl_type.kind == "LIST":
@@ -758,9 +756,8 @@ class SelVerIRInterpreter:
             self._declare(name, decl_type, [zero for _ in range(decl_type.size)])
 
             # record the declaration step of the variable
-            name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
-            if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
-                self.verifier.declaration_steps[name_z3] = self.verifier.last_step
+            if self.verifier is not None:
+                self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
         raise IRRuntimeError(f"Unsupported DECL type: {decl_type}")
@@ -785,9 +782,8 @@ class SelVerIRInterpreter:
         self._declare(name, runtime_type, [zero for _ in range(size)])
 
         # record the declaration step of the variable
-        name_z3 = Z3Mapper.get_z3_var_name(name, self.runtime.scope.scope_id)
-        if self.verifier is not None and name_z3 not in self.verifier.declaration_steps:
-            self.verifier.declaration_steps[name_z3] = self.verifier.last_step
+        if self.verifier is not None:
+            self.verifier.register_declaration(name, self.runtime.scope.scope_id)
 
     def _exec_push(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -823,11 +819,8 @@ class SelVerIRInterpreter:
             self._set_value(name, _coerce_value(value, decl_type))
 
             # record the initialization step of the variable
-            owner = self.runtime.scope.find_owner(name)
-            name_z3 = Z3Mapper.get_z3_var_name(name, owner.scope_id if owner else self.runtime.scope.scope_id)
-            if self.verifier is not None and name_z3 not in self.verifier.initialization_steps:
-                self.verifier.initialization_steps[name_z3] = self.verifier.last_step
-                self.verifier.declaration_steps.pop(name_z3, None)
+            if self.verifier is not None:
+                self.verifier.register_initial_assignment(name, self.runtime.scope)
 
             return
 
@@ -839,11 +832,8 @@ class SelVerIRInterpreter:
             self._set_value(name, list_value)
 
             # record the initialization step of the variable
-            owner = self.runtime.scope.find_owner(name)
-            name_z3 = Z3Mapper.get_z3_var_name(name, owner.scope_id if owner else self.runtime.scope.scope_id)
-            if self.verifier is not None and name_z3 not in self.verifier.initialization_steps:
-                self.verifier.initialization_steps[name_z3] = self.verifier.last_step
-                self.verifier.declaration_steps.pop(name_z3, None)
+            if self.verifier is not None:
+                self.verifier.register_initial_assignment(name, self.runtime.scope)
 
             return
 
@@ -883,11 +873,8 @@ class SelVerIRInterpreter:
         arr[idx] = _coerce_value(value, elem_type)
 
         # record the initialization step of the variable
-        owner = self.runtime.scope.find_owner(name)
-        name_z3 = Z3Mapper.get_z3_var_name(name, owner.scope_id if owner else self.runtime.scope.scope_id)
-        if self.verifier is not None and name_z3 not in self.verifier.initialization_steps:
-            self.verifier.initialization_steps[name_z3] = self.verifier.last_step
-            self.verifier.declaration_steps.pop(name_z3, None)
+        if self.verifier is not None:
+            self.verifier.register_initial_assignment(name, self.runtime.scope)
 
     def _exec_len(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -957,7 +944,6 @@ class SelVerIRInterpreter:
         if self.verifier is None:
             return
         self.verifier.prepare_program(self.code)
-        self.verifier.on_program_start()
 
     def _finish_verifier(self) -> None:
         if self.verifier is None:

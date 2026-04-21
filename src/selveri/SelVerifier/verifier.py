@@ -22,6 +22,9 @@ class VerificationEngine():
         self.specs_by_id: Dict[int, ParsedSpec] = dict()
         self.prepared = False
 
+
+    ################# Spec Compilation #################
+
     # the verifier owns spec parsing and caches parsed ASTs before execution starts.
     def prepare_program(
         self,
@@ -83,7 +86,9 @@ class VerificationEngine():
         self.on_veri(parsed_spec.ast, snapshot) # call the on_veri callback
         return parsed_spec
 
-    def on_program_start(self) -> None: ...
+    ################# ###########################    
+    ################# Verifying #################
+    #############################################        
 
     def on_step(self, snapshot: RuntimeConfiguration) -> None:
         # TODO: investigate the memory management here
@@ -108,7 +113,9 @@ class VerificationEngine():
             return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
         else: # spec.type == SpecType.fLTL:
             return self.verify_future_LTL(spec, snapshot, snapshot.scope.depth)
-        
+    
+    ################# FOL Verification #################
+
     def verify_FOL(self, spec: Spec, snapshot: RuntimeConfiguration, lexical_depth: int) -> bool:
         solver = Solver()
         mapper = Z3Mapper(snapshot, solver, lexical_depth)
@@ -120,6 +127,9 @@ class VerificationEngine():
             # TODO: consider giving a counter-example, using the model
             # model : ModelRef = solver.model()
             return False
+
+
+    ################# pLTL Verification #################
 
     def verify_past_LTL(self, spec: Spec, step : int, start_step : int, lexical_depth: int = 0) -> bool:
         if spec in self.pltl_memo[step]: # memoization for efficiency
@@ -172,7 +182,6 @@ class VerificationEngine():
     def pltl_deduce_inital_step(self, spec: Spec, lexical_scope: Any) -> int:
         variables = self._spec_get_free_variables(spec, set())
         inital_step = 0
-        from .mapper import Z3Mapper
         for var in variables:
             owner = lexical_scope.find_owner(var)
             if owner is None:
@@ -186,7 +195,21 @@ class VerificationEngine():
                 raise VerificationError(f"Variable {var} has no initialization or declaration step")
         return inital_step
 
-    
+    def register_declaration(self, name: str, scope_id: int) -> None:
+        """Records the step when a variable is declared in a specific scope."""
+        name_z3 = Z3Mapper.get_z3_var_name(name, scope_id)
+        if name_z3 not in self.declaration_steps:
+            self.declaration_steps[name_z3] = self.last_step
+
+    def register_initial_assignment(self, name: str, scope: Any) -> None:
+        """Records the step when a variable is first initialized/assigned, removing it from declarations."""
+        owner = scope.find_owner(name)
+        scope_id = owner.scope_id if owner else scope.scope_id
+        name_z3 = Z3Mapper.get_z3_var_name(name, scope_id)
+        if name_z3 not in self.initialization_steps:
+            self.initialization_steps[name_z3] = self.last_step
+            self.declaration_steps.pop(name_z3, None)
+
     def _spec_get_free_variables(self, spec: Spec, variables: set[str]) -> set[str]:
         if isinstance(spec, SpecFromBExp):
             self._bexp_get_free_variables(spec.bexp, variables)
@@ -251,6 +274,7 @@ class VerificationEngine():
         # DomainType, DomainVar — no runtime variables
 
 
-    
+    ################# fLTL Verification #################
+
     def verify_future_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
     def on_program_end(self) -> None: ...
