@@ -1,0 +1,23 @@
+// =====================================================
+// fLTL in loops: all specs should PASS (True)
+// =====================================================
+
+counter : Int;
+counter := 0;
+
+i : Int;
+i := 0;
+
+{ Eventually counter = 6 };           // True
+{ Always counter >= 0 };              // True
+{ counter <= 6 Until counter = 6 };   // True
+
+while i < 3 do
+    counter := counter + 2;
+    i := i + 1;
+od
+
+// After loop: counter = 6, i = 3
+{ counter = 6 };                      // True
+{ Eventually counter = 6 };           // True
+{ Always counter <= 6 };              // True

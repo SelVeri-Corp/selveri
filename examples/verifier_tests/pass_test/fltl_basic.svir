@@ -1,0 +1,44 @@
+0: STEP
+1: DECL INT, x
+2: STEP
+3: PUSH 0
+4: STORE x
+5: STEP
+6: DECL INT, phase
+7: STEP
+8: PUSH 0
+9: STORE phase
+10: STEP
+11: VERI 0, 'Next x = 1'
+12: STEP
+13: PUSH 1
+14: STORE x
+15: STEP
+16: VERI 1, 'Eventually x = 3'
+17: STEP
+18: PUSH 2
+19: STORE x
+20: STEP
+21: PUSH 3
+22: STORE x
+23: STEP
+24: VERI 2, 'Always x >= 0'
+25: STEP
+26: PUSH 4
+27: STORE x
+28: STEP
+29: PUSH 6
+30: STORE x
+31: STEP
+32: VERI 3, 'phase < 3 Until phase = 3'
+33: STEP
+34: PUSH 1
+35: STORE phase
+36: STEP
+37: PUSH 2
+38: STORE phase
+39: STEP
+40: PUSH 3
+41: STORE phase
+42: STEP
+43: VERI 4, 'phase = 3 Until phase = 3'

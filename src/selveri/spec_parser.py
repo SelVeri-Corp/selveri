@@ -107,8 +107,8 @@ class SpecAstBuilder(Transformer):
     def snext(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Next", rhs)
     def seventually(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Eventually", rhs)
     def salways(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.fLTL, "Always", rhs)
-    def ssince(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.pLTL, "Since", l, r)
-    def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), SpecType.fLTL, "Until", l, r)
+    def ssince(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_past_type(l, r), "Since", l, r)
+    def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_future_type(l, r), "Until", l, r)
     def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "&&", l, r)
     def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "||", l, r)
     def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "=>", l, r)
@@ -149,6 +149,16 @@ class SpecAstBuilder(Transformer):
         if spec2.type == SpecType.FOL:
             return spec2.type
         raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+
+    def deduce_past_type(self, spec1: Spec, spec2: Spec) -> SpecType:
+        if SpecType.fLTL in {spec1.type, spec2.type}:
+            raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+        return SpecType.pLTL
+
+    def deduce_future_type(self, spec1: Spec, spec2: Spec) -> SpecType:
+        if SpecType.pLTL in {spec1.type, spec2.type}:
+            raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+        return SpecType.fLTL
 
 
 SPEC_PARSER = Lark.open(

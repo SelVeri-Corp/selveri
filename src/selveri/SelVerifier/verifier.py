@@ -1,24 +1,26 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
-from z3 import *
-from ltlf2dfa.parser.ltlf import LTLfParser
+from z3 import Not, Solver, simplify, unsat
+from sympy import Basic
 
-from ..defs import RuntimeConfiguration, TemporalObligation
 from ..compiler import IRInstr
+from ..defs import RuntimeConfiguration, FutureObligation
 from ..errors import ParserError, VerificationError, VerifierRuntimeError
 from ..spec_parser import parse_spec
 from ..specs import ParsedSpec, RawSpec, Spec, SpecType, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+from .future_automaton import compile_future_automaton
+from .future_mapper import FutureLTLMapper
 from .mapper import Z3Mapper
 
-class VerificationEngine():
+class VerificationEngine:
     def __init__(self):
         self.last_step = 0
         self.declaration_steps: Dict[str, int] = dict() # stores the declaration steps of variable
         self.initialization_steps : Dict[str, int] = dict() # stores the initial assignment steps of variables
         self.history: list[RuntimeConfiguration] = list()
-        self.pltl_memo : Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
-        self.pending: list[TemporalObligation] = list()
+        self.pltl_memo: Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
+        self.fltl_pending: list[FutureObligation] = list() # for future LTL verification pending obligations
         self.specs_by_id: Dict[int, ParsedSpec] = dict()
         self.prepared = False
 
@@ -81,27 +83,48 @@ class VerificationEngine():
             raise VerificationError(f"Unknown specification id: {spec_id}")
         return self.specs_by_id[spec_id]
 
-    def handle_veri(self, spec_id: int, snapshot: RuntimeConfiguration) -> ParsedSpec: # handle a veri instruction
+    def handle_veri(self, spec_id: int, snapshot: RuntimeConfiguration) -> ParsedSpec:
         parsed_spec = self.resolve_spec(spec_id) # resolve the spec by its id
-        self.on_veri(parsed_spec.ast, snapshot) # call the on_veri callback
+        result = self.on_veri(parsed_spec, snapshot) # call the on_veri callback
+        if parsed_spec.ast.type != SpecType.fLTL and not result:
+            self.raise_spec_failure(
+                parsed_spec.raw_spec,
+                "the current execution state does not satisfy the specification",
+            )
         return parsed_spec
 
     ################# ###########################    
     ################# Verifying #################
     #############################################        
+    
+    def on_program_start(self) -> None:
+        self.last_step = 0
+        self.history.clear()
+        self.pltl_memo.clear()
+        self.fltl_pending.clear()
 
     def on_step(self, snapshot: RuntimeConfiguration) -> None:
         # TODO: investigate the memory management here
         self.history.append(snapshot)
         self.pltl_memo[self.last_step] = dict()
         self.last_step += 1
-    
-    # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
-    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> None:
-        if not self.verify(spec, snapshot):
-            raise VerificationError(f"Specification '{spec}' failed")
+        self.advance_future_obligations(snapshot)
 
-    def verify(self, spec: Spec, snapshot : RuntimeConfiguration, start_step : Optional[int] = None) -> bool: 
+    # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
+    def on_veri(self, parsed_spec: ParsedSpec, snapshot: RuntimeConfiguration) -> bool:
+        return self.verify(
+            parsed_spec.ast,
+            snapshot,
+            raw_spec=parsed_spec.raw_spec,
+        )
+
+    def verify(
+        self,
+        spec: Spec,
+        snapshot: RuntimeConfiguration,
+        raw_spec: RawSpec,
+        start_step : Optional[int] = None,
+    ) -> bool:
         # lexical_depth captures the depth at which the spec is defined. This is passed to 
         # historical evaluations to ensure we don't resolve inner-scope variables that the spec shouldn't see.
         lexical_depth = snapshot.scope.depth
@@ -112,7 +135,7 @@ class VerificationEngine():
                 start_step = self.pltl_deduce_inital_step(spec, snapshot.scope)
             return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
         else: # spec.type == SpecType.fLTL:
-            return self.verify_future_LTL(spec, snapshot, snapshot.scope.depth)
+            return self.verify_future_LTL(spec, snapshot, lexical_depth, raw_spec)
     
     ################# FOL Verification #################
 
@@ -276,5 +299,150 @@ class VerificationEngine():
 
     ################# fLTL Verification #################
 
-    def verify_future_LTL(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool: ...
-    def on_program_end(self) -> None: ...
+    def verify_future_LTL(
+        self,
+        spec: Spec,
+        snapshot: RuntimeConfiguration,
+        lexical_depth: int,
+        raw_spec: RawSpec,
+    ) -> bool:
+        '''
+        Verify a future LTL specification.
+        '''
+        mapped_formula = FutureLTLMapper().map(spec)
+        automaton = compile_future_automaton(
+            mapped_formula.formula_text,
+            mapped_formula.atom_table.keys(),
+        )
+        obligation = FutureObligation(
+            spec_id=raw_spec.spec_id,
+            source_spec=raw_spec.text,
+            created_at_step=self.last_step,
+            scope_id=snapshot.scope.scope_id,
+            lexical_depth=lexical_depth,
+            automaton=automaton,
+            atom_table=mapped_formula.atom_table,
+            current_state=automaton.initial_state,
+            steps_to_skip=0,
+        )
+        self.advance_future_obligation(obligation, snapshot) # TODO: is it correct to directly move from the initial state?
+        self.fltl_pending.append(obligation)
+        return True
+
+    def evaluate_future_atoms(
+        self,
+        snapshot: RuntimeConfiguration,
+        atom_table: Dict[str, Spec],
+        lexical_depth: int,
+    ) -> Dict[str, bool]:
+        '''
+        Evaluate the future atoms based on the snapshot.
+        '''
+        return {
+            atom_name: self.verify_FOL(atom_spec, snapshot, lexical_depth) # for each atom, verify the FOL specification
+            for atom_name, atom_spec in atom_table.items()
+        }
+
+    def advance_future_obligations(self, snapshot: RuntimeConfiguration) -> None:
+        '''
+        Advance all the future obligations by one step.
+        '''
+        for obligation in self.fltl_pending:
+            if obligation.steps_to_skip > 0:
+                obligation.steps_to_skip -= 1
+                continue
+            self.advance_future_obligation(obligation, snapshot)
+
+    def advance_future_obligation(
+        self,
+        obligation: FutureObligation,
+        snapshot: RuntimeConfiguration,
+    ) -> None:
+        '''
+        Advance the future obligation by one step.
+        '''
+        atom_values = self.evaluate_future_atoms(
+            snapshot,
+            obligation.atom_table,
+            obligation.lexical_depth,
+        )
+        transition = self.select_future_transition(obligation, atom_values)
+        obligation.current_state = transition.target_state
+
+        if obligation.current_state not in obligation.automaton.can_reach_accepting:
+            self.raise_future_failure(
+                obligation,
+                f"the automaton reached state {obligation.current_state}, which cannot reach an accepting state",
+            )
+
+    def select_future_transition(
+        self,
+        obligation: FutureObligation,
+        atom_values: Dict[str, bool],
+    ):
+        '''
+        Select the transition to be taken by the future obligation based on the atom values.
+        '''
+        transitions = obligation.automaton.transitions_by_state.get(obligation.current_state, ())
+        matching_transitions = [
+            transition
+            for transition in transitions
+            if self.evaluate_guard(transition.guard_formula, atom_values)
+        ]
+
+        if len(matching_transitions) == 1:
+            return matching_transitions[0]
+        if len(matching_transitions) == 0:
+            raise VerificationError(
+                f"Future specification #{obligation.spec_id} has no matching transition "
+                f"from automaton state {obligation.current_state}."
+            )
+        raise VerificationError(
+            f"Future specification #{obligation.spec_id} has multiple matching transitions "
+            f"from automaton state {obligation.current_state}."
+        )
+
+    def evaluate_guard(self, guard_formula: Basic, atom_values: Dict[str, bool]) -> bool:
+        '''
+        Evaluate the guard formula based on the atom values.
+        '''
+        substituted_guard = guard_formula.subs( # substitute the atom values into the guard formula
+            {
+                symbol: atom_values.get(str(symbol), False)
+                for symbol in getattr(guard_formula, "free_symbols", set())
+            }
+        )
+        return bool(substituted_guard) # return the boolean value of the substituted guard formula
+
+    def on_scope_exit(self, leaving_scope_id: int) -> None:
+        '''
+        Handle the exit of a scope.
+        '''
+        to_remove: list[int] = []
+        for idx, obligation in enumerate(self.fltl_pending):
+            if obligation.scope_id == leaving_scope_id:
+                to_remove.append(idx)
+        for idx in reversed(to_remove):
+            self.fltl_pending.pop(idx)
+
+    def on_program_end(self, final_snapshot: RuntimeConfiguration) -> None:
+        '''
+        Check if the state reached by the future obligations is an accepting state.
+        '''
+        self.advance_future_obligations(final_snapshot)
+        for obligation in self.fltl_pending:
+            if obligation.current_state not in obligation.automaton.accepting_states:
+                self.raise_future_failure(
+                    obligation,
+                    f"the execution ended in non-accepting automaton state {obligation.current_state}",
+                )
+
+    def raise_spec_failure(self, raw_spec: RawSpec, detail: str) -> None:
+        raise VerificationError(
+            f"Specification #{raw_spec.spec_id} failed: {detail}: {raw_spec.text}"
+        )
+
+    def raise_future_failure(self, obligation: FutureObligation, detail: str) -> None:
+        raise VerificationError(
+            f"Future specification #{obligation.spec_id} failed: {detail}: {obligation.source_spec}"
+        )

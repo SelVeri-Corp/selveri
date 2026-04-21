@@ -1,0 +1,27 @@
+// =====================================================
+// fLTL Until + Combined: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+x : Int;
+x := 0;
+
+y : Int;
+y := 0;
+
+phase : Int;
+phase := 0;
+
+lst : List[Int, 1, 3];
+lst := [0, 0, 0];
+
+{ (Eventually x = 2) => (Eventually (Forall i in [0...2] . lst[&i] > 0)) }; // False
+x := 1;
+x := 2;
+lst := [1, 0, 3];
+
+// { !(Eventually y = 42) };                   // False (y becomes 42 later)
+// y := 42;
+
+// { (phase < 3) Until (phase = 3) };         // False (phase jumps to 4 instead)
+// phase := 4;

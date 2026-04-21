@@ -671,12 +671,15 @@ class SelVerIRInterpreter:
             return
 
         if op == "PSCOPE":
+            leaving_scope_id = self.runtime.scope.scope_id
             if self.runtime.state.parent is None or self.runtime.scope.parent is None:
                 raise IRRuntimeError("Cannot leave the root scope.")
             self.runtime = RuntimeConfiguration(
                 state=self.runtime.state.parent,
                 scope=self.runtime.scope.parent,
             )
+            if self.verifier is not None:
+                self.verifier.on_scope_exit(leaving_scope_id)
             self.pc += 1
             return
 
@@ -948,7 +951,7 @@ class SelVerIRInterpreter:
     def _finish_verifier(self) -> None:
         if self.verifier is None:
             return
-        self.verifier.on_program_end()
+        self.verifier.on_program_end(self._snapshot_runtime_configuration())
 
     def _dispatch_verifier_spec(self, spec_id: int, raw_spec: Any) -> None:
         assert self.verifier is not None
