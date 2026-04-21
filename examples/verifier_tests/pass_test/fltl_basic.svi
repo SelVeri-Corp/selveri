@@ -1,0 +1,33 @@
+// =====================================================
+// fLTL Basic: all specs should PASS (True)
+// Next, Eventually, Always, Until
+// =====================================================
+
+x : Int;
+x := 0;
+
+phase : Int;
+phase := 0;
+
+// --- Next ---
+{ Next x = 1 };                 // True
+x := 1;
+
+// --- Eventually ---
+{ Eventually x = 3 };           // True
+x := 2;
+x := 3;
+
+// --- Always ---
+{ Always x >= 0 };              // True
+x := 4;
+x := 6;
+
+// --- Until ---
+{ phase < 3 Until phase = 3 };  // True
+phase := 1;
+phase := 2;
+phase := 3;
+
+// --- Until with immediate right-hand satisfaction ---
+{ phase = 3 Until phase = 3 };  // True
