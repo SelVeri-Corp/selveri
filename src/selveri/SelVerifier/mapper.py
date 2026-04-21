@@ -112,32 +112,6 @@ class Z3Mapper():
             return self.map_FOL_quant(spec)
         raise VerifierRuntimeError(f"Unsupported FOL specification")
 
-    def _get_lexical_scope(self) -> Scope:
-        """
-        Traverses up the scope hierarchy to find the scope matching the current lexical depth.
-        This ensures we don't accidentally resolve variables from inner scopes that were not visible
-        when/where the specification was defined (vertical isolation).
-        """
-        lex_scope = self.scope
-        while lex_scope is not None and lex_scope.depth > self.lexical_depth:
-            lex_scope = lex_scope.parent
-        if lex_scope is None:
-            raise VerifierRuntimeError(f"Lexical depth {self.lexical_depth} not found")
-        return lex_scope
-
-    def get_lexical_owner_scope_id(self, name: str) -> int:
-        lex_scope = self._get_lexical_scope()
-        owner = lex_scope.find_owner(name)
-        if owner is None:
-            raise VerifierRuntimeError(f"Variable {name} not found in lexical scope")
-        return owner.scope_id
-
-    def get_scoped_z3_var_name(self, name: str) -> str:
-        """
-        Resolves the lexical owner scope of a given variable name and returns its fully qualified
-        Z3 variable name, ensuring accurate mapping to the correct isolated execution context.
-        """
-        return Z3Mapper.get_z3_var_name(name, self.get_lexical_owner_scope_id(name))
 
     def map_FOL_aexp(self, aexp: AExp) -> z3types.ExprRef :
         if isinstance(aexp, IntLit):
@@ -395,7 +369,8 @@ class Z3Mapper():
                 return Or(result_list)
             
 
-                
+    ######## Utility Methods ########
+
     def get_list_dimension(self, name: str) -> int:
         owner = self.scope.find_owner(name)
         if owner is None:
@@ -416,6 +391,33 @@ class Z3Mapper():
 
     def get_dimension_length(self, var_name: str, dim: int) -> str:
         return Z3Mapper.get_z3_var_name(f"_{var_name}_len_{dim}", self.get_lexical_owner_scope_id(var_name))
+    
+    def _get_lexical_scope(self) -> Scope:
+        """
+        Traverses up the scope hierarchy to find the scope matching the current lexical depth.
+        This ensures we don't accidentally resolve variables from inner scopes that were not visible
+        when/where the specification was defined (vertical isolation).
+        """
+        lex_scope = self.scope
+        while lex_scope is not None and lex_scope.depth > self.lexical_depth:
+            lex_scope = lex_scope.parent
+        if lex_scope is None:
+            raise VerifierRuntimeError(f"Lexical depth {self.lexical_depth} not found")
+        return lex_scope
+
+    def get_lexical_owner_scope_id(self, name: str) -> int:
+        lex_scope = self._get_lexical_scope()
+        owner = lex_scope.find_owner(name)
+        if owner is None:
+            raise VerifierRuntimeError(f"Variable {name} not found in lexical scope")
+        return owner.scope_id
+
+    def get_scoped_z3_var_name(self, name: str) -> str:
+        """
+        Resolves the lexical owner scope of a given variable name and returns its fully qualified
+        Z3 variable name, ensuring accurate mapping to the correct isolated execution context.
+        """
+        return Z3Mapper.get_z3_var_name(name, self.get_lexical_owner_scope_id(name))
 
     @staticmethod
     def get_z3_var_name(var_name: str, scope_id : int) -> str:
