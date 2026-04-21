@@ -85,7 +85,7 @@ class VerificationEngine:
 
     def handle_veri(self, spec_id: int, snapshot: RuntimeConfiguration) -> ParsedSpec:
         parsed_spec = self.resolve_spec(spec_id) # resolve the spec by its id
-        result = self.on_veri(parsed_spec.ast, snapshot) # call the on_veri callback
+        result = self.on_veri(parsed_spec, snapshot) # call the on_veri callback
         if parsed_spec.ast.type != SpecType.fLTL and not result:
             self.raise_spec_failure(
                 parsed_spec.raw_spec,
@@ -111,14 +111,18 @@ class VerificationEngine:
         self.advance_future_obligations(snapshot)
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
-    def on_veri(self, spec: Spec, snapshot: RuntimeConfiguration) -> bool:
-        return self.verify(spec, snapshot)
+    def on_veri(self, parsed_spec: ParsedSpec, snapshot: RuntimeConfiguration) -> bool:
+        return self.verify(
+            parsed_spec.ast,
+            snapshot,
+            raw_spec=parsed_spec.raw_spec,
+        )
 
     def verify(
         self,
         spec: Spec,
         snapshot: RuntimeConfiguration,
-        raw_spec: Optional[RawSpec] = None,
+        raw_spec: RawSpec,
         start_step : Optional[int] = None,
     ) -> bool:
         # lexical_depth captures the depth at which the spec is defined. This is passed to 
@@ -131,7 +135,7 @@ class VerificationEngine:
                 start_step = self.pltl_deduce_inital_step(spec, snapshot.scope)
             return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
         else: # spec.type == SpecType.fLTL:
-            return self.verify_future_LTL(spec, snapshot, snapshot.scope.depth, raw_spec)
+            return self.verify_future_LTL(spec, snapshot, lexical_depth, raw_spec)
     
     ################# FOL Verification #################
 
@@ -299,11 +303,12 @@ class VerificationEngine:
         self,
         spec: Spec,
         snapshot: RuntimeConfiguration,
-        raw_spec: Optional[RawSpec],
+        lexical_depth: int,
+        raw_spec: RawSpec,
     ) -> bool:
-        if raw_spec is None:
-            raise VerificationError("Future LTL verification requires a raw specification payload.")
-
+        '''
+        Verify a future LTL specification.
+        '''
         mapped_formula = FutureLTLMapper().map(spec)
         automaton = compile_future_automaton(
             mapped_formula.formula_text,
