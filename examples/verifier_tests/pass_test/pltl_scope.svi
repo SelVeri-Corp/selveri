@@ -1,0 +1,41 @@
+x : Float;
+x := 3.14;
+
+i : Int;
+i := 0;
+y: Float;
+while i < 10 do
+    x : Float;
+    x := 0.5 * i;
+    y := x;
+    i := i + 1;
+    
+    { Once ((i = 1) => (x = 0)) }; // holds just after i becomes 1.
+    { Once ((i = 1) => (x = 0.5)) }; // holds just before i becomes 2.
+
+    { Historically((x = 0.5 * i) || x = 0.5 * (i-1)) };
+    
+
+    // IMPORTANT NOTE: Because of unique scope IDs, the inner x is now a BRAND NEW 
+    //                 variable for every iteration! Its history resets every loop.
+    //                 Therefore, it is never 0.0 at iteration 2; it is only exactly
+    //                 what it was initialized to in this specific iteration.
+    //                 
+od
+
+// SelVeri-trick: in loops, to capture specific iterations, one must use loop-variant-conjuction, after the loop ends
+{ Once ((i = 1) && (y = 0)) }; // holds just after i becomes 1.
+{ Once ((i = 1) && (y = 0.5)) }; // holds just before i becomes 2.
+{ Once ((i = 10) && (y = 4.5)) }; // holds just before i becomes 11.
+{ Historically((y = 0.5 * i) || y = 0.5 * (i-1)) };
+
+
+if 2 > 1 then
+    x : Int;
+    x := 33;
+    { Historically(x = 33) }; // This is independent of all other x, so this spec holds.
+fi
+
+x := 3.14;
+
+{ Historically(x = 3.14) };

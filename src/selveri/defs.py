@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Dict
 
 from sympy.core.basic import Basic
-from .runtime import DeclType
+from .runtime import Scope, State
 if TYPE_CHECKING: # this runs only during type checking and does not import the specs module
     # defs -> specs -> parser -> defs
     from .specs import Spec
@@ -15,8 +15,8 @@ class Stmt: pass
 
 @dataclass(frozen=True)
 class RuntimeConfiguration:
-    state: Dict[str, Any]
-    scope: Dict[str, Optional[DeclType]]
+    state: State
+    scope: Scope
     
 @dataclass(frozen=True)
 class Formula:

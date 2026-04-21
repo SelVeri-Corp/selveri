@@ -99,7 +99,7 @@ class SpecAstBuilder(Transformer):
     def truthy(self, aexp): return BTruthy(aexp)
 
     # specs
-    def sbexp(self, bexp: BExp): return SpecFromBExp(self._next_uid(), SpecType.FOL, bexp) # TODO: can it have a type other than FOL?
+    def sbexp(self, bexp: BExp): return SpecFromBExp(self._next_uid(), SpecType.FOL, bexp)
     def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), rhs.type, "!", rhs)
     def spreviously(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Previously", rhs)
     def sonce(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Once", rhs)
