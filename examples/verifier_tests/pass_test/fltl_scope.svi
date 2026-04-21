@@ -22,13 +22,17 @@ fi
 if 2 = 2 then
     x : Int;
     x := 3;
+    { Always x = 3 };
+    y : Float;
+    y := x + x;
 fi
 
 if 3 = 3 then
     x : Int;
     x := 5;
-   { Historically x = 5}; // this is just interested in local x
+   { Always x = 5}; // this is just interested in local x
 fi
 
 // Outer `x` is still 0, so the obligation remains satisfied.
 { x = 0 };
+{ Always x = 0 };
