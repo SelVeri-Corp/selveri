@@ -318,6 +318,7 @@ class VerificationEngine:
             spec_id=raw_spec.spec_id,
             source_spec=raw_spec.text,
             created_at_step=self.last_step,
+            scope_id=snapshot.scope.scope_id,
             lexical_depth=lexical_depth,
             automaton=automaton,
             atom_table=mapped_formula.atom_table,
@@ -412,6 +413,17 @@ class VerificationEngine:
             }
         )
         return bool(substituted_guard) # return the boolean value of the substituted guard formula
+
+    def on_scope_exit(self, leaving_scope_id: int) -> None:
+        '''
+        Handle the exit of a scope.
+        '''
+        to_remove: list[int] = []
+        for idx, obligation in enumerate(self.fltl_pending):
+            if obligation.scope_id == leaving_scope_id:
+                to_remove.append(idx)
+        for idx in reversed(to_remove):
+            self.fltl_pending.pop(idx)
 
     def on_program_end(self, final_snapshot: RuntimeConfiguration) -> None:
         '''

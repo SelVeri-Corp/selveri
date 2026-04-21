@@ -42,6 +42,7 @@ class FutureObligation:
     spec_id: int
     source_spec: str
     created_at_step: int
+    scope_id: int
     lexical_depth: int
     automaton: FutureAutomaton
     atom_table: Dict[str, Spec]
