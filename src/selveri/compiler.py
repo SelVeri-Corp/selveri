@@ -744,12 +744,15 @@ class SelVeriCompiler:
     def C_stmt(self, stmt: Stmt) -> None:
         if isinstance(stmt, Decl):
             self._compile_decl(stmt)
+            self.emit("STEP")
             return
         if isinstance(stmt, Assign):
             self._compile_assign(stmt)
+            self.emit("STEP")
             return
         if isinstance(stmt, ListAssign):
             self._compile_list_assign(stmt)
+            self.emit("STEP")
             return
         if isinstance(stmt, Pass):
             self.emit("NOOP")
@@ -846,7 +849,7 @@ class SelVeriCompiler:
     def _compile_block(self, stmts: List[Stmt]) -> None:
         self.emit("CSCOPE")
         self._create_scope()
-        self.C_stmt_seq(stmts, emit_step=True)
+        self.C_stmt_seq(stmts)
         self._leave_scope()
         self.emit("PSCOPE")
 
@@ -923,10 +926,8 @@ class SelVeriCompiler:
         self.emit("CALL", call.name)
         self._set_retvar_type(func_decl.return_type)
 
-    def C_stmt_seq(self, stmts: List[Stmt], emit_step: bool = True) -> None:
+    def C_stmt_seq(self, stmts: List[Stmt]) -> None:
         for stmt in stmts:
-            if emit_step:
-                self.emit("STEP")
             self.C_stmt(stmt)
 
     def _register_functions(self, program: Program) -> None:
@@ -987,6 +988,7 @@ class SelVeriCompiler:
                 self._declare_dynamic_list_param(param.name, param.type_node)
                 continue
             raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
+        self.emit("STEP") # step after initializing parameters
 
         body = list(func.body) # copy for appending return
         if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value
