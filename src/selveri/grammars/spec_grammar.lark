@@ -1,0 +1,129 @@
+%import common.WS
+%ignore WS
+
+%ignore /\/\/[^\n]*/
+%ignore /\/\*[\s\S]*?\*\//
+
+IDENT: /[A-Za-z_][A-Za-z0-9_]*/
+FLOAT_LIT: /[0-9]+\.[0-9]+/
+INT_LIT: /[0-9]+/
+
+COMP_OP: "=" | "<=" | "<" | ">=" | ">"
+
+start: spec
+
+?spec: temporal_imp
+
+?temporal_imp: temporal_or "=>" temporal_imp            -> simp
+             | temporal_or
+
+?temporal_or: temporal_or "||" temporal_and             -> sor
+             | temporal_and
+
+?temporal_and: temporal_and "&&" temporal_temp          -> sand
+              | temporal_temp
+
+?temporal_temp: temporal_temp "Since" temporal_unary    -> ssince
+               | temporal_temp "Until" temporal_unary    -> suntil
+               | temporal_unary
+
+?temporal_unary: "!" temporal_unary                 -> snot
+                | "Previously" temporal_unary        -> spreviously
+                | "Once" temporal_unary              -> sonce
+                | "Historically" temporal_unary      -> shistorically
+                | "Next" temporal_unary              -> snext
+                | "Eventually" temporal_unary        -> seventually
+                | "Always" temporal_unary            -> salways
+                | "Forall" IDENT "in" domain "." state_spec -> sforall
+                | "Exists" IDENT "in" domain "." state_spec -> sexists
+                | bexp                           -> sbexp
+                | "(" spec ")"
+
+?state_spec: state_imp
+
+?state_imp: state_or "=>" state_imp         -> state_simp
+           | state_or
+
+?state_or: state_or "||" state_and          -> state_sor
+          | state_and
+
+?state_and: state_and "&&" state_unary      -> state_sand
+          | state_unary
+
+?state_unary: "!" state_unary               -> state_snot
+             | "Forall" IDENT "in" domain "." state_spec -> state_forall
+             | "Exists" IDENT "in" domain "." state_spec -> state_exists
+             | bexp                           -> state_sbexp
+             | "(" state_spec ")"
+
+?domain: list_lit                           -> domain_values
+       | range_domain
+       | interval_domain
+       | IDENT                              -> domain_ident
+       | basic_type                         -> domain_type
+       | "Var" "[" basic_type "]"           -> domain_var
+
+?range_domain: "[" aexp "..." aexp "]" -> domain_range
+
+?interval_domain: "[" aexp ";" aexp "]" -> interval_closed
+               | "(" aexp ";" aexp ")" -> interval_open
+               | "[" aexp ";" aexp ")" -> interval_halfopen
+               | "(" aexp ";" aexp "]" -> interval_halfclosed
+
+?basic_type: "Int"                         -> type_int
+           | "Float"                       -> type_float
+?type: basic_type
+     | "List" "[" basic_type "," INT_LIT "," aexp_list "]" -> type_list
+
+aexp_list: aexp ("," aexp)*                -> aexp_list
+
+?imm: INT_LIT                              -> int_lit
+    | FLOAT_LIT                            -> float_lit
+    | list_lit
+
+list_lit: "[" [imm ("," imm)*] "]"
+
+aexp: aexp_sum                             -> aexp
+
+?aexp_sum: aexp_sum "+" aexp_term          -> add
+         | aexp_sum "-" aexp_term          -> sub
+         | aexp_term
+
+?aexp_term: aexp_term "*" aexp_factor      -> mul
+          | aexp_term "/" aexp_factor      -> div
+          | aexp_factor
+
+?aexp_factor: "-" aexp_factor              -> neg
+            | aexp_atom
+
+?aexp_atom: imm
+         | IDENT                           -> a_var
+         | "&" IDENT                       -> a_bound_var
+         | "len" "(" IDENT ")"             -> a_len
+         | indexed_value
+         | "(" aexp ")"
+
+?indexed_value: IDENT "[" aexp "]"         -> a_index
+              | indexed_value "[" aexp "]" -> a_index
+
+bexp: b_or                                 -> bexp
+
+?b_or: b_or "or" b_xor                     -> bor
+     | b_xor
+
+?b_xor: b_xor "xor" b_and                  -> bxor
+      | b_and
+
+?b_and: b_and "and" b_not                  -> band
+      | b_not
+
+?b_not: "not" b_not                        -> bnot
+      | b_atom
+
+?b_atom: "true"                            -> btrue
+      | "false"                            -> bfalse
+      | comparison
+      | aexp                               -> truthy
+      | "(" bexp ")"
+
+comparison: aexp COMP_OP aexp              -> compare

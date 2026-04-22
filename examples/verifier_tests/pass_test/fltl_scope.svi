@@ -1,0 +1,38 @@
+// =====================================================
+// fLTL lexical scope capture: should PASS
+// =====================================================
+//
+// This test targets lexical_depth in future-LTL:
+// - The spec is declared in the outer scope.
+// - An inner scope shadows `x` with another variable named `x`.
+// - The outer-scope formula must keep referring to the outer `x`.
+
+x : Int;
+x := 0;
+
+// Must stay true for the outer `x`, even while an inner `x` exists.
+{ Always x = 0 };
+
+if 1 = 1 then
+    x : Int;
+    x := 99;
+    { x = 99 };
+fi
+
+if 2 = 2 then
+    x : Int;
+    x := 3;
+    { Always x = 3 };
+    y : Float;
+    y := x + x;
+fi
+
+if 3 = 3 then
+    x : Int;
+    x := 5;
+   { Always x = 5}; // this is just interested in local x
+fi
+
+// Outer `x` is still 0, so the obligation remains satisfied.
+{ x = 0 };
+{ Always x = 0 };

@@ -1,0 +1,21 @@
+// =====================================================
+// fLTL in loops: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+counter : Int;
+counter := 0;
+
+i : Int;
+i := 0;
+
+while i < 3 do
+    counter := counter + 2;
+    i := i + 1;
+od
+
+// After loop: counter = 6
+{ Eventually counter = 8 };             // False (counter stops at 6)
+
+// { Always counter < 6 };              // False (counter is 6 now)
+// { counter < 6 Until counter = 8 };   // False (8 is never reached)

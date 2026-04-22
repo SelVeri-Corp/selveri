@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .compiler import compile_selveri_source_to_ir_text
-from .interpreter import interpret_ir_text
+from .compiler import SelVeriCompiler
+from .interpreter import interpret_ir_code
+from .parser import parse_selveri
+from .SelVerifier.verifier import VerificationEngine
 
 def run_pipeline(
     input_path: Path,
@@ -16,7 +18,10 @@ def run_pipeline(
     with input_path.open("r", encoding="utf-8") as f:
         source = f.read()
 
-    ir_text = compile_selveri_source_to_ir_text(source)
+    program = parse_selveri(source)
+    compiler = SelVeriCompiler()
+    code = compiler.compile_program(program)
+    ir_text = "\n".join(instr.render() for instr in code)
 
     if output_ir is not None:
         output_ir.parent.mkdir(parents=True, exist_ok=True)
@@ -27,7 +32,9 @@ def run_pipeline(
         print(ir_text)
         print()
 
-    result = interpret_ir_text(ir_text, max_steps=max_steps)
+    verifier = VerificationEngine()
+    verifier.prepare_program(code, raw_specs=compiler.raw_specs.values())
+    result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
 
     print("Final state:")
     print(result.state)

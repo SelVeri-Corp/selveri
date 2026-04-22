@@ -1,0 +1,33 @@
+// =====================================================
+// pLTL in loops: all specs should PASS (True)
+// =====================================================
+
+x : Int;
+x := 0;
+
+{ x = 0 };              // True
+
+i : Int;
+i := 0;
+
+while i < 5 do
+    x := x + 2;
+    i := i + 1;
+
+    // x was 0 at some point
+    { Once (x = 0) };                    // True
+
+    // x has always been non-negative
+    { Historically (x >= 0) };           // True
+od
+
+// After loop: x = 10, i = 5
+{ x = 10 };                              // True
+{ Once (x = 0) };                        // True
+{ Once (x = 4) };                        // True
+{ Once (x = 10) };                       // True
+{ Historically (x >= 0) };               // True
+{ Historically (x <= 10) };              // True
+
+// x has been positive since it was first set to 2
+{ (x > 0) Since (x = 2) };               // True

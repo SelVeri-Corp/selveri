@@ -7,6 +7,7 @@
 %ignore /\/\/[^\n]*/
 %ignore /\/\*[\s\S]*?\*\//
 
+SPEC_SLOT: /__SELVERI_SPEC_[0-9]+__/
 IDENT: /[A-Za-z_][A-Za-z0-9_]*/
 FLOAT_LIT: /[0-9]+\.[0-9]+/
 INT_LIT: /[0-9]+/
@@ -23,10 +24,7 @@ stmt_seq: stmt*
 
 ?stmt: terminated_stmt
      | unterminated_stmt
-     | spec_annot                                        -> spec_annot
      | ";"                                               -> empty_stmt
-
-?spec_annot: "{" spec "}" ";"
 
 // ------------------ STATEMENTS ------------------
 
@@ -37,6 +35,9 @@ stmt_seq: stmt*
                | list_assign
                | "pass"                                               -> pass_stmt
                | func_call
+               | spec_annot
+
+spec_annot: SPEC_SLOT                                                 -> spec_annot
 
 // Statements that MUST NOT end with ';'
 ?unterminated_stmt: if_stmt
@@ -113,47 +114,6 @@ bexp: b_or                                                                -> bex
 
 comparison: aexp COMP_OP aexp                                             -> compare
 
-// ------------------ SPECIFICATIONS ------------------
-?spec: spec_imp                                                          
-
-?spec_imp: spec_or "=>" spec_imp                                          -> simp
-         | spec_or
-
-?spec_or: spec_or "||" spec_and                                           -> sor
-        | spec_and
-
-?spec_and: spec_and "&&" spec_temp                                        -> sand
-         | spec_temp
-
-?spec_temp: spec_temp "Since" spec_unary                                  -> ssince
-          | spec_temp "Until" spec_unary                                  -> suntil
-          | spec_unary
-
-?spec_unary: "!" spec_unary                                               -> snot
-           | "Previously" spec_unary                                      -> spreviously
-           | "Once" spec_unary                                            -> sonce
-           | "Historically" spec_unary                                    -> shistorically
-           | "Next" spec_unary                                            -> snext
-           | "Eventually" spec_unary                                      -> seventually
-           | "Always" spec_unary                                          -> salways
-           | "Forall" IDENT domain_opt "." spec                           -> sforall
-           | "Exists" IDENT domain_opt "." spec                           -> sexists
-           | bexp                                                         -> sbexp
-           | "(" spec ")"
-
-_domain_in: "in" domain
-domain_opt: _domain_in?                                                   -> domain_opt
-
-?domain: interval
-       | IDENT                                                            -> domain_ident
-       | set_lit
-       | type                                                             -> domain_type
-
-interval: "[" aexp "," aexp ")"                                           -> interval_halfopen
-        | "[" aexp "," aexp "]"                                           -> interval_closed
-
-set_lit: "{" aexp_list "}"                                                -> set_lit
-
 // ------------------ FUNCTIONS ------------------
 func_decl: "function" IDENT "(" param_list? ")" "->" return_type "::" func_stmt_seq "end" -> func_decl
 
@@ -171,7 +131,6 @@ dynamic_list_type: "List" "[" basic_type "," INT_LIT "]"                  -> dyn
 func_stmt_seq: func_stmt*
 ?func_stmt:  func_terminated_stmt
            | func_unterminated_stmt
-           | spec_annot                                                 -> spec_annot
            | ";"                                                          -> empty_stmt
 
 ?func_terminated_stmt: func_semicolon_stmt ";"
@@ -181,6 +140,7 @@ func_stmt_seq: func_stmt*
                     | func_call
                     | "pass"                                                 -> pass_stmt
                     | return_stmt
+                    | spec_annot
 
 ?func_unterminated_stmt: func_if_stmt
                         | func_while_stmt
