@@ -25,6 +25,8 @@ STATE_NAME_RE = re.compile(r"[A-Za-z0-9_]+")
 
 def compile_future_automaton(formula_text: str, atom_names: Iterable[str]) -> FutureAutomaton:
     try:
+        # TODO: check if NNF conversion is really needed
+        #       otherwise remove it, it's unnecessary complexity
         ltlf_formula = LTLfParser()(formula_text).to_nnf() # negation normal form
     except Exception as exc:
         raise VerificationError(
