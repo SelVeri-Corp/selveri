@@ -6,7 +6,6 @@
 
 % Set page size and margins
 % Replace `letterpaper' with `a4paper' for UK/EU standard size
-\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
 
 % Useful packages
 \usepackage{amsmath}
@@ -124,6 +123,8 @@ We declare the syntax of arithmetic expressions so that the operator precedence 
 \langle \mathit{Ident} \rangle
 \;\mid\;
 \mathtt{len}(\langle \mathit{Ident} \rangle)
+\;\mid\;
+\mathtt{read()} 
 \;\mid\;
 \langle \mathit{IndexedVal} \rangle
 \;\mid\;
@@ -254,44 +255,35 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 \mathtt{Always}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
 &&
 \mid\;
-\mathtt{Forall}\;\langle \mathit{Ident} \rangle\;\langle \mathit{DomainOpt} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle
+\mathtt{Forall}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle
 \;\mid\;
-\mathtt{Exists}\;\langle \mathit{Ident} \rangle\;\langle \mathit{DomainOpt} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle \\[2pt]
+\mathtt{Exists}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle \\[2pt]
 &&
 \mid\;
 \langle \mathit{BExp} \rangle
 \;\mid\;
 (\langle \mathit{Spec} \rangle) \\[4pt]
 
-\langle \mathit{DomainOpt} \rangle
-&::=&
-\epsilon
-\;\mid\;
-\mathtt{in}\;\langle \mathit{Domain} \rangle \\[4pt]
-
 \langle \mathit{Domain} \rangle
 &::=&
-\langle \mathit{Interval} \rangle
+\mathtt{[}\; \langle \mathit{IntLit} \rangle \; \mathtt{...}\; \langle \mathit{IntLit} \rangle \; \mathtt{)}
 \;\mid\;
+\mathtt{[}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{]}
+\;\mid\;
+\mathtt{(}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{)} \\[2pt]
+&&
+\mathtt{[}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{)}
+\;\mid\;
+\mathtt{(}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{]} \\[2pt]
+&&
+\mid\;
 \langle \mathit{Ident} \rangle
 \;\mid\;
-\langle \mathit{SetLiteral} \rangle
+\langle \mathit{BasicType} \rangle
 \;\mid\;
-\langle \mathit{Type} \rangle \\[4pt]
-
-\langle \mathit{Interval} \rangle
-&::=&
-[\langle \mathit{AExp} \rangle,\langle \mathit{AExp} \rangle)
+\mathtt{Var[} \; \langle \mathit{BasicType} \rangle \; \mathtt{]}
 \;\mid\;
-[\langle \mathit{AExp} \rangle,\langle \mathit{AExp} \rangle] \\[4pt]
-
-\langle \mathit{SetLiteral} \rangle
-&::=&
-\{\langle \mathit{AExpList} \rangle\} \\[4pt]
-
-\langle \mathit{AExpList} \rangle
-&::=&
-\langle \mathit{AExp} \rangle\;(\texttt{,}\;\langle \mathit{AExp} \rangle)^*
+\langle \mathit{ListLit} \rangle \\[4pt]
 \end{array}
 \]
 
@@ -360,8 +352,7 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 
 \langle \mathit{IOStmt} \rangle
 &::=&
-\mathtt{read}\;\langle \mathit{Ident} \rangle 
-\;\mid\; \mathtt{write}\;\langle \mathit{Ident} \rangle
+\mathtt{write}\;\langle \mathit{Ident} \rangle
 \;\mid\; \mathtt{writeline}\;\langle \mathit{Ident} \rangle
 
 \end{array}
@@ -547,7 +538,7 @@ Initially, each scope starts its lifetime as an empty scope, denoted as $\tilde{
 \[
 \forall x \in \textbf{Var} \, . \,\tilde{s}(x) = \textbf{Void}
 \]
-where $\textbf{Void} : \textbf{Type}$ is the empty type.\\
+where $\textbf{Void} : \textbf{Type}$ is the empty type.
 
 To simplify the formalization of list-types, given any scope $s$, we enforce the following implication:
 
@@ -556,10 +547,13 @@ s(x) = \textbf{List[$t,d,\vec{n}$]}
 \implies
 \forall i \in \{0, \,...\, , n-1\} \,.\, s(x\texttt{[$i$]}) = \textbf{List[$t, d-1, \pi_d(\vec{n})$]}
 \]
-We call this implication as \textit{recursive declaration principle}. As \texttt{SelVeri} syntax does not allow identifiers including \texttt{[} or \texttt{]} characters, it is not possible to create any scope contradicting the recursive declaration. \\
+We call this implication as \textit{recursive declaration principle}. As \texttt{SelVeri} syntax does not allow identifiers including \texttt{[} or \texttt{]} characters, it is not possible to create any scope contradicting the recursive declaration.
 
-Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}. If $s$ is a scope, we denote its immediate child as $s_c$. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope. When a variable is reached by a parent scope, then a change to its type (which is only possible for the special variable \texttt{retvar}, see section \textbf{2.1.5}) is made directly to the parent scope. However, for simplicity, we omit this special case in our configurations.
+Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}. If $s$ is a scope, we denote its immediate child as $s_c$. In the \texttt{SelVeri} implementation, a variable is searched in the \texttt{parent\_scope}, if it cannot be found in the current scope. When a variable is reached by a parent scope, then a change to its type (which is only possible for special variable \texttt{retvar}, see section \textbf{2.1.5}) is made directly to the parent scope. However, for simplicity, we omit this special case in our configurations.
 
+Finally, each scope comes with a unique id, which is utilized by \texttt{SelVerifier} to differentiate variables with same name that are declared in different scopes.
+
+\newpage
 \subsubsection{Program states}
 
 Let \textbf{State} be the set of all possible program states and \textbf{Val} \footnote{The reader can notice that $ran\mathcal{I}$, $ran\mathcal{F}$ and $ran\mathcal{L}$ are all subsets of \textbf{Val}.} be the set of all semantic values. Each state is in fact a map from \textbf{Var} and \textbf{Scope} to \textbf{Val}, representing the value of a given variable in the specified scope. Formally,
@@ -618,12 +612,31 @@ size(t) = \begin{cases}
 \]
 In a type declaration like $\textbf{List}[t, d, \vec{n}]$, definition of $\textbf{List}$ type enforces $t \in \textbf{BasicType}$, so above definition covers all possible t values.
 
+\subsubsection{I/O Operations}
+\texttt{SelVeri} programs can interact with the input and output streams. This is necessary due to the philosophy of \texttt{SelVeri}, since verification requires reasoning over programs that depend on external inputs rather than fixed constants. These interactions are done utilizing tools available to the abstract machine\footnotemark.
+\footnotetext{Refer to SelVerIR document for details of the abstract machine.}
+
+\paragraph{Write Operations.}
+Write operations behave as expected. The string representation of an arithmetic expression is printed after evaluating it under the current state and scope. Formally, for an expression $a$, the abstract machine outputs $\mathcal{A}(a, \sigma, s)$.
+
+\paragraph{Read as an Arithmetic Expression.}
+Unlike the \texttt{write} operation, \texttt{read} is not treated as a statement, and it is evaluated as an arithmetic expression. This allows it to be composed naturally inside larger expressions, such as:
+\[
+    x := \texttt{read()} + (\texttt{read()} * 2)
+\]
+To support this, we define all possible sequences of input streams as \textbf{InputStream}:
+\[
+    \iota \in \textbf{InputStream}  \implies \exists n \in \mathbb{N}.\; \iota = [v_0, v_1, v_2, \dots, v_n] \in \textbf{Imm}^{n\footnotemark} 
+\]
+which represents the sequence of values provided by the environment.
+\footnotetext{Here, $n$ represents the number of inputs provided by the user through the execution of the program. Normally it is equal to the number of occurences of the \texttt{read()} statement.}
+
 \newpage
 \subsection{Semantics of arithmetic expressions}
 
 We define the arithmetic valuation function $\mathcal{A}$, representing the semantics of the arithmetic expressions in \texttt{SelVeri}.
 \[
-\mathcal{A} : \textbf{AExp} \times \textbf{State} \times \textbf{Scope} \rightarrow \textbf{Val} 
+\mathcal{A} : \textbf{AExp} \times \textbf{State} \times \textbf{Scope} \times \textbf{InputStream} \to \textbf{Val} 
 \]
 
 \begin{table}[h!]
@@ -635,94 +648,44 @@ We define the arithmetic valuation function $\mathcal{A}$, representing the sema
 \fbox{%
 \begin{tabular}{l}
 $
-    \begin{alignedat}{2}
-    \mathcal{A}(x, \sigma, s) &= \mathcal{I}(x)
-    \qquad &&\text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int} \\
-    
-    \mathcal{A}(x, \sigma, s) &= \mathcal{F}(x)
-    \qquad &&\text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float} \\
-    
-    \mathcal{A}(x, \sigma, s) &= \text{size}(\textbf{List}[ t,d, \vec{n}]) : \mathcal{L}_{\textbf{List}[t, d,\vec{n}]}(x)
-    \qquad &&\text{if } x \in \textbf{Imm} \land s(x) = \textbf{List[} t,d,\vec{n}  \textbf{]} \\
-    
-    \mathcal{A}(x, \sigma, s) &= \sigma(x, s)
-    \qquad &&\text{if } x \in \textbf{Var} \\
-    
-    \mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_m$]}, \sigma, s) &= \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_m, \sigma, s)$]}, \sigma, s)
-    \qquad &&\text{if $lst \in \textbf{Var}$ and $lst$} \\
-
-    \mathcal{A}(\texttt{len($x$)}, \sigma, s) &= 
-    \left\{
-      \begin{aligned}
-        & 0 \\
-        & \mathcal{A}(\texttt{\_$x$\_len\_1}, \sigma, s) \\
-        & \bot
-      \end{aligned}
-    \right.
-    \qquad
-      &&\begin{aligned}  
-        &\text{if } x \in \textbf{Var} \land s(x) \in \textbf{BasicType} \\
-        &\text{if } x \in \textbf{Var} \land s(x) \notin \{\textbf{Void}, \textbf{Int}, \textbf{Float}\} \\
-        &\text{otherwise}
-      \end{aligned} \\
-
-    \mathcal{A}(a_1 + a_2, \sigma, s) &=  
-    \left\{
-    \begin{aligned}
-        & \mathcal{A}(a_1, \sigma, s) + \mathcal{A}(a_2, \sigma, s) \\
-        & \bot
-    \end{aligned}
-    \right.
-    \qquad
-    &&\begin{aligned}
-        &\text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
-        &\text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
-    \end{aligned} \\
-
-    \mathcal{A}(a_1 \ast a_2, \sigma, s) &= 
-    \left\{
-    \begin{aligned}
-        & \mathcal{A}(a_1, \sigma, s)\cdot \mathcal{A}(a_2, \sigma, s) \\
-        & \bot
-    \end{aligned}
-    \right.
-    \qquad
-    &&\begin{aligned}
-        &\text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
-        &\text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
-    \end{aligned} \\
-
-    \mathcal{A}(a_1 - a_2, \sigma, s) &= 
-    \left\{
-    \begin{aligned}
-        & \mathcal{A}(a_1, \sigma, s)- \mathcal{A}(a_2, \sigma, s) \\
-        & \bot
-    \end{aligned}
-    \right.
-    \qquad
-    &&\begin{aligned}
-        &\text{if } \mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot \\
-        &\text{if } \mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot
-    \end{aligned} \\
-
-    \mathcal{A}(a_1 / a_2, \sigma, s) &= 
-    \left\{
-    \begin{aligned}
-        & \mathcal{A}(a_1, \sigma, s) / \mathcal{A}(a_2, \sigma, s) \footnotemark \\
-        & \bot
-    \end{aligned}
-    \right.
-    \qquad
-    &&\begin{aligned}
-        &\text{if } \mathcal{A}(a_2, \sigma, s)\neq 0 \land (\mathcal{A}(a_1, \sigma, s)\neq \bot \land \mathcal{A}(a_2, \sigma, s)\neq \bot) \\
-        &\text{if } \mathcal{A}(a_2, \sigma, s)= 0 \lor (\mathcal{A}(a_1, \sigma, s)= \bot \lor \mathcal{A}(a_2, \sigma, s)= \bot)
-    \end{aligned} \\
-\end{alignedat}
+\begin{aligned}
+\mathcal{A}(x, \sigma, s, \iota) &= \mathcal{I}(x) \quad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Int} \\
+\mathcal{A}(x, \sigma, s, \iota) &= \mathcal{F}(x) \quad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{Float} \\
+\mathcal{A}(x, \sigma, s, \iota) &= \text{size}(\textbf{List}[t, d, \vec{n}]) : \mathcal{L}_{\textbf{List}[t, d, \vec{n}]}(x) \quad \text{if } x \in \textbf{Imm} \land s(x) = \textbf{List}[t, d, \vec{n}] \\
+\mathcal{A}(x, \sigma, s, \iota) &= \sigma(x, s) \quad \text{if } x \in \textbf{Var} \\
+\mathcal{A}(lst[i_1]\dots[i_m], \sigma, s, \iota) &= \mathcal{A}(lst[\mathcal{A}(i_1, \sigma, s, \iota)]\dots[\mathcal{A}(i_m, \sigma, s, \iota)], \sigma, s, \iota) \quad \text{if } lst \in \textbf{Var} \\
+\mathcal{A}(\texttt{len}(x), \sigma, s, \iota) &= 
+\begin{cases}
+    0 & \text{if } x \in \textbf{Var} \land s(x) \in \textbf{BasicType} \\
+    \mathcal{A}(\texttt{\_}x\texttt{\_len\_1}, \sigma, s, \iota) & \text{if } x \in \textbf{Var} \land s(x) \notin \{\textbf{Void}, \textbf{Int}, \textbf{Float}\} \\
+    \bot & \text{otherwise}
+\end{cases} \\
+\mathcal{A}(a_1 + a_2, \sigma, s, \iota) &= 
+\begin{cases}
+    \mathcal{A}(a_1, \sigma, s, \iota) + \mathcal{A}(a_2, \sigma, s, \iota) & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) \neq \bot \land \mathcal{A}(a_2, \sigma, s, \iota) \neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) = \bot \lor \mathcal{A}(a_2, \sigma, s, \iota) = \bot
+\end{cases} \\
+\mathcal{A}(a_1 \ast a_2, \sigma, s, \iota) &= 
+\begin{cases}
+    \mathcal{A}(a_1, \sigma, s, \iota) \cdot \mathcal{A}(a_2, \sigma, s, \iota) & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) \neq \bot \land \mathcal{A}(a_2, \sigma, s, \iota) \neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) = \bot \lor \mathcal{A}(a_2, \sigma, s, \iota) = \bot
+\end{cases} \\
+\mathcal{A}(a_1 - a_2, \sigma, s, \iota) &= 
+\begin{cases}
+    \mathcal{A}(a_1, \sigma, s, \iota) - \mathcal{A}(a_2, \sigma, s, \iota) & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) \neq \bot \land \mathcal{A}(a_2, \sigma, s, \iota) \neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) = \bot \lor \mathcal{A}(a_2, \sigma, s, \iota) = \bot
+\end{cases} \\
+\mathcal{A}(a_1 / a_2, \sigma, s, \iota) &= 
+\begin{cases}
+    \mathcal{A}(a_1, \sigma, s, \iota) / \mathcal{A}(a_2, \sigma, s, \iota) & \text{if } \mathcal{A}(a_2, \sigma, s, \iota) \neq 0 \land \mathcal{A}(a_1, \sigma, s, \iota) \neq \bot \land \mathcal{A}(a_2, \sigma, s, \iota) \neq \bot \\
+    \bot & \text{if } \mathcal{A}(a_2, \sigma, s, \iota) = 0 \lor \mathcal{A}(a_1, \sigma, s, \iota) = \bot \lor \mathcal{A}(a_2, \sigma, s, \iota) = \bot
+\end{cases} \\
+\mathcal{A}(\text{read}(), \sigma, s, i : \iota) &= \mathcal{V}(i) \quad \text{if } i \in \textbf{Imm} \land s(x) \in \textbf{BasicType}
+\end{aligned}
 $
 \end{tabular}%
 }
 }
-
 \caption{The semantics of arithmetic expressions}
 \label{tab:arith-semantics}
 \end{table}
@@ -742,7 +705,7 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 
 \begin{table}[h!]
 \centering
-\renewcommand{\arraystretch}{2} % increase vertical spacing
+\renewcommand{\arraystretch}{1.6} % increase vertical spacing
 \large % increase font size
 \makebox[\textwidth][c]{%
 \fbox{%
@@ -805,7 +768,7 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 
 \begin{table}[!ht]
 \centering
-\renewcommand{\arraystretch}{1.8} % Significantly increased global line spacing
+\renewcommand{\arraystretch}{1.3} % Significantly increased global line spacing
 \makebox[\textwidth][c]{%
 \begin{tabular}{|r l|}
 \hline
@@ -880,7 +843,7 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 
 \([ \text{while}^{\bot}_{\text{os}} ]\) &
 \(\langle \texttt{while } b \texttt{ do } S \texttt{ od}, \sigma, s \rangle \rightarrow \hat{\sigma}
-\quad \text{if } \mathcal{B}(b, \sigma, s) = \bot\) \\[6pt]
+\quad \text{if } \mathcal{B}(b, \sigma, s) = \bot\) \\
 
 \([ \text{call}_{\text{os}} ]\) &
 \renewcommand{\arraystretch}{1.2}
@@ -899,25 +862,17 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 \quad \text{where } \sigma \text{ and } s \text{ are of returning function's caller.}
 \end{array}\) \\[6pt]
 
-\([ \text{read}_{\text{os}} ]\) &
-\renewcommand{\arraystretch}{1.2}
-\(\begin{array}[t]{@{}l@{}}
-\langle \texttt{read}\; x, \sigma, s \rangle \rightarrow \langle \sigma[x \mapsto i],\; s\rangle \\
-\quad \text{if $x \in \textbf{Var} \land i \in ran\mathcal{L}_{s(x)}$}\\
-\quad \text{where $i$ is the external user input}
-\end{array}\) \\[6pt]
-
 \([ \text{write}_{\text{os}} ]\) &
 \renewcommand{\arraystretch}{1.2}
 \(\begin{array}[t]{@{}l@{}}
-\langle \texttt{write}\; x, \sigma, s \rangle \rightarrow \langle \sigma,\; s\rangle \\
+\langle \texttt{write}(x), \sigma, s \rangle \rightarrow \langle \sigma,\; s\rangle \\
 \quad \text{where the abstract machine emits the value $\mathcal{A}(x, \sigma, s)$}
 \end{array}\) \\[6pt]
 
 \([ \text{writeln}_{\text{os}} ]\) &
 \renewcommand{\arraystretch}{1.2}
 \(\begin{array}[t]{@{}l@{}}
-\langle \texttt{writeline}\; x, \sigma, s \rangle \rightarrow \langle \sigma,\; s\rangle \\
+\langle \texttt{writeline}(x), \sigma, s \rangle \rightarrow \langle \sigma,\; s\rangle \\
 \quad \text{where the abstract machine emits the value $\mathcal{A}(x, \sigma, s)$ and a newline}
 \end{array}\) \\[6pt]
 
@@ -935,5 +890,8 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 Note that not all possible configurations are included in the table above. In any case which is absent from the table, program state is transitioned into $\hat{\sigma}$. \\
 
 Moreover, for each if-rule, an \texttt{if}-statement without the \texttt{else}-part, namely a statement of the form "\texttt{if} $b$ \texttt{then} $S$ \texttt{fi}" can be treated as "\texttt{if} $b$ \texttt{then} $S$ \texttt{else pass fi}"
+
+\newpage
+\section{Turing-completeness of SelVeri}
 
 \end{document}
