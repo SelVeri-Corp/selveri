@@ -21,7 +21,7 @@
 
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 
-\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v0.8}
+\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v0.9}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -408,6 +408,31 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 As one can notice from the tables above, we do not have type-specific commands for \texttt{ADD}, \texttt{SUB} and \texttt{MUL} or boolean operators as these operations are closed under $\mathbb{Z}$ \footnote{Although syntactically different in \texttt{SelVeri} high level language; semantically, we do not interpret any integer differently than its real number counterpart.}. However, since this is not the case for division, we have separate instructions for integer and float division, namely \texttt{iDIV} and \texttt{fDIV}.
 
 \newpage
+\section{Determinism of \texttt{SelVerIR}}
+
+Before proceeding to the compilation section, we need to guarantee that the \texttt{SelVerIR} abstract machine serves as a mathematically sound target for the compiler. To achieve this we must prove that its execution is strictly deterministic. This requires showing that the small-step operational semantics transition relation ($\triangleright$) for the intermediate representation is a partial function. \\
+
+\textbf{Theorem (Determinism of SelVerIR):} For any IR-configuration $\gamma = \langle c,\, e,\, \sigma,\, s,\, pc,\, ras,\, \iota,\, \Omega \rangle$, if $\gamma \triangleright \gamma_1$ and $\gamma \triangleright \gamma_2$, then $\gamma_1 = \gamma_2$. \\
+
+\textbf{Proof:} The proof proceeds by case analysis on the current command to be executed, which is the head of the command list $c$. We must demonstrate that for any configuration, exactly one transition rule from the operational semantics tables applies. \\
+
+\textit{Step 1: Uniqueness of Command Matching} \\
+The execution of the abstract machine is strictly driven by the command at $c[0]$. Because the syntax of \texttt{SelVerIR} commands (e.g., \texttt{ADD}, \texttt{LOAD}, \texttt{JZ}) is unambiguous, the configuration will match the left-hand side of at most one command's semantic definition. \\
+
+\textit{Step 2: Mutual Exclusivity of Command Premises} \\
+For commands that define multiple possible resulting states, we must show that their branching conditions are mutually exclusive:
+\begin{itemize}
+    \item \textbf{State-related Commands (\texttt{DECL}, \texttt{LOAD}, \texttt{STORE}):} These commands branch strictly based on the static type of the identifier in the scope ($s(x)$) or the length of the list being accessed. Since a variable $x$ cannot simultaneously map to multiple disparate types or lengths in $s$, these conditions are mutually exclusive.
+    \item \textbf{Arithmetic and Boolean Commands:} Instructions like \texttt{iDIV} and \texttt{fDIV} branch on whether the divisor is zero or non-zero ($z_2 = 0$ vs. $z_2 \neq 0$). Boolean commands like \texttt{AND}, \texttt{OR}, and \texttt{NEG} branch on explicit, mutually exclusive truth values ($1$ or $0$) popped from the stack.
+    \item \textbf{Control-flow (\texttt{JZ}):} The \texttt{JZ} instruction branches on whether the condition value $b$ popped from the stack is exactly $1$ or exactly $0$. It is mathematically impossible for both to be true simultaneously.
+\end{itemize}
+
+\textit{Step 3: Deterministic Error Fallback} \\
+For any valid command where the current stack $e$ or scope $s$ fails to satisfy the specific preconditions listed in the semantic definitions (e.g., a type mismatch, stack underflow, or an invalid list index), the semantics explicitly state that the configuration deterministically transitions to the erroneous state $\hat{\sigma}$ and increments the program counter $pc$ by exactly 1. \\
+
+Because every valid \texttt{SelVerIR} command maps to exactly one deterministic outcome based on the state of the stack, scope, and program variables, and because any undefined configuration maps strictly to a single defined error state, at most one rule can apply to any IR-configuration. With a simple induction, this rule can be generalized to any \texttt{SelVerIR} program $c$ of finite length. Therefore, $\gamma_1 = \gamma_2$, proving that the \texttt{SelVerIR} is deterministic. $\blacksquare$
+
+\newpage
 \section{Compilation}
 
 Let \textbf{Code} and \textbf{CodeIR} be the sets of all \texttt{SelVeri} and \texttt{SelVerIR} programs, respectively. Using these sets, we will inductively define a compiler function:
@@ -468,7 +493,7 @@ However, $\mathit{LF}$ only formalizes list-accesses in \texttt{SelVerIR}, but w
 \end{cases}
 \] Similar to $\mathit{LF}$, \texttt{size\_IR} outputs a syntctic arithmetic expression and the use of $\Pi$ is a shorthan for represeting a chaing of $d$-many $\ast$ operations. \\
 
-Observe that the valuation of \texttt{size\_IR}($t$) is equal $size(t)$. With the help of $\mathit{LF}$ and \texttt{size\_IR}, we will be able to correctly define the compilation of list-accesses and list-declarations in \textbf{sections 3.2} and \textbf{3.4}.
+Observe that the valuation of \texttt{size\_IR}($t$) is equal $size(t)$. With the help of $\mathit{LF}$ and \texttt{size\_IR}, we will be able to correctly define the compilation of list-accesses and list-declarations in \textbf{sections 4.2} and \textbf{4.4}.
 
 
 \newpage
@@ -1147,7 +1172,7 @@ Now, as the correctness of arithmetic and boolean expressions is proven, we may 
 \langle \mathcal{C}(P),\, e,\, \underline{\sigma},\, s,\, pc,\, ras \rangle \; \triangleright^{\ast} \; \langle \underline{\sigma}_f,\, s_f,\, pc + l_P,\, ras \rangle 
 \] where $P$ is any \texttt{SelVeri} program and $l_P$ is the number of commands in $\mathcal{C}(P)$. \\
 
-Observe that the implication above mentions the correctness of only terminating programs. However, we also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct, and we will present our arguments in \textbf{section 5}.
+Observe that the implication above mentions the correctness of only terminating programs. However, we also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct, and we will present our arguments in \textbf{section 6}.
 
 \begin{proof}
 If $\underline{\sigma}$ is an erroneous program state, then by section \textbf{2.2.5} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$, the above implication is obviously true \footnote{Furthermore, $\sigma = \sigma_f$ and $s = s_f$, in this case.}.  Therefore, from now on, we assume that $\underline{\sigma}$ represents a non-erroneous program state and will use $\sigma$ to denote it. \\
@@ -1739,7 +1764,7 @@ Now, as our formalization enhanced, we can attempt to prove the correctness of d
         Zero steps taken, the states are trivially identical.
 
         \item \textbf{The Successor Case:} Assume that theorem holds for some ordinal $\gamma$ and let $\alpha = \gamma^+$. \\
-        \textbf{Section 4} exactly proves the successor case. Note that, the proof in the \textbf{section 4} trivially implies the prefix correctness via the semantics of compositional statements.
+        \textbf{Section 5} exactly proves the successor case. Note that, the proof in the \textbf{section 5} trivially implies the prefix correctness via the semantics of compositional statements.
 
         \item \textbf{The Limit Case:} Let $\alpha$ be a limit ordinal and assume that the theorem holds for all ordinals $\gamma < \alpha$. \\ By the \textit{$\omega$-bound of computation}, we have $\alpha = \beta = \omega$. This also means our induction hypothesis is equivalent to the correctness of convergent programs, which is already proven. Additionally, because the only reasons of divergence in a \texttt{SelVeri} program are infinite loops or recursions, after a finite number of steps, say $M$; by the decomposition lemma there must be an indefinitely executed statement $S_r$  whose longest possible execution takes a finite number of steps, say $m$. Given any variable $x$, consider two cases:
 

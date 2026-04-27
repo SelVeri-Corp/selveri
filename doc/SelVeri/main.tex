@@ -17,7 +17,7 @@
 \setlength{\parskip}{\smallskipamount}
 \setlength{\parindent}{0pt}
 
-\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.9}
+\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.9.1}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -892,6 +892,30 @@ Note that not all possible configurations are included in the table above. In an
 Moreover, for each if-rule, an \texttt{if}-statement without the \texttt{else}-part, namely a statement of the form "\texttt{if} $b$ \texttt{then} $S$ \texttt{fi}" can be treated as "\texttt{if} $b$ \texttt{then} $S$ \texttt{else pass fi}"
 
 \newpage
-\section{Turing-completeness of SelVeri}
+\newpage
+\section{Determinism of \texttt{SelVeri}}
+
+In order to rigorously establish that \texttt{SelVeri} is a deterministic language, we must prove that its small-step operational semantics transition relation ($\rightarrow$) is a partial function.
+
+\textbf{Theorem (Determinism):} For any statement $S$, state $\sigma$, and scope $s$, if $\langle S, \sigma, s \rangle \rightarrow \gamma_1$ and $\langle S, \sigma, s \rangle \rightarrow \gamma_2$, then $\gamma_1 = \gamma_2$.
+
+\textbf{Proof:} The proof proceeds by structural induction on the statement $S$. Before evaluating the statements, we first establish the determinism of expressions.
+
+\textit{Step 1: Determinism of Expressions} \\
+According to our semantics, the arithmetic valuation function $\mathcal{A}$ is defined as a deterministic mathematical function mapping a tuple of (\textbf{AExp}, \textbf{State}, \textbf{Scope}, \textbf{InputStream}) to exactly one value in \textbf{Val} (Table \ref{tab:arith-semantics}). Similarly, the boolean valuation function $\mathcal{B}$ maps to exactly one value in $\{0, 1, \bot\}$ (Table \ref{tab:boolean-semantics}). Because these evaluations are strictly defined as functions, they inherently yield exactly one result for any given configuration.
+
+\textit{Step 2: Mutual Exclusivity of Statement Rules} \\
+We proceed by structural induction on $S$, showing that for any given configuration, at most one operational semantic rule can apply (Table \ref{tab:while-semantics}).
+\begin{itemize}
+    \item \textbf{Control Flow (\texttt{if} and \texttt{while}):} The transition rules for \texttt{if} ($[\text{if}^{1}_{\text{os}}]$, $[\text{if}^{0}_{\text{os}}]$, $[\text{if}^{\bot}_{\text{os}}]$) and \texttt{while} ($[\text{while}^{1}_{\text{os}}]$, $[\text{while}^{0}_{\text{os}}]$, $[\text{while}^{\bot}_{\text{os}}]$) depend strictly on the evaluation of $\mathcal{B}(b, \sigma, s)$. Since $\mathcal{B}$ deterministically evaluates to exactly $1$, $0$, or $\bot$, these premises are mutually exclusive.
+    \item \textbf{Assignments:} The basic assignment rules ($[\text{ass}_{\text{os}}]$ and $[\text{ass}^{\bot}_{\text{os}}]$) possess mutually exclusive premises. $[\text{ass}_{\text{os}}]$ requires $\mathcal{A}(a, \sigma, s) \neq \bot \land \mathcal{A}(a, \sigma, s) \in ran\mathcal{L}_{s(x)}$. The rule $[\text{ass}^{\bot}_{\text{os}}]$ fires if and only if this exact condition is false ($\mathcal{A}(a, \sigma, s) = \bot \lor \mathcal{A}(a, \sigma, s) \notin ran\mathcal{L}_{s(x)}$). The same mutual exclusivity applies to list assignments.
+    \item \textbf{Declarations:} The declaration rules ($[\text{decl}_{\text{os}}]$ and $[\text{decl}^{\bot}_{\text{os}}]$) rely on mutually exclusive type and scope checks. $[\text{decl}_{\text{os}}]$ applies if $t \in \textbf{BasicType} \land s(x) = \textbf{Void}$, whereas $[\text{decl}^{\bot}_{\text{os}}]$ acts as the deterministic fallback if $t \notin \textbf{Type} \lor s(x) \neq \textbf{Void}$.
+    \item \textbf{Error States:} If a state is already erroneous ($\hat{\sigma}$), the catch-all error rule $[\text{err}_{\text{os}}]$ deterministically transitions the program into $\hat{\sigma}$. Furthermore, as stated previously, any configuration absent from the operational semantics table also deterministically transitions into $\hat{\sigma}$.
+\end{itemize}
+
+Because the expressions are deterministic and the transition rules for statements are mutually exclusive, it is impossible for more than one operational semantic rule to apply to any given configuration. Therefore, $\gamma_1 = \gamma_2$, and the semantics of \texttt{SelVeri} are strictly deterministic. $\blacksquare$
+
+\section{Turing-completeness of \texttt{SelVeri}}
+}
 
 \end{document}
