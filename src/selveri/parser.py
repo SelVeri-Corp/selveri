@@ -38,17 +38,17 @@ class BasicType(ConcreteType):
         raise NotImplementedError("Subclasses must implement __str__")
 
 @dataclass(frozen=True)
-class IntType(BasicType):
+class TypeInt(BasicType):
     def __str__(self) -> str:
         return "INT"
 
 @dataclass(frozen=True)
-class FloatType(BasicType):
+class TypeFloat(BasicType):
     def __str__(self) -> str:
         return "FLOAT"
 
 @dataclass(frozen=True)
-class ListType(ConcreteType):
+class TypeList(ConcreteType):
     elem: BasicType
     dimension: "IntLit"
     shape: List[AExp] = field(default_factory=list)
@@ -64,7 +64,7 @@ class ListType(ConcreteType):
         return f"LIST[{self.elem},{self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 @dataclass(frozen=True)
-class DynamicListType(TypeNode):
+class TypeDynamicList(TypeNode):
     elem: BasicType
     dimension: "IntLit"
     shape: List[Optional[AExp]] = field(default_factory=list)
@@ -278,10 +278,10 @@ class AstBuilder(Transformer):
     def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
 
     # types
-    def type_int(self): return IntType()
-    def type_float(self): return FloatType()
-    def type_list(self, elem, dimension, shape): return ListType(elem, IntLit(int(dimension)), shape)
-    def dynamic_list_type(self, elem, dimension): return DynamicListType(elem, IntLit(int(dimension)))
+    def type_int(self): return TypeInt()
+    def type_float(self): return TypeFloat()
+    def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
+    def dynamic_list_type(self, elem, dimension): return TypeDynamicList(elem, IntLit(int(dimension)))
 
     def aexp_list(self, *items):
         return list(items)

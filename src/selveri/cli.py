@@ -15,6 +15,7 @@ def run_pipeline(
     output_ir: Path | None,
     max_steps: int,
     print_ir: bool,
+    debug: bool,
 ) -> int:
     with input_path.open("r", encoding="utf-8") as f:
         source = f.read()
@@ -44,13 +45,14 @@ def run_pipeline(
     start_time = perf_counter()
     result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
     end_time = perf_counter()
-    print(f"Execution time: {end_time - start_time:.6f} seconds")
+    print(f"\nExecution time: {end_time - start_time:.6f} seconds")
 
-    print("Final state:")
-    print(result.state)
-    print("\nFinal stack:")
-    print(result.stack)
-    print(f"\nSteps: {result.steps}")
+    if debug:
+        print("Final state:")
+        print(result.state)
+        print("\nFinal stack:")
+        print(result.stack)
+    print(f"Steps: {result.steps}")
     return 0
 
 
@@ -82,6 +84,11 @@ def main() -> int:
         action="store_true",
         help="Print generated SelVerIR before interpretation",
     )
+    arg_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print debug information",
+    )
     args = arg_parser.parse_args()
 
     output_ir = None
@@ -93,4 +100,5 @@ def main() -> int:
         output_ir=output_ir,
         max_steps=args.max_steps,
         print_ir=args.print_ir,
+        debug=args.debug,
     )
