@@ -1,5 +1,5 @@
 x : Int;
-x := read();
+x := 5;
 writeline(x);
 
 y : List[Int, 1, 5];

@@ -37,10 +37,10 @@ stmt_seq: stmt*
                | func_call
                | write_stmt
                | writeline_stmt
+               | spec_annot
 
 write_stmt: "write" "(" aexp ")"                                        -> write_stmt
 writeline_stmt: "writeline" "(" aexp ")"                                -> writeline_stmt
-               | spec_annot
 
 spec_annot: SPEC_SLOT                                                 -> spec_annot
 

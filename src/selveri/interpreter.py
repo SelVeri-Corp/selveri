@@ -105,7 +105,7 @@ def _split_top_level_commas(s: str) -> List[str]:
         parts.append(tail)
     return parts
 
-# parse scalar token: INT | FLOAT | list literal e.g. [1,2,3] or [1, [2, 3]]
+# parse scalar token: INT | FLOAT
 def _parse_scalar_token(token: str) -> Any:
     t = token.strip()
     if len(t) >= 2 and t[0] == t[-1] and t[0] in {"'", '"'}:
@@ -114,12 +114,6 @@ def _parse_scalar_token(token: str) -> Any:
         return int(t)
     if _FLOAT_RE.fullmatch(t):
         return float(t)
-    if len(t) >= 2 and t[0] == "[" and t[-1] == "]":
-        inner = t[1:-1].strip()
-        if not inner:
-            return []
-        return [_parse_scalar_token(p) for p in _split_top_level_commas(inner)]
-
     return t
 
 # parse label line: LABEL OP [args]
@@ -831,9 +825,6 @@ class SelVerIRInterpreter:
         # literal values
         if isinstance(arg, (int, float)):
             self._push(arg)
-            return
-        if isinstance(arg, list):
-            self._push_list_packet(arg)
             return
 
         raise IRRuntimeError(f"Cannot PUSH unknown immediate: {arg}")

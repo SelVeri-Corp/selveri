@@ -139,7 +139,9 @@ class SelVeriCompiler:
     """
 
     def __init__(self) -> None:
-        self._create_scope(fresh_env=True) # create global parent scope
+        # starting scope with retvar
+        self.scope = _ScopeFrame() # parent scope
+        self.scope.bindings["retvar"] = None
         self.current_return_type: Optional[TypeNode] = None
         # functions to be compiled (declaration object, pc)
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
@@ -181,7 +183,7 @@ class SelVeriCompiler:
         type_node = owner.bindings[name]
         if type_node is None:
             if name == "retvar":
-                raise CompilerError(f"retvar has no type yet.")
+                raise CompilerError("retvar has no type until a function call returns.")
             raise CompilerError(f"Internal: unbound variable: {name}")
         return type_node
 
@@ -212,14 +214,12 @@ class SelVeriCompiler:
     def _declare_list_len_slot(self, list_name: str, dim: int) -> None:
         self._declare_basic(self._list_len_name(list_name, dim), TypeInt())
 
-    def _set_dynamic_var_type(self, name: str, type_node: Optional[TypeNode]) -> None:
-        if name != "retvar":
-            raise CompilerError(f"Internal: {name} is not a dynamic variable.")
-        self.scope.bindings[name] = type_node
+    def _set_retvar_type(self, type_node: Optional[TypeNode]) -> None:
+        self.scope.bindings["retvar"] = type_node
         if isinstance(type_node, (TypeList, TypeDynamicList)):
-            self.scope.lists[name] = self._list_info_from_type(type_node)
+            self.scope.lists["retvar"] = self._list_info_from_type(type_node)
             return
-        self.scope.lists.pop(name, None)
+        self.scope.lists.pop("retvar", None)
 
     def _try_eval_const_int(self, a: AExp) -> Optional[int]:
         """
@@ -357,8 +357,8 @@ class SelVeriCompiler:
 
     def _basic_types_compatible(self, actual: TypeNode, expected: TypeNode) -> bool:
         if isinstance(expected, TypeFloat):
-            return isinstance(actual, BasicType) # integers are casted into floats gracefully
-        return type(actual) is type(expected) or type(actual) is BasicType
+            return isinstance(actual, (TypeInt, TypeFloat)) # integers are casted into floats gracefully
+        return type(actual) is type(expected)
 
     def _infer_list_literal_type(self, literal: ListLit) -> TypeList:
         """
@@ -532,13 +532,13 @@ class SelVeriCompiler:
             return self._get_type_list_access(info, indices)
         if isinstance(expr, AUnOp):
             inner = self._type_of_aexp(expr.rhs)
-            if not isinstance(inner, BasicType):
+            if not isinstance(inner, (TypeInt, TypeFloat)):
                 raise CompilerError("Unary '-' can only be applied to basic numeric expressions.")
             return inner
         if isinstance(expr, ABinOp):
             left = self._type_of_aexp(expr.left)
             right = self._type_of_aexp(expr.right)
-            if not isinstance(left, BasicType) or not isinstance(right, BasicType):
+            if not isinstance(left, (TypeInt, TypeFloat)) or not isinstance(right, (TypeInt, TypeFloat)):
                 raise CompilerError("Binary arithmetic operators can only be applied to basic numeric expressions.")
             if isinstance(left, TypeFloat) or isinstance(right, TypeFloat):
                 return TypeFloat()
@@ -934,7 +934,7 @@ class SelVeriCompiler:
                 self.CA(arg)
 
         self.emit("CALL", call.name)
-        self._set_dynamic_var_type("retvar", func_decl.return_type)
+        self._set_retvar_type(func_decl.return_type)
 
     def _compile_write(self, stmt: Write) -> None:
         self.CA(stmt.aexp)
@@ -996,7 +996,8 @@ class SelVeriCompiler:
         self.functions[func.name] = (func, entry_pc)
 
         self.emit("FUNCENV", func.name, f"{func.return_type}")
-        self._create_scope(fresh_env=True)
+        self.scope = _ScopeFrame()
+        self.scope.bindings["retvar"] = None
         self.current_return_type = func.return_type
 
         # Parameters are pushed left-to-right by the caller, so bind them from the
