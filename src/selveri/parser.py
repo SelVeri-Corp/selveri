@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List
+from typing import Dict, Iterator, List, Optional
 
-from lark import Lark, Transformer, v_args, LarkError
+from lark import Lark, LarkError, Token, Transformer, v_args
+
 from .errors import ParserError
+from .defs import AExp, BExp, Stmt
+from .specs import RawSpec
+from .preprocessor import extract_raw_specs
 
 # =========================
 # AST
@@ -16,17 +20,14 @@ class Program:
     func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
 
-class Stmt: pass
-class AExp: pass
-class BExp: pass
-class Spec: pass
+
+
 class TypeNode: 
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
 class ConcreteType(TypeNode):
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
-class Domain: pass
 class Imm:
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
@@ -49,7 +50,7 @@ class FloatType(BasicType):
 @dataclass(frozen=True)
 class ListType(ConcreteType):
     elem: BasicType
-    dimension: IntLit
+    dimension: "IntLit"
     shape: List[AExp] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -65,7 +66,7 @@ class ListType(ConcreteType):
 @dataclass(frozen=True)
 class DynamicListType(TypeNode):
     elem: BasicType
-    dimension: IntLit
+    dimension: "IntLit"
     shape: List[Optional[AExp]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -128,11 +129,17 @@ class AUnOp(AExp):
     op: str
     rhs: AExp
 
+    def __str__(self) -> str:
+        return f"{self.op}{self.rhs}"
+
 @dataclass(frozen=True)
 class ABinOp(AExp):
     op: str
     left: AExp
     right: AExp
+
+    def __str__(self) -> str:
+        return f"{self.left} {self.op} {self.right}"
 
 # Boolean
 @dataclass(frozen=True)
@@ -171,63 +178,6 @@ class BCompare(BExp):
 class BTruthy(BExp):
     aexp: AExp
 
-# Domains
-@dataclass(frozen=True)
-class DomainIdent(Domain):
-    name: str
-
-@dataclass(frozen=True)
-class DomainType(Domain):
-    type_node: TypeNode
-
-@dataclass(frozen=True)
-class DomainSet(Domain):
-    items: List[AExp]
-
-@dataclass(frozen=True)
-class DomainInterval(Domain):
-    lo: AExp
-    hi: AExp
-    right_open: bool
-
-    def __str__(self) -> str:
-        return f"[{self.lo}, {self.hi})" if self.right_open else f"[{self.lo}, {self.hi}]"
-
-@dataclass(frozen=True)
-class DomainOpt:
-    domain: Optional[Domain]
-
-# Specs
-@dataclass(frozen=True)
-class SpecFromBExp(Spec):
-    bexp: BExp
-
-    def __str__(self) -> str:
-        return str(self.bexp)
-
-@dataclass(frozen=True)
-class SpecUnOp(Spec):
-    op: str
-    rhs: Spec
-
-@dataclass(frozen=True)
-class SpecBinOp(Spec):
-    op: str
-    left: Spec
-    right: Spec
-
-    def __str__(self) -> str:
-        return f"{self.left} {self.op} {self.right}"
-
-@dataclass(frozen=True)
-class SpecQuant(Spec):
-    kind: str          # "Forall" | "Exists"
-    var: str
-    domain: Optional[Domain]
-    body: Spec
-
-    def __str__(self) -> str:
-        return f"{self.kind} {self.var} in {self.domain} . {self.body}"
 
 # Statements
 @dataclass(frozen=True)
@@ -250,7 +200,7 @@ class Pass(Stmt): pass
 
 @dataclass(frozen=True)
 class SpecAnnot(Stmt):
-    spec: Spec
+    spec: RawSpec
 
 @dataclass(frozen=True)
 class If(Stmt):
@@ -295,7 +245,12 @@ class FunctionDecl:
 
 @v_args(inline=True)
 class AstBuilder(Transformer):
-    def start(self, program): return program
+    def __init__(self, spec_slots: Dict[str, RawSpec]) -> None:
+        super().__init__()
+        self.spec_slots = spec_slots
+
+    def start(self, program):
+        return program
 
     def program(self, *children):
         if not children:
@@ -306,8 +261,8 @@ class AstBuilder(Transformer):
     def stmt_seq(self, *stmts):
         return list(stmts) or []
 
-    def spec_annot(self, spec):
-        return SpecAnnot(spec)
+    def spec_annot(self, slot: Token):
+        return SpecAnnot(self.spec_slots[str(slot)])
 
     # statements
     def decl_stmt(self, name, type_node): return Decl(str(name), type_node)
@@ -327,6 +282,9 @@ class AstBuilder(Transformer):
     def type_float(self): return FloatType()
     def type_list(self, elem, dimension, shape): return ListType(elem, IntLit(int(dimension)), shape)
     def dynamic_list_type(self, elem, dimension): return DynamicListType(elem, IntLit(int(dimension)))
+
+    def aexp_list(self, *items):
+        return list(items)
 
     # function parameters
     def param_type(self, name, type_node):
@@ -364,37 +322,6 @@ class AstBuilder(Transformer):
     def bor(self, l, r): return BBinOp("or", l, r)
     def compare(self, l, op, r): return BCompare(str(op), l, r)
     def truthy(self, aexp): return BTruthy(aexp)
-
-    # spec ops
-    def sbexp(self, bexp): return SpecFromBExp(bexp)
-    def snot(self, rhs): return SpecUnOp("!", rhs)
-    def spreviously(self, rhs): return SpecUnOp("Previously", rhs)
-    def sonce(self, rhs): return SpecUnOp("Once", rhs)
-    def shistorically(self, rhs): return SpecUnOp("Historically", rhs)
-    def snext(self, rhs): return SpecUnOp("Next", rhs)
-    def seventually(self, rhs): return SpecUnOp("Eventually", rhs)
-    def salways(self, rhs): return SpecUnOp("Always", rhs)
-    def ssince(self, l, r): return SpecBinOp("Since", l, r)
-    def suntil(self, l, r): return SpecBinOp("Until", l, r)
-    def sand(self, l, r): return SpecBinOp("&&", l, r)
-    def sor(self, l, r): return SpecBinOp("||", l, r)
-    def simp(self, l, r): return SpecBinOp("=>", l, r)
-
-    # domain + quantifiers
-    def domain_opt(self, domain=None):
-        return DomainOpt(domain)
-    def domain_ident(self, name): return DomainIdent(str(name))
-    def domain_type(self, type_node): return DomainType(type_node)
-    def aexp_list(self, *items): return list(items)
-    def set_lit(self, items): return DomainSet(items)
-    def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, True)
-    def interval_closed(self, lo, hi): return DomainInterval(lo, hi, False)
-
-    def sforall(self, var, domopt, body):
-        return SpecQuant("Forall", str(var), domopt.domain, body)
-
-    def sexists(self, var, domopt, body):
-        return SpecQuant("Exists", str(var), domopt.domain, body)
 
     # functions
     def func_decl(self, name, *rest):
@@ -442,20 +369,42 @@ class AstBuilder(Transformer):
 
 
 SELVERI_PARSER = Lark.open(
-    str(Path(__file__).with_name("grammar.lark")),
+    str(Path(__file__).resolve().parent / "grammars" / "grammar.lark"),
     parser="lalr",
     lexer="contextual",
     maybe_placeholders=False,
 )
 
-
 def parse_selveri(src: str) -> Program:
-    """Parse SelVeri source code into an AST Program."""
+    """Parse SelVeri source code into an executable AST with raw spec payloads."""
+    rewritten_src, raw_specs = extract_raw_specs(src) # preprocess the source code to extract raw specs
     try:
-        tree = SELVERI_PARSER.parse(src)
+        tree = SELVERI_PARSER.parse(rewritten_src)
     except LarkError as e:
         raise ParserError("Failed to parse SelVeri source code. " + str(e)) from None
-    return AstBuilder().transform(tree)
+    return AstBuilder(raw_specs).transform(tree)
+
+
+def _iter_stmt_specs(stmts: List[Stmt]) -> Iterator[RawSpec]:
+    for stmt in stmts:
+        if isinstance(stmt, SpecAnnot):
+            yield stmt.spec
+            continue
+        if isinstance(stmt, If):
+            yield from _iter_stmt_specs(stmt.then_s)
+            if stmt.else_s is not None:
+                yield from _iter_stmt_specs(stmt.else_s)
+            continue
+        if isinstance(stmt, While):
+            yield from _iter_stmt_specs(stmt.body)
+
+
+def collect_raw_specs(program: Program) -> List[RawSpec]:
+    specs: List[RawSpec] = []
+    for func in program.func_decls:
+        specs.extend(_iter_stmt_specs(func.body))
+    specs.extend(_iter_stmt_specs(program.stmt_seq))
+    return specs
 
 
 if __name__ == "__main__":

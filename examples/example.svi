@@ -5,4 +5,4 @@ if x = 1 then
 else
     x := 3;
 fi 
-{ Forall i in [0, 3) . (x = 1) && true };
+{ Forall i in [0; 3) . (x = 2) && true };

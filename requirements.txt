@@ -1,1 +1,3 @@
 lark
+ltlf2dfa
+z3-solver

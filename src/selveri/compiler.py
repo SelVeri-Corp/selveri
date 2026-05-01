@@ -14,6 +14,7 @@ from .parser import (
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
     FunctionDecl, Write, WriteLine,
 )
+from .specs import RawSpec
 
 from .errors import CompilerError
 
@@ -29,8 +30,13 @@ class IRInstr:
     args: Tuple[Union[str, int, float], ...] = () # arguments
 
     def render(self) -> str:
-        rendered_args = ", ".join(str(arg) for arg in self.args)
+        rendered_args = ", ".join(self._render_arg(index, arg) for index, arg in enumerate(self.args))
         return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
+
+    def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
+        if self.op == "VERI" and index == 1 and isinstance(arg, str):
+            return repr(arg)
+        return str(arg)
 
 
 # Patch reference for jumps
@@ -139,6 +145,7 @@ class SelVeriCompiler:
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
+        self.raw_specs: Dict[int, RawSpec] = {}
 
     # ---------- utilities ----------
     def pc(self) -> int:
@@ -741,18 +748,22 @@ class SelVeriCompiler:
     def C_stmt(self, stmt: Stmt) -> None:
         if isinstance(stmt, Decl):
             self._compile_decl(stmt)
+            self.emit("STEP")
             return
         if isinstance(stmt, Assign):
             self._compile_assign(stmt)
+            self.emit("STEP")
             return
         if isinstance(stmt, ListAssign):
             self._compile_list_assign(stmt)
+            self.emit("STEP")
             return
         if isinstance(stmt, Pass):
             self.emit("NOOP")
             return
         if isinstance(stmt, SpecAnnot):
-            self.emit("VERI", stmt.spec)
+            self.raw_specs[stmt.spec.spec_id] = stmt.spec
+            self.emit("VERI", stmt.spec.spec_id, stmt.spec.text)
             return
         if isinstance(stmt, If):
             self._compile_if(stmt)
@@ -1002,6 +1013,7 @@ class SelVeriCompiler:
                 self._declare_dynamic_list_param(param.name, param.type_node)
                 continue
             raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
+        self.emit("STEP") # step after initializing parameters
 
         body = list(func.body) # copy for appending return
         if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value

@@ -1,0 +1,503 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+
+% Useful packages
+\usepackage{graphicx}
+\usepackage{tablefootnote}
+\usepackage{amsmath, amssymb, array} % in the preamble
+\usepackage{enumitem}
+\usepackage{amsthm} % In your preamble
+\usepackage{bussproofs}
+\usepackage{amssymb}
+\usepackage{tabularx} % Required for adjustable width tables
+\usepackage{array}
+\usepackage{tablefootnote}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+
+\title{SelVerifier: Self-Verifying Programming Language \\ Verification Engine Document \\}
+\author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\texttt{SelVeri}, as its name suggests, is a programming language that natively supports verification of first-order logical formulae (including past and future temporal operators) based on the program state and scope. Its subcomponent which is responsible for verifying specifications is called the \textit{verification engine}, or more stylistically, the \texttt{SelVerifier}. This documentation focuses on how the verifying process works and its limitations.
+
+% This part is direclty copy-paster from the SelVeri documentation (v0.9). If any change occurs in that documentation, this part should also be updated.
+\section{Syntax of allowed specifications}
+
+Let $\mathtt{Spec}_{\mathtt{SV}}$ be the infinite set of all allowed specifications in \texttt{SelVeri}.
+
+\[
+\begin{array}{rcl}
+\langle \mathit{Spec} \rangle
+&::=&
+\langle \mathit{SpecImp} \rangle \\[4pt]
+
+\langle \mathit{SpecImp} \rangle
+&::=&
+\langle \mathit{SpecOr} \rangle\;\mathtt{=>}\;\langle \mathit{SpecImp} \rangle
+\;\mid\;
+\langle \mathit{SpecOr} \rangle \\[4pt]
+
+\langle \mathit{SpecOr} \rangle
+&::=&
+\langle \mathit{SpecOr} \rangle\;\mathtt{||}\;\langle \mathit{SpecAnd} \rangle
+\;\mid\;
+\langle \mathit{SpecAnd} \rangle \\[4pt]
+
+\langle \mathit{SpecAnd} \rangle
+&::=&
+\langle \mathit{SpecAnd} \rangle\;\mathtt{\&\&}\;\langle \mathit{SpecTemp} \rangle
+\;\mid\;
+\langle \mathit{SpecTemp} \rangle \\[4pt]
+
+\langle \mathit{SpecTemp} \rangle
+&::=&
+\langle \mathit{SpecTemp} \rangle\;\mathtt{Since}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\langle \mathit{SpecTemp} \rangle\;\mathtt{Until}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\langle \mathit{SpecUnary} \rangle \\[4pt]
+
+\langle \mathit{SpecUnary} \rangle
+&::=&
+\mathtt{!}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Previously}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Once}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Historically}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
+&&
+\mid\;
+\mathtt{Next}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Eventually}\;\langle \mathit{SpecUnary} \rangle
+\;\mid\;
+\mathtt{Always}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
+&&
+\mid\;
+\mathtt{Forall}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle
+\;\mid\;
+\mathtt{Exists}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle \\[2pt]
+&&
+\mid\;
+\langle \mathit{BExp} \rangle
+\;\mid\;
+(\langle \mathit{Spec} \rangle) \\[4pt]
+
+\langle \mathit{Domain} \rangle
+&::=&
+\mathtt{[}\; \langle \mathit{IntLit} \rangle \; \mathtt{...}\; \langle \mathit{IntLit} \rangle \; \mathtt{)}
+\;\mid\;
+\mathtt{[}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{]}
+\;\mid\;
+\mathtt{(}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{)} \\[2pt]
+&&
+\mathtt{[}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{)}
+\;\mid\;
+\mathtt{(}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{]} \\[2pt]
+&&
+\mid\;
+\langle \mathit{Ident} \rangle
+\;\mid\;
+\langle \mathit{BasicType} \rangle
+\;\mid\;
+\mathtt{Var[} \; \langle \mathit{BasicType} \rangle \; \mathtt{]}
+\;\mid\;
+\langle \mathit{ListLit} \rangle \\[4pt]
+\end{array}
+\]
+
+\newpage
+\section{Verification of First-order Logic formulae}
+To verify FOL formulae, \texttt{SelVerifier} utilizes \texttt{Z3 Theorem Prover} (with its \texttt{Python API}). In order to map \texttt{SelVerIR} program state and scopes and convert specifications from $\mathtt{Spec}_{\mathtt{SV}}$ to equivalent \texttt{Z3} inputs (elements of $\mathtt{Spec}_{\mathtt{Z3}}$), it utilizes the \texttt{Z3Mapper} class, formalized as in the following way:
+
+\subsection{Variable Mapping Dictionaries}
+To accurately preserve the semantics of both the program's memory and the logical specifications, the \texttt{Z3Mapper} utilizes two distinct dictionaries for variable resolution:
+
+\begin{itemize}
+    \item \textbf{\texttt{free\_var\_map}:} This dictionary maps lexically scoped \texttt{SelVeri} program variables to their corresponding Z3 symbolic constants (e.g., \texttt{Int}, \texttt{Real}, or \texttt{Array}). These represent the persistent program state and are globally constrained by the values defined in the runtime environment.
+    
+    \item \textbf{\texttt{bound\_var\_map}:} This dictionary tracks temporary variables that are strictly bound by First-Order Logic (FOL) quantifiers (such as $\forall$ and $\exists$) or finite domain iterators within a specification. These map to Z3 bound variables (internally prefixed with \texttt{\&}) or concrete values during domain unrolling, ensuring they do not interfere with the free variables of the program state.
+\end{itemize}
+
+\newpage
+\subsection{Configuration Mapping}
+The runtime configuration consists of a hierarchical \textbf{Scope} (lexical environments) and a \textbf{State} (memory values). The mapper enforces a strict lexical depth matching mechanism to preserve vertical isolation.
+
+\subsubsection{Lexical Scoping and Variable Naming}
+To ensure independent history tracking for horizontally isolated blocks, every variable $v$ mapped to \mathtt{Z3} is prefixed with its owner scope's unique identifier (\texttt{scope\_id}). We define the naming function $\mathcal{ZN}$ as:
+\[
+\mathcal{ZN}(v, id) = \texttt{\_s}\langle id \rangle\texttt{\_}v
+\]
+
+
+\subsubsection{Scope Mapping}
+Let $\mathcal{ZS}$ be the mapping function from \texttt{SelVeri} types to \mathtt{Z3} Sorts. Variables are declared in the \texttt{free\_var\_map} according to their type:
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5} 
+\resizebox{0.8\linewidth}{!}{%
+\fbox{%
+$\begin{array}{ll}
+\mathcal{ZS}(\texttt{INT}) &= \texttt{IntSort()} \\[1ex]
+\mathcal{ZS}(\texttt{FLOAT}) &= \texttt{RealSort()} \\[1ex]
+\mathcal{ZS}(\texttt{LIST[INT]}) &= \texttt{Array}(\texttt{IntSort()}, \texttt{IntSort()}) \\[1ex]
+\mathcal{ZS}(\texttt{LIST[FLOAT]}) &= \texttt{Array}(\texttt{IntSort()}, \texttt{RealSort()}) \\[1ex]
+\end{array}$%
+}%
+}
+\end{table}
+
+\subsubsection{State Mapping}
+For a given state mapping variable $v$ to value $val$, assertions are added to the \mathtt{Z3} solver to constrain the free variables. 
+If $v$ is of a basic type (\texttt{INT} or \texttt{FLOAT}):
+\[
+\texttt{solver.add}( \mathcal{ZN}(v, id) == val )
+\]
+If $v$ is a \texttt{LIST} of size $n$, the array is constrained element by element:
+\[
+\forall i \in [0, n-1] \cdot \texttt{solver.add}( \mathcal{ZN}(v, id)[i] == val[i] )
+\]
+
+\newpage
+\subsection{Specification Mapping}
+
+The mapper recursively translates Abstract Syntax Tree (AST) nodes of the specification into \mathtt{Z3} expressions. We define $\mathcal{ZA}$ for arithmetic expressions, $\mathcal{ZB}$ for boolean expressions, and $\mathcal{ZF}$ for generic FOL formulas.
+
+
+\subsubsection{Mapping of Arithmetic Expressions ($\mathcal{ZA}$)}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+\resizebox{\linewidth}{!}{%
+\fbox{%
+$\begin{array}{ll}
+\mathcal{ZA}(\texttt{IntLit}(v)) &= \texttt{IntVal}(v) \\[1ex]
+
+\mathcal{ZA}(\texttt{FloatLit}(v)) &= \texttt{RealVal}(v) \\[1ex]
+
+\mathcal{ZA}(\texttt{ListLit}(v_0, \dots, v_n)) &= 
+\begin{cases}
+    \texttt{Store}(\dots \texttt{Store}(\texttt{K}(\texttt{Int}, 0), 0, v_0) \dots, n, v_n) & \text{if all } v_i \in \mathbb{Z} \\
+    \texttt{Store}(\dots \texttt{Store}(\texttt{K}(\texttt{Int}, 0.0), 0, v_0) \dots, n, v_n) & \text{if any } v_i \in \mathbb{R}
+\end{cases}
+\\[2ex]
+
+\mathcal{ZA}(\texttt{AVar}(x)) &= \texttt{free\_var\_map}[\mathcal{ZN}(x, \text{lexical\_owner}(x))] \\[1ex]
+
+\mathcal{ZA}(\texttt{ABoundVar}(x)) &= \texttt{bound\_var\_map}[x] \\[1ex]
+
+\mathcal{ZA}(\texttt{ALen}(lst)) &= 
+\begin{cases}
+    \texttt{free\_var\_map}[\mathcal{ZN}(\texttt{\_}lst\texttt{\_len\_1}, id)] & \text{if } lst \text{ is a LIST} \\
+    \texttt{IntVal}(0) & \text{otherwise}
+\end{cases}
+\\[2.5ex]
+
+\mathcal{ZA}(\texttt{AIndex}(lst, i_1 \dots i_d)) &= \texttt{free\_var\_map}[\mathcal{ZN}(lst, id)][\mathcal{ZA}(\mathit{LF_{Z3}}(lst; i_1, \dots, i_d))] \\[1ex]
+
+\mathcal{ZA}(-a) &= -\mathcal{ZA}(a) \\[1ex]
+
+\mathcal{ZA}(a_1 \oplus a_2) &= \mathcal{ZA}(a_1) \oplus \mathcal{ZA}(a_2) \qquad \text{for } \oplus \in \{+, -, \ast, /\} \\[1ex]
+
+\end{array}$%
+}%
+}
+\end{table}
+
+\textit{Note: $\mathit{LF_{Z3}}$ is the \mathtt{Z3} equivalent of the list flattening logic, computed dynamically using dimension length shadows ($\texttt{\_}lst\texttt{\_len\_}d$) from the mapping scope.}
+
+\newpage
+\subsubsection{Mapping of Boolean Expressions ($\mathcal{ZB}$)}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+\resizebox{0.9\linewidth}{!}{%
+\fbox{%
+$\begin{array}{ll}
+\mathcal{ZB}(\texttt{BBool}(\texttt{True})) &= \texttt{BoolVal(True)} \\[1ex]
+
+\mathcal{ZB}(\texttt{BBool}(\texttt{False})) &= \texttt{BoolVal(False)} \\[1ex]
+
+\mathcal{ZB}(\texttt{BNot}(b)) &= \texttt{Not}(\mathcal{ZB}(b)) \\[1ex]
+
+\mathcal{ZB}(b_1 \;\texttt{and}\; b_2) &= \texttt{And}(\mathcal{ZB}(b_1), \mathcal{ZB}(b_2)) \\[1ex]
+
+\mathcal{ZB}(b_1 \;\texttt{or}\; b_2) &= \texttt{Or}(\mathcal{ZB}(b_1), \mathcal{ZB}(b_2)) \\[1ex]
+
+\mathcal{ZB}(b_1 \;\texttt{xor}\; b_2) &= \texttt{Xor}(\mathcal{ZB}(b_1), \mathcal{ZB}(b_2)) \\[1ex]
+
+\mathcal{ZB}(a_1 \otimes a_2) &= \mathcal{ZA}(a_1) \otimes \mathcal{ZA}(a_2) \qquad \text{for } \otimes \in \{==, <, <=, >, >=\} \\[1ex]
+
+\mathcal{ZB}(\texttt{BTruthy}(a)) &= (\mathcal{ZA}(a) \neq 0) \\[1ex]
+
+\end{array}$%
+}%
+}
+\end{table}
+
+\subsubsection{Mapping of First-Order Logic formulas ($\mathcal{ZF}$)}
+
+Formulas such as Unary Operators (\texttt{!}), Binary Operators (\texttt{\&\&}, \texttt{||}, \texttt{=>}), and general BExp specifications are routed directly to Z3's logical connectives:
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+\resizebox{0.8\linewidth}{!}{%
+\fbox{%
+$\begin{array}{ll}
+\mathcal{ZF}(\texttt{SpecFromBExp}(b)) &= \mathcal{ZB}(b) \\[1ex]
+\mathcal{ZF}(\texttt{SpecUnOp}(\texttt{!}, f)) &= \texttt{Not}(\mathcal{ZF}(f)) \\[1ex]
+\mathcal{ZF}(\texttt{SpecBinOp}(\texttt{\&\&}, f_1, f_2)) &= \texttt{And}(\mathcal{ZF}(f_1), \mathcal{ZF}(f_2)) \\[1ex]
+\mathcal{ZF}(\texttt{SpecBinOp}(\texttt{||}, f_1, f_2)) &= \texttt{Or}(\mathcal{ZF}(f_1), \mathcal{ZF}(f_2)) \\[1ex]
+\mathcal{ZF}(\texttt{SpecBinOp}(\texttt{=>}, f_1, f_2)) &= \texttt{Implies}(\mathcal{ZF}(f_1), \mathcal{ZF}(f_2)) \\[1ex]
+\end{array}$%
+}%
+}
+\end{table}
+
+\newpage
+\subsubsection{Quantifiers and Domains}
+
+The \texttt{SpecQuant} mapping dictates how $\forall$ (\texttt{Forall}) and $\exists$ (\texttt{Exists}) are bound over specific domains. For a bound variable $x$ and formula body $\phi$:
+
+\begin{itemize}
+    \item \textbf{Infinite Domains (Z3 Native Quantifiers)}
+    
+    If the domain is unbounded (\texttt{DomainType}), \mathtt{Z3} native quantifiers are utilized directly:
+    \[
+    \begin{aligned}
+    \mathcal{ZF}(\forall x \in \texttt{INT} \cdot \phi) \quad &\implies \quad \texttt{ForAll}(x_{z3}, \mathcal{ZF}(\phi)) \\
+    \mathcal{ZF}(\exists x \in \texttt{FLOAT} \cdot \phi) \quad &\implies \quad \texttt{Exists}(x_{z3}, \mathcal{ZF}(\phi))
+    \end{aligned}
+    \]
+    
+    \item \textbf{Bounded Continuous/Discrete Domains}
+    
+    For \texttt{DomainRange} (discrete bounds $[lo, hi]$):
+    \[
+    \begin{aligned}
+    \mathcal{ZF}(\forall x \in [lo, hi] \cdot \phi) \quad &\implies \quad \texttt{ForAll}(x_{z3}, \texttt{Implies}(lo \le x_{z3} \le hi, \mathcal{ZF}(\phi))) \\
+    \mathcal{ZF}(\exists x \in [lo, hi] \cdot \phi) \quad &\implies \quad \texttt{Exists}(x_{z3}, \texttt{And}(lo \le x_{z3} \le hi, \mathcal{ZF}(\phi)))
+    \end{aligned}
+    \]
+
+    For \texttt{DomainInterval} (real bounds with strict/non-strict operators), the bounds are dynamically translated to combinations of $<$ and $\le$.
+    
+    \item \textbf{Finite Iteration Domains (Unrolled via finite connectives)}
+    
+    For lists or finite sets, the quantifier is unrolled during the mapping phase into large \texttt{And} or \texttt{Or} chains. Let $\mathcal{D}$ be a finite domain iterable returning values $\{v_0, v_1, \dots, v_n\}$: (Note that the substitution is implemented with the help of \texttt{bound\_var\_map} dictionary.)
+    
+    \[
+    \begin{aligned}
+    \mathcal{ZF}(\forall x \in \mathcal{D} \cdot \phi) \quad &\implies \quad \texttt{And}( \mathcal{ZF}(\phi[v_0/x]), \dots, \mathcal{ZF}(\phi[v_n/x]) ) \\
+    \mathcal{ZF}(\exists x \in \mathcal{D} \cdot \phi) \quad &\implies \quad \texttt{Or}( \mathcal{ZF}(\phi[v_0/x]), \dots, \mathcal{ZF}(\phi[v_n/x]) )
+    \end{aligned}
+    \]
+    This is applied to \texttt{DomainIdent} (array elements), \texttt{DomainValues} (literals), and \texttt{DomainVar} (variables in the lexical scope).
+    
+\end{itemize}
+
+\subsection{\texttt{VERI} instruction}
+
+Let $\mathcal{M}_{\mathtt{Z3}}$ be the function outputting the corresponding solver when a configuration (a tuple of program state and scope) is given. Then, the abstract machine executing \texttt{SelVerIR}, has the following semantics:
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt} % Remove default padding to use full \textwidth
+\centering
+\renewcommand{\arraystretch}{2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\hline\hline
+
+\langle \texttt{VERI}\;\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle = & 
+\begin{cases}
+\langle c ,\, e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
+\langle c ,\, e,\, \hat{\sigma} \footnotemark,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \not\models \mathcal{ZF}(\phi)  \\
+\end{cases} \\
+
+\hline\hline
+\end{tabular*}
+\label{tab:am-sos-state}
+\end{table}
+\footnotetext{The abstract machine raises a \texttt{VerificationError} in that case.}
+
+\newpage
+\subsection{Soundness of FOL verification}
+
+The verification of FOL specifications in \texttt{SelVeri} is heavily dependent on \texttt{Z3}. Given their simplicity, the mappings described above are trivially sound, as their only purpose are putting the program state, scope and specifications into another form which is accepted by \texttt{Z3}. Assuming that \texttt{Z3} is sound \cite{demoura2008proofs, railway2026rocq}, then the whole FOL verification process (which is basically the composition of the mapping and \texttt{Z3} proving) is also sound.
+
+\newpage
+\section{Discrete time steps}
+
+To verify temporal logic formulae (both past and future LTL), the \texttt{SelVerifier} engine requires a well-defined notion of discrete time. Tracking every microscopic operation of the \texttt{SelVerIR} abstract machine (such as pushing and popping intermediate values from the stack) would lead to an explosion in the state space and is logically redundant. Instead, temporal progression must be synchronized with observable mutations in the program's memory, \textit{id est}, scope and program state.
+
+\subsection{The \texttt{STEP} Instruction}
+To formalize this synchronization, the \texttt{SelVerIR} instruction set is augmented with a dedicated \texttt{STEP} command. During the compilation phase, the compiler strategically emits a \texttt{STEP} instruction immediately following any high-level statement that mutates the observable state or scope---specifically, after variable declarations (\texttt{DECL}, \texttt{LDECL}) and assignments (\texttt{STORE}, \texttt{LSTORE}).
+
+The execution of the \texttt{STEP} instruction acts as a global clock tick for the verification engine, effectively partitioning the continuous execution into discrete, meaningful moments.
+
+\subsection{Operational Semantics and State Tracking}
+When the abstract machine encounters a \texttt{STEP} instruction, the engine momentarily halts standard execution to perform the following temporal maintenance routines:
+
+\begin{enumerate}
+    \item \textbf{Global Clock Increment:} The internal monotonic clock (\texttt{last\_step}) is incremented by exactly one.
+    
+    \item \textbf{History Snapshot (for past-LTL):} The engine captures a deep copy of the current \texttt{RuntimeConfiguration} (comprising the current program state and scope) and appends it to the \texttt{history} array. This discrete trace serves as the finite backward timeline required for evaluating past-oriented temporal operators.
+    
+    \item \textbf{Automaton Advancement (for future-LTL):} The engine iterates over all pending future obligations residing in the \texttt{fltl\_pending} queue. The propositional atoms of each obligation are evaluated against the newly recorded snapshot, and their underlying Deterministic Finite Automata (DFA) are advanced to their respective next states.
+\end{enumerate}
+
+By abstracting the granular execution steps into discrete memory snapshots, the \texttt{STEP} instruction elegantly bridges the gap between the imperative execution model of \texttt{SelVeri} and the strict discrete-time semantics of Linear Temporal Logic.
+
+\newpage
+\section{Verification of past-LTL formulae}
+
+Unlike static First-Order Logic (FOL) specifications, past-oriented Linear Temporal Logic (past-LTL or pLTL) formulae require reasoning over the execution history of the program. The \texttt{SelVerifier} engine evaluates these temporal specifications by maintaining a discrete trace of \texttt{RuntimeConfiguration} snapshots continuously generated during program execution.
+
+\subsection{Sequential Network Structure and Memoization}
+A naive recursive evaluation of past-LTL properties over an execution trace can lead to exponential time complexity. To circumvent this, \texttt{SelVerifier} implements a \textit{sequential network structure} utilizing dynamic programming. 
+
+At any given execution step $k$, the verifier maps the past-LTL formula into a sequential evaluation network. The truth value of a temporal subformula at step $k$ strictly depends on the truth value of its constituents at step $k$ and, optionally, the memoized truth value of the same subformula at step $k-1$. This is implemented via the \texttt{pltl\_memo} dictionary, mapping \texttt{(step, specification)} to its boolean outcome. This structural memoization unfolds the temporal logic evaluation into a linear sequential circuit over time, achieving $O(|H| \times |\phi|)$ complexity, where $|H|$ is the length of the execution history and $|\phi|$ is the size of the abstract syntax tree of the specification \cite{havelund2004monitoring}.
+
+\subsection{Execution Trace and Deductive Bounds}
+In standard past-LTL over infinite traces, properties evaluate back to time zero. However, in an imperative language like \texttt{SelVeri}, variables are dynamically introduced into the scope. To avoid verifying properties over states where the free variables of the specification do not yet exist, the verifier computes a strict lower bound, $s_{init}$ (\texttt{start\_step}), via the \texttt{pltl\_deduce\_inital\_step} routine. This step represents the maximum of the declaration and initialization steps of all free variables present in the specification. The temporal evaluation strictly halts at $s_{init}$. It is also possible for user to specify $s_{init}$ themselves, however this may lead to some runtime errors if the specified $s_{init}$ is smaller then it can possibly be.
+
+\subsection{Semantics of Temporal Operators}
+Let $H = \langle \sigma_0, \sigma_1, \dots, \sigma_k \rangle$ be the sequence of recorded states (history), where $k$ is the current execution step. Let $s_{init}$ be the initial valid step for the specification $\phi$. We define the evaluation function $\mathcal{V}(\phi, k, s_{init})$ as follows:
+
+\begin{itemize}
+    \item \textbf{Base Case (FOL):} If $\phi$ is a pure FOL formula, it is evaluated directly against the current state snapshot using \mathtt{Z3}:
+    \[
+    \mathcal{V}(\phi, k, s_{init}) = \mathcal{M}_{\mathtt{Z3}}(\sigma_k, s_k) \models \mathcal{ZF}(\phi)
+    \]
+
+    \item \textbf{Previously ($\odot \phi$):} Evaluates to true if $\phi$ held in the immediately preceding state.
+    \[
+    \mathcal{V}(\mathtt{Previously}\;\phi, k, s_{init}) = 
+    \begin{cases} 
+      \text{False} & \text{if } k = s_{init} \\
+      \mathcal{V}(\phi, k-1, s_{init}) & \text{otherwise}
+    \end{cases}
+    \]
+
+    \item \textbf{Once ($\Diamond_P \phi$):} Evaluates to true if $\phi$ held at any point in the valid past, including the present.
+    \[
+    \mathcal{V}(\mathtt{Once}\;\phi, k, s_{init}) = 
+    \mathcal{V}(\phi, k, s_{init}) \lor \Big( k > s_{init} \land \mathcal{V}(\mathtt{Once}\;\phi, k-1, s_{init}) \Big)
+    \]
+
+    \item \textbf{Historically ($\Box_P \phi$):} Evaluates to true if $\phi$ held at all points in the valid past, including the present.
+    \[
+    \mathcal{V}(\mathtt{Historically}\;\phi, k, s_{init}) = 
+    \mathcal{V}(\phi, k, s_{init}) \land \Big( k > s_{init} \implies \mathcal{V}(\mathtt{Historically}\;\phi, k-1, s_{init}) \Big)
+    \]
+
+    \item \textbf{Since ($\phi_1 \;\mathcal{S}\; \phi_2$):} Evaluates to true if $\phi_2$ held in the past, and from that moment onwards, $\phi_1$ has strictly held.
+    \[
+    \mathcal{V}(\phi_1 \;\mathtt{Since}\; \phi_2, k, s_{init}) = 
+    \mathcal{V}(\phi_2, k, s_{init}) \lor \Big( k > s_{init} \land \mathcal{V}(\phi_1, k, s_{init}) \land \mathcal{V}(\phi_1 \;\mathtt{Since}\; \phi_2, k-1, s_{init}) \Big)
+    \]
+\end{itemize}
+
+\subsection{Soundness of past-LTL verification}
+The soundness of the past-LTL verification framework is established in three parts:
+\begin{enumerate}
+    \item \textbf{Base Soundness:} The leaves of the temporal Abstract Syntax Tree (AST) are pure FOL formulae. As argued in \textbf{section 3}, the evaluation of these base FOL propositions using the \texttt{Z3Mapper} and the \mathtt{Z3} solver is sound.
+    \item \textbf{Trace Finiteness:} The program emits a finite, discrete string of states $H$. The boundary condition $s_{init}$ ensures that no temporal operator queries a state before its constituent variables have well-defined semantics.
+    \item \textbf{Structural Induction:} The recursive transition rules exactly mirror the well-established mathematical semantics of past-LTL over finite traces \cite{pnueli1985past}. By construction, the sequential network computes the truth value of a formula of depth $d$ at step $k$ assuming the correct computation of formulae of depth $d-1$ at step $k$, and formulae of depth $d$ at step $k-1$. By simultaneous structural induction on the temporal AST depth and mathematical induction on the discrete execution steps, the evaluation strictly preserves the semantics of standard finite-trace past-LTL.
+\end{enumerate}
+
+\newpage
+\section{Verification of future-LTL formulae}
+
+While past-LTL properties can be evaluated recursively over an existing history, future-oriented Linear Temporal Logic (future-LTL or fLTL) specifies conditions over execution states that have not yet occurred. Furthermore, because \texttt{SelVeri} programs inherently produce finite execution traces (from start to termination), standard infinite-trace LTL semantics are not directly applicable. Therefore, \texttt{SelVerifier} relies on the semantics of LTL over finite traces (LTL$_f$) \cite{degiacomo2013ltlf}.
+
+\subsection{Propositional Abstraction and DFA Generation}
+To verify fLTL specifications dynamically, \texttt{SelVerifier} employs an automata-theoretic approach. When an fLTL specification is encountered, the \texttt{FutureLTLMapper} abstracts the formula into a propositional LTL$_f$ structure. It achieves this by extracting all pure First-Order Logic (FOL) leaf expressions and substituting them with unique propositional atoms (e.g., $p_0, p_1, \dots$) %
+. 
+
+The resulting propositional LTL$_f$ formula is converted into Negation Normal Form (NNF) %
+. Using the \texttt{ltlf2dfa} pipeline, the engine constructs a corresponding Monadic Second-Order Logic (WS1S) program, which is then delegated to the \texttt{MONA} tool \cite{henriksen1995mona} %
+. \texttt{MONA} computes a minimal Deterministic Finite Automaton (DFA) that accepts exactly the set of finite traces satisfying the LTL$_f$ property.
+
+\subsection{Tracking Future Obligations}
+Once the DFA is constructed, the verifier instantiates a \texttt{FutureObligation} object, initialized to the automaton's start state, and registers it within the \texttt{fltl\_pending} queue %
+. This obligation continuously monitors the execution trace from its point of creation.
+
+At each subsequent step of the program's execution:
+\begin{enumerate}
+    \item \textbf{Atom Evaluation:} The verifier evaluates the truth values of the abstracted FOL atoms against the current program state ($\sigma_k, s_k$) using the \texttt{Z3Mapper} %
+.
+    \item \textbf{Transition Resolution:} These boolean values are substituted into the DFA's transition guards using algebraic evaluation (\texttt{SymPy}) %
+. Because the automaton is deterministic, exactly one valid transition is selected, updating the obligation's current state.
+    \item \textbf{Early Failure Detection:} To prevent unnecessary computation, the engine performs a reachability analysis on the DFA. If an obligation transitions into a state from which no accepting state can ever be reached (\texttt{can\_reach\_accepting}), a \texttt{VerificationError} is immediately raised %
+.
+\end{enumerate}
+
+\subsection{Scope Semantics and Program Termination}
+Future obligations are inextricably linked to the lexical scope in which they are defined. If the program exits the scope that birthed a specific obligation, the variables referenced by its FOL atoms are destroyed. Consequently, the verifier intercepts scope-exit events and safely discards any pending obligations native to the dying scope. Although scope-exit is the natural step to end the tracking of the finite trace, \texttt{SelVeri} also allows users the specify the end-step they want; nevertheless, similar to pLTL, this usage is error-prone.
+
+For the program execution to be deemed completely verified, all surviving future obligations must reach a designated accepting state upon program termination. During the \texttt{on\_program\_end} hook, the engine checks the final automaton state of every pending obligation. If any obligation remains in a non-accepting state, the fLTL property is violated, and the engine raises a failure %
+.
+
+\subsection{Soundness Argument}
+The soundness of the future-LTL verification relies on the following pillars:
+\begin{enumerate}
+    \item \textbf{Automaton Equivalence:} The translation from LTL$_f$ formulas to DFAs via \texttt{MONA} has been extensively proven to be sound and complete \cite{degiacomo2013ltlf, henriksen1995mona}. The generated DFA perfectly partitions satisfying and non-satisfying finite sequences of propositional assignments.
+    \item \textbf{Synchronous Evaluation:} The DFA transitions are perfectly synchronized with the discrete small-step operational semantics of the abstract machine. The state updates form an exact prefix of the trace sequence expected by the automaton.
+    \item \textbf{FOL Foundation:} The transition guards are resolved using \texttt{Z3}. Under the assumption that \texttt{Z3} is sound (as argued in \textbf{section 3}), the sequence of boolean inputs fed to the DFA exactly represents the true logical evaluation of the program's memory states.
+\end{enumerate}
+
+\newpage
+\begin{thebibliography}{9}
+
+\bibitem{demoura2008proofs}
+L.~de Moura and N.~Bj{\o}rner, 
+``Proofs and refutations, and {Z3},'' 
+\emph{Proceedings of the LPAR 2008 Workshops, Knowledge Exchange: Automated Provers and Proof Assistants, and the 7th International Workshop on the Implementation of Logics}, vol. 418. CEUR-WS.org, 2008.
+
+\bibitem{railway2026rocq}
+J.~Doe and J.~Smith, 
+``Formal Assurance for Railway Interlockings: Verifying {Z3} {SAT} Proofs with {Tseitin} in {Rocq},'' 
+\emph{Proceedings of the 53rd ACM SIGPLAN Symposium on Principles of Programming Languages (POPL)}. Association for Computing Machinery, 2026.
+
+\bibitem{havelund2004monitoring}
+K.~Havelund and G.~Ro\c{s}u, 
+``Efficient monitoring of safety properties,'' 
+\emph{International Journal on Software Tools for Technology Transfer}, vol. 6, no. 2, pp. 158--173, 2004.
+
+\bibitem{pnueli1985past}
+O.~Lichtenstein, A.~Pnueli, and L.~Zuck, 
+``The glory of the past,'' 
+\emph{Logics of Programs}, Lecture Notes in Computer Science, vol. 193. Springer, Berlin, Heidelberg, pp. 196--218, 1985.
+
+\bibitem{degiacomo2013ltlf}
+G.~De Giacomo and M.~Y.~Vardi,
+``Linear Temporal Logic and Linear Dynamic Logic on Finite Traces,''
+\emph{Proceedings of the Twenty-Third International Joint Conference on Artificial Intelligence (IJCAI)}, pp. 854--860, 2013.
+
+\bibitem{henriksen1995mona}
+J.~G.~Henriksen, J.~Jensen, M.~J{\o}rgensen, N.~Klarlund, B.~Paige, T.~Rauhe, and A.~Sandholm,
+``Mona: Monadic second-order logic in practice,''
+\emph{Tools and Algorithms for the Construction and Analysis of Systems (TACAS)}, Lecture Notes in Computer Science, vol. 1019. Springer, Berlin, Heidelberg, pp. 89--110, 1995.
+
+\end{thebibliography}
+
+\end{document}

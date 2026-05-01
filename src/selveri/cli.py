@@ -4,20 +4,26 @@ import argparse
 from pathlib import Path
 from time import perf_counter
 
-from .compiler import compile_selveri_source_to_ir_text
-from .interpreter import interpret_ir_text
+from .compiler import SelVeriCompiler
+from .interpreter import interpret_ir_code
+from .parser import parse_selveri
+from .SelVerifier.verifier import VerificationEngine
 
 def run_pipeline(
     input_path: Path,
     *,
     output_ir: Path | None,
     max_steps: int,
+    print_ir: bool,
 ) -> int:
     with input_path.open("r", encoding="utf-8") as f:
         source = f.read()
 
     start_time = perf_counter()
-    ir_text = compile_selveri_source_to_ir_text(source)
+    program = parse_selveri(source)
+    compiler = SelVeriCompiler()
+    code = compiler.compile_program(program)
+    ir_text = "\n".join(instr.render() for instr in code)
     end_time = perf_counter()
     print(f"Compilation time: {end_time - start_time:.6f} seconds")
 
@@ -25,10 +31,26 @@ def run_pipeline(
         output_ir.parent.mkdir(parents=True, exist_ok=True)
         output_ir.write_text(ir_text, encoding="utf-8")
 
+    if print_ir:
+        print("Generated SelVerIR:")
+        print(ir_text)
+        print()
+
+    verifier_start_time = perf_counter()
+    verifier = VerificationEngine()
+    verifier.prepare_program(code, raw_specs=compiler.raw_specs.values())
+    verifier_end_time = perf_counter()
+    print(f"Verifier time: {verifier_end_time - verifier_start_time:.6f} seconds")
     start_time = perf_counter()
-    interpret_ir_text(ir_text, max_steps=max_steps)
+    result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
     end_time = perf_counter()
-    print(f"\nExecution time: {end_time - start_time:.6f} seconds")
+    print(f"Execution time: {end_time - start_time:.6f} seconds")
+
+    print("Final state:")
+    print(result.state)
+    print("\nFinal stack:")
+    print(result.stack)
+    print(f"\nSteps: {result.steps}")
     return 0
 
 
@@ -55,6 +77,11 @@ def main() -> int:
         default=1_000_000,
         help="Maximum number of interpreted instructions",
     )
+    arg_parser.add_argument(
+        "--print-ir",
+        action="store_true",
+        help="Print generated SelVerIR before interpretation",
+    )
     args = arg_parser.parse_args()
 
     output_ir = None
@@ -65,4 +92,5 @@ def main() -> int:
         args.input,
         output_ir=output_ir,
         max_steps=args.max_steps,
+        print_ir=args.print_ir,
     )

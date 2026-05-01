@@ -1,0 +1,50 @@
+// =====================================================
+// FOL Lists: all specs should PASS (True)
+// =====================================================
+
+lst : List[Int, 1, 5];
+lst := [10, 20, 30, 40, 50];
+
+// --- Basic indexing ---
+{ lst[0] = 10 };          // True
+{ lst[4] = 50 };          // True
+{ lst[2] = 30 };          // True
+
+// --- len() ---
+{ len(lst) = 5 };         // True
+{ len(lst) > 0 };         // True
+
+// --- Arithmetic indexing ---
+{ lst[1 + 1] = 30 };      // True  (lst[2] = 30)
+{ lst[len(lst) - 1] = 50 }; // True (lst[4] = 50)
+
+// --- Comparisons between elements ---
+{ lst[0] < lst[1] };      // True (10 < 20)
+{ lst[3] < lst[4] };      // True (40 < 50)
+
+// --- Spec over list after mutation ---
+lst[2] := 99;
+{ lst[2] = 99 };          // True
+{ lst[0] = 10 };          // True (unchanged)
+
+// --- Sum-like property ---
+sum : Int;
+sum := 0;
+i : Int;
+i := 0;
+while i < len(lst) do
+    sum := sum + lst[i];
+    i := i + 1;
+od
+// lst is [10, 20, 99, 40, 50], sum = 219
+{ sum = 219 };             // True
+
+// --- Variable-length list ---
+n : Int;
+n := 3;
+short : List[Int, 1, n];
+short[0] := 1;
+short[1] := 2;
+short[2] := 3;
+{ len(short) = 3 };       // True
+{ short[0] + short[1] + short[2] = 6 }; // True
