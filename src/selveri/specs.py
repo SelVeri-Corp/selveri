@@ -42,7 +42,7 @@ class DomainIdent(Domain):
 
 @dataclass(frozen=True)
 class DomainValues(Domain):
-    """Domain of values drawn from a list of literals."""   
+    """Domain of values drawn from an explicit list of arithmetic expressions."""   
     items: List[AExp]
 
     def __str__(self) -> str:

@@ -270,7 +270,7 @@ class VerificationEngine:
             self._aexp_get_free_variables(bexp.aexp, variables)
 
     def _aexp_get_free_variables(self, aexp: Any, variables: set[str]) -> None:
-        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, FloatLit, FuncCall
+        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, FloatLit, FuncCall, ListLit
         from ..spec_parser import ABoundVar
         if isinstance(aexp, ABoundVar):
             pass  # bound variables are not free; handled by _spec_get_free_variables via SpecQuant.discard
@@ -289,7 +289,10 @@ class VerificationEngine:
         elif isinstance(aexp, FuncCall):
             for arg in aexp.args:
                 self._aexp_get_free_variables(arg, variables)
-        # IntLit, FloatLit, ListLit — no variables
+        elif isinstance(aexp, ListLit):
+            for item in aexp.items:
+                self._aexp_get_free_variables(item, variables)
+        # IntLit, FloatLit — no variables
 
     def _domain_get_free_variables(self, domain: Any, variables: set[str]) -> None:
         from ..specs import DomainIdent, DomainValues, DomainRange, DomainInterval

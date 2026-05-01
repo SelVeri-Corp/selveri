@@ -165,29 +165,29 @@ class Z3Mapper():
 
     def map_FOL_listlit(self, aexp: ListLit) -> z3types.ExprRef:
         stack: list = [aexp]
-        flat_imms: list = []
+        flat_elems: list = []
         while stack:
             node = stack.pop()
             if isinstance(node, ListLit):
                 for item in reversed(node.items):
                     stack.append(item)
-            elif isinstance(node, IntLit):
-                flat_imms.append(node)
-            elif isinstance(node, FloatLit):
-                flat_imms.append(node)
             else:
-                raise VerifierRuntimeError(f"Unsupported list literal element: {node}")
-        if not flat_imms:
+                flat_elems.append(node)
+        if not flat_elems:
             raise VerifierRuntimeError("Empty list literal is not supported in specifications")
-        use_real = any(isinstance(x, FloatLit) for x in flat_imms)
+        mapped = [self.map_FOL_aexp(x) for x in flat_elems]
+        use_real = any(isinstance(x, FloatLit) for x in flat_elems) or any(
+            me.is_real() for me in mapped
+        )
         if use_real:
             arr = K(IntSort(), RealVal(0))
-            for i, imm in enumerate(flat_imms):
-                arr = Store(arr, IntVal(i), RealVal(imm.value))
+            for i, me in enumerate(mapped):
+                el = ToReal(me) if me.is_int() else me
+                arr = Store(arr, IntVal(i), el)
         else:
             arr = K(IntSort(), IntVal(0))
-            for i, imm in enumerate(flat_imms):
-                arr = Store(arr, IntVal(i), IntVal(imm.value))
+            for i, me in enumerate(mapped):
+                arr = Store(arr, IntVal(i), me)
         return arr
 
     def map_FOL_aindex(self, aexp: AIndex) -> z3types.ExprRef:
