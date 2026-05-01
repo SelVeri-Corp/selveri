@@ -15,6 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Future LTL (fLTL) lowers to MONA via ltlf2dfa; pass/fail verifier tests hit this path.
+      - name: Install MONA (Future LTL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mona
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
