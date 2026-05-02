@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
-from z3 import Not, Solver, simplify, unsat
+from z3 import Not, Solver, simplify, sat, unsat, unknown
 from sympy import Basic
 
 from ..compiler import IRInstr
@@ -14,6 +14,9 @@ from .future_mapper import FutureLTLMapper
 from .mapper import Z3Mapper
 
 class VerificationEngine:
+
+    SOLVER_TIMEOUT = 60000 # 1 minute timeout for each solver check.
+
     def __init__(self):
         self.last_step = 0
         self.declaration_steps: Dict[str, int] = dict() # stores the declaration steps of variable
@@ -143,13 +146,15 @@ class VerificationEngine:
         solver = Solver()
         mapper = Z3Mapper(snapshot, solver, lexical_depth)
         negated_assumption = simplify(Not(mapper.map_FOL(spec)))
-        result = solver.check(negated_assumption)
+        solver.set("timeout", VerificationEngine.SOLVER_TIMEOUT); result = solver.check(negated_assumption)
         if result == unsat:
             return True
-        else: # sat
+        elif result == sat:
             # TODO: consider giving a counter-example, using the model
             # model : ModelRef = solver.model()
             return False
+        else: # unknown
+            raise VerificationError(f"Z3-solver returned unknown for FOL verification. Reason: {solver.reason_unknown()}")
 
 
     ################# pLTL Verification #################
@@ -179,6 +184,8 @@ class VerificationEngine:
                     result = self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth)
                 else:
                     result = self.verify_past_LTL(spec.rhs, step, start_step, lexical_depth) and self.verify_past_LTL(spec, step - 1, start_step, lexical_depth)
+            else:
+                raise VerificationError(f"Unsupported unary operator for pLTL: {spec.op}")
 
         elif isinstance(spec, SpecBinOp):
             if spec.op == "&&":
@@ -194,6 +201,8 @@ class VerificationEngine:
                 else:
                     left = self.verify_past_LTL(spec.left, step, start_step, lexical_depth)
                     result = right or (left and self.verify_past_LTL(spec, step - 1, start_step, lexical_depth))
+            else:
+                raise VerificationError(f"Unsupported binary operator for pLTL: {spec.op}")
         
         else:
             raise VerificationError(f"Unexpected specification type for pLTL: {spec.type}")
@@ -261,8 +270,11 @@ class VerificationEngine:
             self._aexp_get_free_variables(bexp.aexp, variables)
 
     def _aexp_get_free_variables(self, aexp: Any, variables: set[str]) -> None:
-        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, FloatLit, FuncCall
-        if isinstance(aexp, AVar):
+        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, FloatLit, FuncCall, ListLit
+        from ..spec_parser import ABoundVar
+        if isinstance(aexp, ABoundVar):
+            pass  # bound variables are not free; handled by _spec_get_free_variables via SpecQuant.discard
+        elif isinstance(aexp, AVar):
             variables.add(aexp.name)
         elif isinstance(aexp, ALen):
             variables.add(aexp.name)
@@ -277,7 +289,10 @@ class VerificationEngine:
         elif isinstance(aexp, FuncCall):
             for arg in aexp.args:
                 self._aexp_get_free_variables(arg, variables)
-        # IntLit, FloatLit, ListLit — no variables
+        elif isinstance(aexp, ListLit):
+            for item in aexp.items:
+                self._aexp_get_free_variables(item, variables)
+        # IntLit, FloatLit — no variables
 
     def _domain_get_free_variables(self, domain: Any, variables: set[str]) -> None:
         from ..specs import DomainIdent, DomainValues, DomainRange, DomainInterval

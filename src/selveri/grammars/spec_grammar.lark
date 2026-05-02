@@ -81,7 +81,7 @@ aexp_list: aexp ("," aexp)*                -> aexp_list
     | FLOAT_LIT                            -> float_lit
     | list_lit
 
-list_lit: "[" [imm ("," imm)*] "]"
+list_lit: "[" [aexp ("," aexp)*] "]"
 
 aexp: aexp_sum                             -> aexp
 

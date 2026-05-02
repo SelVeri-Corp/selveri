@@ -7,6 +7,7 @@ from pathlib import Path
 from lark import Lark, LarkError, Transformer, v_args
 
 from .errors import ParserError, VerifierRuntimeError
+from .runtime import DeclType
 from .parser import (
     ABinOp,
     ALen,
@@ -28,6 +29,15 @@ from .parser import (
     TypeInt,
     TypeList,
 )
+def _basic_type_to_decl_type(bt):
+    """Convert a parser-level BasicType (TypeInt/TypeFloat) to a runtime DeclType."""
+    if isinstance(bt, TypeInt):
+        return DeclType("INT", None, None)
+    elif isinstance(bt, TypeFloat):
+        return DeclType("FLOAT", None, None)
+    else:
+        raise ParserError(f"Unsupported type for quantifier domain: {bt}")
+
 from .specs import (
     DomainIdent,
     DomainInterval,
@@ -124,8 +134,8 @@ class SpecAstBuilder(Transformer):
     def domain_ident(self, name): return DomainIdent(str(name))
     def domain_range(self, lo, hi): return DomainRange(lo, hi)
     def domain_values(self, lit: ListLit): return DomainValues(list(lit.items))
-    def domain_type(self, type_node: BasicType): return DomainType(type_node)
-    def domain_var(self, elem_ty: BasicType): return DomainVar(elem_ty)
+    def domain_type(self, type_node: BasicType): return DomainType(_basic_type_to_decl_type(type_node))
+    def domain_var(self, elem_ty: BasicType): return DomainVar(_basic_type_to_decl_type(elem_ty))
     def interval_closed(self, lo, hi): return DomainInterval(lo, hi, left_closed=True, right_closed=True)
     def interval_open(self, lo, hi): return DomainInterval(lo, hi, left_closed=False, right_closed=False)
     def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, left_closed=True, right_closed=False)

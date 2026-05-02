@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Dict
 from z3 import *
 
-from ..runtime import Scope, State
+from ..runtime import Scope, State, _UNSET
 from ..defs import RuntimeConfiguration
 from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
 from ..spec_parser import ABoundVar
@@ -44,7 +44,7 @@ class Z3Mapper():
     ######### Configuration Mapping #########    
 
     def map_scope(self, scope: Scope) -> Dict[str, z3types.ExprRef]:
-        for var, vartype in scope.items():
+        for var, vartype in scope.types.items():  # local scope only; parents handled by recursion
             if vartype is None:
                 continue
             
@@ -68,11 +68,13 @@ class Z3Mapper():
             self.map_scope(scope.parent)
 
     def map_state(self, state : State, scope: Scope, solver : Solver) -> None:
-        for var, value in state.items():
-            if var not in scope:
+        for var, value in state.values.items():  # local state only; parents handled by recursion
+            if value is _UNSET:
+                continue
+            if var not in scope.types:
                 raise VerifierRuntimeError(f"Variable {var} not found in scope")
             try:
-                vartype = scope[var]
+                vartype = scope.types.get(var)
                 if vartype is None:
                     continue
                 var_z3_name = Z3Mapper.get_z3_var_name(var, scope.scope_id)
@@ -163,29 +165,29 @@ class Z3Mapper():
 
     def map_FOL_listlit(self, aexp: ListLit) -> z3types.ExprRef:
         stack: list = [aexp]
-        flat_imms: list = []
+        flat_elems: list = []
         while stack:
             node = stack.pop()
             if isinstance(node, ListLit):
                 for item in reversed(node.items):
                     stack.append(item)
-            elif isinstance(node, IntLit):
-                flat_imms.append(node)
-            elif isinstance(node, FloatLit):
-                flat_imms.append(node)
             else:
-                raise VerifierRuntimeError(f"Unsupported list literal element: {node}")
-        if not flat_imms:
+                flat_elems.append(node)
+        if not flat_elems:
             raise VerifierRuntimeError("Empty list literal is not supported in specifications")
-        use_real = any(isinstance(x, FloatLit) for x in flat_imms)
+        mapped = [self.map_FOL_aexp(x) for x in flat_elems]
+        use_real = any(isinstance(x, FloatLit) for x in flat_elems) or any(
+            me.is_real() for me in mapped
+        )
         if use_real:
             arr = K(IntSort(), RealVal(0))
-            for i, imm in enumerate(flat_imms):
-                arr = Store(arr, IntVal(i), RealVal(imm.value))
+            for i, me in enumerate(mapped):
+                el = ToReal(me) if me.is_int() else me
+                arr = Store(arr, IntVal(i), el)
         else:
             arr = K(IntSort(), IntVal(0))
-            for i, imm in enumerate(flat_imms):
-                arr = Store(arr, IntVal(i), IntVal(imm.value))
+            for i, me in enumerate(mapped):
+                arr = Store(arr, IntVal(i), me)
         return arr
 
     def map_FOL_aindex(self, aexp: AIndex) -> z3types.ExprRef:
@@ -299,7 +301,7 @@ class Z3Mapper():
                 result = ForAll(bound_var_z3, self.map_FOL(spec.body))
             else: # QuantifierType.Exists
                 result = Exists(bound_var_z3, self.map_FOL(spec.body))
-            del self.bound_var_map[bound_var]
+            self.bound_var_map.pop(bound_var, None)
             return result
         elif isinstance(domain, DomainRange):
             bound_var_z3 = Int("&" + bound_var)
@@ -311,7 +313,7 @@ class Z3Mapper():
                 result = ForAll(bound_var_z3, Implies(domain_z3, self.map_FOL(spec.body)))
             else: # QuantifierType.Exists
                 result = Exists(bound_var_z3, And(domain_z3, self.map_FOL(spec.body)))
-            del self.bound_var_map[bound_var]
+            self.bound_var_map.pop(bound_var, None)
             return result
         elif isinstance(domain, DomainInterval):
             bound_var_z3 = Real("&" + bound_var)
@@ -331,7 +333,7 @@ class Z3Mapper():
                 result = ForAll(bound_var_z3, Implies(domain_z3, self.map_FOL(spec.body)))
             else: # QuantifierType.Exists
                 result = Exists(bound_var_z3, And(domain_z3, self.map_FOL(spec.body)))
-            del self.bound_var_map[bound_var]
+            self.bound_var_map.pop(bound_var, None)
             return result
         else: # uses finite_connector over finite domain
             result_list = list()
@@ -341,8 +343,14 @@ class Z3Mapper():
                     raise VerifierRuntimeError(f"Variable {domain.name} (Z3 name: {domain_z3_name}) not mapped")
                 if not is_array(self.free_var_map[domain_z3_name]):
                     raise VerifierRuntimeError(f"Variable {domain.name} is not a list")
-                # TODO: consider multi-dim lists
-                for i in range(self.state[f"_{domain.name}_len_1"]):
+                # Use scope-aware type resolution for list length
+                owner_scope = self._get_lexical_scope().find_owner(domain.name)
+                if owner_scope is None:
+                    raise VerifierRuntimeError(f"List {domain.name} not found in lexical scope")
+                list_type = owner_scope.types.get(domain.name)
+                if list_type is None or list_type.kind != "LIST" or list_type.size is None:
+                    raise VerifierRuntimeError(f"Cannot determine size of list {domain.name}")
+                for i in range(list_type.size):
                     self.bound_var_map[bound_var] = self.map_FOL_aexp(AIndex(AVar(domain.name), IntLit(i)))
                     result_list.append(self.map_FOL(spec.body))     
             elif isinstance(domain, DomainValues):
@@ -362,7 +370,7 @@ class Z3Mapper():
             else:
                 raise VerifierRuntimeError(f"Unsupported domain type: {domain}")
                 
-            del self.bound_var_map[bound_var]
+            self.bound_var_map.pop(bound_var, None)
             if quantifier == QuantifierType.Forall:
                 return And(result_list)
             else: # QuantifierType.Exists
