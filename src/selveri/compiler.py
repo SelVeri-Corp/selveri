@@ -356,6 +356,8 @@ class SelVeriCompiler:
         return True
 
     def _basic_types_compatible(self, actual: TypeNode, expected: TypeNode) -> bool:
+        if type(actual) is BasicType:
+            return isinstance(expected, (TypeInt, TypeFloat))
         if isinstance(expected, TypeFloat):
             return isinstance(actual, (TypeInt, TypeFloat)) # integers are casted into floats gracefully
         return type(actual) is type(expected)
