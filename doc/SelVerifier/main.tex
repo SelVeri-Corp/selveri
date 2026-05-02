@@ -326,10 +326,30 @@ Let $\mathcal{M}_{\mathtt{Z3}}$ be the function outputting the corresponding sol
 \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
 \hline\hline
 
-\langle \texttt{VERI}\;\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle = & 
+\langle \texttt{VERI}\;\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
 \begin{cases}
-\langle c ,\, e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
-\langle c ,\, e,\, \hat{\sigma} \footnotemark,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \not\models \mathcal{ZF}(\phi)  \\
+\langle c ,\, e,\, \sigma,\, s,\, pc + 1 \rangle &\section{Discrete time steps}
+￼
+To verify temporal logic formulae (both past and future LTL), the \texttt{SelVerifier} engine requires a well-defined notion of discrete time. Tracking every microscopic operation of the \texttt{SelVerIR} abstract machine (such as pushing and popping intermediate values from the stack) would lead to an explosion in the state space and is logically redundant. Instead, temporal progression must be synchronized with observable mutations in the program's memory, \textit{id est}, scope and program state.
+￼
+\subsection{The \texttt{STEP} Instruction}
+To formalize this synchronization, the \texttt{SelVerIR} instruction set is augmented with a dedicated \texttt{STEP} command. During the compilation phase, the compiler strategically emits a \texttt{STEP} instruction immediately following any high-level statement that mutates the observable state or scope---specifically, after variable declarations (\texttt{DECL}, \texttt{LDECL}) and assignments (\texttt{STORE}, \texttt{LSTORE}).
+￼
+The execution of the \texttt{STEP} instruction acts as a global clock tick for the verification engine, effectively partitioning the continuous execution into discrete, meaningful moments.
+￼
+\subsection{Operational Semantics and State Tracking}
+When the abstract machine encounters a \texttt{STEP} instruction, the verification engine's \texttt{on\_step} hook is invoked[cite: 10]. This momentarily halts standard execution to perform the following temporal maintenance routines in strictly this order:
+￼
+\begin{enumerate}
+    \item \textbf{History Snapshot (for past-LTL):} The engine captures the current \texttt{RuntimeConfiguration} snapshot (comprising the current program state and scope) and appends it to the \texttt{history} array[cite: 10]. It also initializes a new, empty dictionary in \texttt{pltl\_memo} to cache temporal evaluations for this specific step[cite: 10].
+    
+    \item \textbf{Global Clock Increment:} The internal monotonic clock (\texttt{last\_step}) is incremented by exactly one[cite: 10].
+    
+    \item \textbf{Automaton Advancement (for future-LTL):} The engine delegates the captured snapshot to \texttt{advance\_future\_obligations}[cite: 10]. It iterates over all pending future obligations residing in the \texttt{fltl\_pending} queue, evaluating their propositional atoms against the snapshot, and advancing their underlying Deterministic Finite Automata (DFA) to their respective next states[cite: 10].
+\end{enumerate}
+￼
+By abstracting the granular execution steps into discrete memory snapshots, the \texttt{STEP} instruction elegantly bridges the gap between the imperative execution model of \texttt{SelVeri} and the strict discrete-time semantics of Linear Temporal Logic. \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
+\langle c ,\, e,\, \hat{\sigma} \footnotemark,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s)  \not\models \footnotemark \mathcal{ZF}(\phi)  \\
 \end{cases} \\
 
 \hline\hline
@@ -337,6 +357,7 @@ Let $\mathcal{M}_{\mathtt{Z3}}$ be the function outputting the corresponding sol
 \label{tab:am-sos-state}
 \end{table}
 \footnotetext{The abstract machine raises a \texttt{VerificationError} in that case.}
+\footnotetext{There may be several reasons for failure: $\phi$ may be false or undecidable. \texttt{Z3}-specific failures such as timeouts are also possible.}
 
 \newpage
 \subsection{Soundness of FOL verification}
@@ -354,14 +375,14 @@ To formalize this synchronization, the \texttt{SelVerIR} instruction set is augm
 The execution of the \texttt{STEP} instruction acts as a global clock tick for the verification engine, effectively partitioning the continuous execution into discrete, meaningful moments.
 
 \subsection{Operational Semantics and State Tracking}
-When the abstract machine encounters a \texttt{STEP} instruction, the engine momentarily halts standard execution to perform the following temporal maintenance routines:
+When the abstract machine encounters a \texttt{STEP} instruction, the verification engine's \texttt{on\_step} hook is invoked. This momentarily halts standard execution to perform the following temporal maintenance routines in strictly this order:
 
 \begin{enumerate}
+    \item \textbf{History Snapshot (for past-LTL):} The engine captures the current \texttt{RuntimeConfiguration} snapshot (comprising the current program state and scope) and appends it to the \texttt{history} array. It also initializes a new, empty dictionary in \texttt{pltl\_memo} to cache temporal evaluations for this specific step.
+    
     \item \textbf{Global Clock Increment:} The internal monotonic clock (\texttt{last\_step}) is incremented by exactly one.
     
-    \item \textbf{History Snapshot (for past-LTL):} The engine captures a deep copy of the current \texttt{RuntimeConfiguration} (comprising the current program state and scope) and appends it to the \texttt{history} array. This discrete trace serves as the finite backward timeline required for evaluating past-oriented temporal operators.
-    
-    \item \textbf{Automaton Advancement (for future-LTL):} The engine iterates over all pending future obligations residing in the \texttt{fltl\_pending} queue. The propositional atoms of each obligation are evaluated against the newly recorded snapshot, and their underlying Deterministic Finite Automata (DFA) are advanced to their respective next states.
+    \item \textbf{Automaton Advancement (for future-LTL):} The engine delegates the captured snapshot to \texttt{advance\_future\_obligations}. It iterates over all pending future obligations residing in the \texttt{fltl\_pending} queue, evaluating their propositional atoms against the snapshot, and advancing their underlying Deterministic Finite Automata (DFA) to their respective next states.
 \end{enumerate}
 
 By abstracting the granular execution steps into discrete memory snapshots, the \texttt{STEP} instruction elegantly bridges the gap between the imperative execution model of \texttt{SelVeri} and the strict discrete-time semantics of Linear Temporal Logic.
