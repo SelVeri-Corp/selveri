@@ -10,13 +10,15 @@ from .parser import (
     Program,
     Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
     TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
-    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, FuncCall,
+    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
-    FunctionDecl,
+    FunctionDecl, Write, WriteLine,
 )
 from .specs import RawSpec
 
 from .errors import CompilerError
+
+RESERVED_NAMES = ["retvar", "read", "write", "len"]
 
 # -----------------------
 # IR instruction model
@@ -199,8 +201,8 @@ class SelVeriCompiler:
         raise CompilerError(f"'{name}' is not a declared list.")
 
     def _bind_name(self, name: str, type_node: Optional[TypeNode]) -> None:
-        if name == "retvar":
-            raise CompilerError("retvar is reserved and cannot be declared by the user.")
+        if name in RESERVED_NAMES:
+            raise CompilerError(f"{name} is reserved and cannot be declared by the user.")
         if name in self.scope.bindings:
             raise CompilerError(f"Duplicate declaration: {name}")
         self.scope.bindings[name] = type_node
@@ -354,6 +356,8 @@ class SelVeriCompiler:
         return True
 
     def _basic_types_compatible(self, actual: TypeNode, expected: TypeNode) -> bool:
+        if type(actual) is BasicType:
+            return isinstance(expected, (TypeInt, TypeFloat))
         if isinstance(expected, TypeFloat):
             return isinstance(actual, (TypeInt, TypeFloat)) # integers are casted into floats gracefully
         return type(actual) is type(expected)
@@ -546,6 +550,8 @@ class SelVeriCompiler:
             if func_info is None:
                 raise CompilerError(f"Undefined function: {expr.name}")
             return func_info[0].return_type
+        if isinstance(expr, ARead):
+            return BasicType()
         raise CompilerError(f"Unknown arithmetic expression node: {type(expr).__name__}")
 
     def _ct_type(self, type_node: BasicType) -> str:
@@ -688,8 +694,8 @@ class SelVeriCompiler:
                 self.emit("fDIV" if isinstance(self._type_of_aexp(expr), TypeFloat) else "iDIV")
                 return
             raise CompilerError(f"Unsupported binary operator in arithmetic expression: {expr.op}")
-        if isinstance(expr, FuncCall):
-            self._compile_call(expr)
+        if isinstance(expr, ARead):
+            self.emit("READ")
             return
         raise CompilerError(f"Unsupported arithmetic expression: {type(expr).__name__}")
 
@@ -772,6 +778,12 @@ class SelVeriCompiler:
             return
         if isinstance(stmt, FuncCall):
             self._compile_call(stmt)
+            return
+        if isinstance(stmt, Write):
+            self._compile_write(stmt)
+            return
+        if isinstance(stmt, WriteLine):
+            self._compile_writeline(stmt)
             return
         raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
 
@@ -925,6 +937,22 @@ class SelVeriCompiler:
 
         self.emit("CALL", call.name)
         self._set_retvar_type(func_decl.return_type)
+
+    def _compile_write(self, stmt: Write) -> None:
+        self.CA(stmt.aexp)
+        t = self._type_of_aexp(stmt.aexp)
+        if isinstance(t, (TypeList, TypeDynamicList)):
+            self.emit("LWRITE")
+        else:
+            self.emit("WRITE")
+
+    def _compile_writeline(self, stmt: WriteLine) -> None:
+        self.CA(stmt.aexp)
+        t = self._type_of_aexp(stmt.aexp)
+        if isinstance(t, (TypeList, TypeDynamicList)):
+            self.emit("LWRITELN")
+        else:
+            self.emit("WRITELN")
 
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
         for stmt in stmts:

@@ -268,10 +268,18 @@ def _funcenv_metadata(args: Tuple[Any, ...]) -> Tuple[Optional[str], Optional[De
 # type casting
 def _coerce_value(value: Any, decl_type: DeclType) -> Any:
     if decl_type.kind == "INT":
-        return int(value)
+        if isinstance(value, float):
+            raise IRRuntimeError(f"Type mismatch: cannot assign float {value} to INT.")
+        try:
+            return int(value)
+        except ValueError:
+            raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to INT.")
 
     if decl_type.kind == "FLOAT":
-        return float(value)
+        try:
+            return float(value)
+        except ValueError:
+            raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to FLOAT.")
 
     if decl_type.kind == "LIST":
         if not isinstance(value, list):
@@ -706,6 +714,34 @@ class SelVerIRInterpreter:
 
         if op == "RET":
             self._exec_ret(instr.args)
+            return
+
+        if op == "WRITE":
+            print(self._pop(), end="")
+            self.pc += 1
+            return
+
+        if op == "WRITELN":
+            print(self._pop(), end="\n")
+            self.pc += 1
+            return
+        
+        if op == "LWRITE":
+            items = self._pop_list_packet(expected_size=None)
+            print(items, end="")
+            self.pc += 1
+            return
+
+        if op == "LWRITELN":
+            items = self._pop_list_packet(expected_size=None)
+            print(items, end="\n")
+            self.pc += 1
+            return
+
+        if op == "READ":
+            value = input()
+            self._push(_parse_scalar_token(value))
+            self.pc += 1
             return
 
         if op == "VERI":

@@ -35,7 +35,12 @@ stmt_seq: stmt*
                | list_assign
                | "pass"                                               -> pass_stmt
                | func_call
+               | write_stmt
+               | writeline_stmt
                | spec_annot
+
+write_stmt: "write" "(" aexp ")"                                        -> write_stmt
+writeline_stmt: "writeline" "(" aexp ")"                                -> writeline_stmt
 
 spec_annot: SPEC_SLOT                                                 -> spec_annot
 
@@ -90,6 +95,7 @@ aexp: aexp_sum                                                              -> a
          | "len" "(" IDENT ")"                                            -> a_len
          | indexed_value                                                  
          | "(" aexp ")"
+         | "read" "(" ")"                                                 -> a_read
 
 // ------------------ BOOLEAN EXPRESSIONS ------------------
 bexp: b_or                                                                -> bexp
