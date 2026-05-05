@@ -4,4 +4,5 @@
 // =====================================================
 
 // No integer satisfies x > 10 AND x < 5 simultaneously
-obtain(&x, {Exists x in Int . &x > 10 && &x < 5});
+y : Int;
+y := obtain(&x, {Exists x in Int . &x > 10 && &x < 5});

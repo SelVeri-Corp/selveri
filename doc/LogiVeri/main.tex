@@ -32,7 +32,7 @@ This document formalizes \texttt{LogiVeri}, a constraint-driven logic programmin
 \newpage
 \section{Extended High-Level Syntax}
 
-To support the logic programming capabilities of \texttt{LogiVeri}, we extend the core grammar of \texttt{SelVeri}. We introduce a mechanism to evaluate specifications as standard boolean expressions, and a new statement to query the solver for existential witnesses.
+To support the logic programming capabilities of \texttt{LogiVeri}, we extend the core grammar of \texttt{SelVeri}. We introduce a mechanism to evaluate specifications as standard boolean expressions, and a new arithmetic (logic) expression to query the solver for existential witnesses.
 
 \subsection{Boolean Expressions}
 We extend the $\langle \mathit{BExp} \rangle$ ruleset. A specification enclosed in curly braces can now be utilized anywhere a boolean expression is expected (e.g., in \texttt{if} guards or \texttt{while} conditions).
@@ -55,28 +55,30 @@ We extend the $\langle \mathit{BExp} \rangle$ ruleset. A specification enclosed 
 \end{array}
 \]
 
-\subsection{Statements}
-We extend the $\langle \mathit{TermStmt} \rangle$ ruleset to include the \texttt{obtain} statement. This statement binds an identifier to a witness extracted from the provided specification.
+\subsection{Arithmetic Expressions}
+We extend the $\langle \mathit{AAtom} \rangle$ ruleset to include the \texttt{obtain} expression. This expression queries the solver for a witness and evaluates to its value.
 
 \[
 \begin{array}{rcl}
-\langle \mathit{TermStmt} \rangle
+\langle \mathit{AAtom} \rangle
 &::=&
-\langle \mathit{Decl} \rangle\texttt{;}
+\langle \mathit{Imm} \rangle
 \;\mid\;
-\langle \mathit{Assign} \rangle\texttt{;}
+\langle \mathit{Ident} \rangle
 \;\mid\;
-\langle \mathit{ListAssign} \rangle\texttt{;}
+\mathtt{len}(\langle \mathit{Ident} \rangle)
 \;\mid\;
-\langle \mathit{FuncCall} \rangle\texttt{;}
+\langle \mathit{IndexedValue} \rangle
 \;\mid\;
-\langle \mathit{IOStmt} \rangle\texttt{;}
-\;\mid\;
-\mathtt{pass}\texttt{;} \\[2pt]
+(\langle \mathit{AExp} \rangle) \\[2pt]
 && \mid\;
-\mathbf{\mathtt{obtain}( \texttt{\&}\langle \mathit{Ident} \rangle, \textbf{\{} \langle \mathit{Spec} \rangle \textbf{\}} ) \texttt{;}} \\[4pt]
+\mathtt{read}()
+\;\mid\;
+\mathbf{\mathtt{obtain}( \texttt{\&}\langle \mathit{Ident} \rangle, \textbf{\{} \langle \mathit{Spec} \rangle \textbf{\}} )} \\[4pt]
 \end{array}
 \]
+
+Because \texttt{obtain} is an arithmetic expression, it can appear anywhere a value is expected: in assignments (\texttt{y := obtain(\&x, \{$\phi$\})}), as an argument to I/O functions (\texttt{writeline(obtain(\&x, \{$\phi$\}))}), inside arithmetic operations (\texttt{obtain(...) + 1}), and so on.
 
 \section{Extended High-Level Semantics}
 
@@ -103,36 +105,40 @@ Let $\mathcal{M}_{\mathtt{Z3}}$ be the mapping function that outputs the corresp
 }
 \end{table}
 
-\subsection{Operational Semantics of \texttt{obtain}}
-To formalize the extraction of a witness without violating the static typing and lexical scoping invariants of standard variables, we introduce a special, dynamically-typed reserved variable \texttt{obtvar}, completely analogous to \texttt{retvar}. It stores the value and type of the most recently extracted witness.
+\subsection{Semantics of \texttt{obtain}}
+We define an extraction function $\mathcal{W}(x, \phi, \sigma, s)$. If $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)$, $\mathtt{Z3}$ produces a satisfying model $M$. $\mathcal{W}$ evaluates the existentially bound variable $x$ under this model $M$ and returns its concrete value $v \in \textbf{Val}$. If the formula is unsatisfiable or undecidable, $\mathcal{W}$ yields $\bot$.
 
-We define an extraction function $\mathcal{W}(x, \phi, \sigma, s)$. If $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)$, \mathtt{Z3} produces a satisfying model $M$. $\mathcal{W}$ evaluates the existentially bound variable $x$ under this model $M$ and returns its concrete value $v \in \textbf{Val}$. Let $t_x$ denote the inferred type of the bound variable $x$ inside $\phi$. If the formula is unsatisfiable or undecidable, $\mathcal{W}$ yields $\bot$.
-
-The structural operational semantics for the \texttt{obtain} statement are:
+Because \texttt{obtain} is an arithmetic expression, its semantics extend the arithmetic valuation function $\mathcal{A}$:
 
 \begin{table}[!ht]
 \centering
-\renewcommand{\arraystretch}{1.3} 
+\renewcommand{\arraystretch}{1.6} 
+\large
 \makebox[\textwidth][c]{%
-\begin{tabular}{|r l|}
-\hline
-
-\([ \text{obt}_{\text{os}} ]\) &
-\(\langle \mathtt{obtain}(\texttt{\&}x, \{ \phi \}), \sigma, s \rangle \rightarrow \langle \sigma[\mathtt{obtvar} \mapsto v], s[\mathtt{obtvar} \mapsto t_x] \rangle \quad \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot\) \\[6pt]
-
-\([ \text{obt}^{\bot}_{\text{os}} ]\) &
-\(\langle \mathtt{obtain}(\texttt{\&}x, \{ \phi \}), \sigma, s \rangle \rightarrow \hat{\sigma} \quad \text{if } \mathcal{W}(x, \phi, \sigma, s) = \bot\) \\
-
-\hline
+\fbox{%
+\begin{tabular}{rl}
+\(\mathcal{A}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \}), \sigma, s)\) & \(=
+\left\{
+  \begin{array}{ll}
+    v & \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot \\
+    \bot & \text{if } \mathcal{W}(x, \phi, \sigma, s) = \bot
+  \end{array}
+\right.\) \\
 \end{tabular}
+}%
 }
+\caption{Extension of $\mathcal{A}$ for witness extraction}
 \end{table}
 
-If no witness exists that satisfies $\phi$, the program deterministically transitions to the erroneous state $\hat{\sigma}$. Otherwise, the programmer can subsequently assign the extracted witness to a standard variable via a standard assignment, such as \texttt{y := obtvar;}.
+When $\mathcal{A}$ yields $\bot$, the standard error propagation rule of the base language applies: any statement evaluating an arithmetic expression that produces $\bot$ transitions to the erroneous state $\hat{\sigma}$. Otherwise, the expression evaluates to the concrete witness value $v$, which can be used directly in any arithmetic context. For example:
+\begin{verbatim}
+    y := obtain(&x, {Exists x in Int . &x = 5});
+    writeline(obtain(&w, {Exists w in Int . &w = 42}));
+\end{verbatim}
 
 \subsection{Accepted Forms of \texttt{obtain}}
 
-The concrete syntax is \texttt{obtain(\&$x$, \{$\phi$\});} where \texttt{\&$x$} names the target bound variable whose witness is extracted, and $\phi$ is a specification containing an existential quantifier binding~$x$. The specification $\phi$ must contain a sub-formula of the form $\exists\, x \in D.\; \psi$ for some domain $D$ and body $\psi$.
+The concrete syntax is \texttt{obtain(\&$x$, \{$\phi$\})} where \texttt{\&$x$} names the target bound variable whose witness is extracted, and $\phi$ is a specification containing an existential quantifier binding~$x$. The specification $\phi$ must contain a sub-formula of the form $\exists\, x \in D.\; \psi$ for some domain $D$ and body $\psi$.
 
 \subsubsection*{Supported Domains}
 
@@ -161,9 +167,10 @@ The specification may contain multiple nested quantifiers. When \texttt{obtain} 
 \mathtt{obtain}(\texttt{\&}b,\;\; \exists\, a \in [1\ldots 10].\; \exists\, b \in [5,6,7,9].\; \texttt{\&}a * \texttt{\&}a = \texttt{\&}b)
 \]
 
-Both $a$ and $b$ are introduced as free integer variables. The solver finds a satisfying assignment (e.g., $a = 3,\, b = 9$) and the value of the \emph{target} variable $b$ is stored in \texttt{obtvar}. Note that the choice of witness is non-deterministic when multiple satisfying assignments exist, as established in the determinism analysis below.
+Both $a$ and $b$ are introduced as free integer variables. The solver finds a satisfying assignment (e.g., $a = 3,\, b = 9$) and the value of the \emph{target} variable $b$ is returned as the value of the expression. Note that the choice of witness is non-deterministic when multiple satisfying assignments exist, as established in the determinism analysis below.
 
-\section{Determinism of LogiVeri}
+\newpage
+\section{Determinism analysis for LogiVeri}
 
 The original \texttt{SelVeri} language was strictly deterministic, meaning its small-step operational semantics transition relation ($\rightarrow$) formed a partial function. Introducing the \texttt{LogiVeri} constraint-driven extensions requires us to re-evaluate this property. We must analyze the two new additions independently: specification-based boolean expressions ($\{ \phi \}$) and witness extraction (\texttt{obtain}).
 
@@ -181,22 +188,22 @@ Because the evaluation of $\{ \phi \}$remains a partial function, the mutual exc
 
 \subsection{Non-Determinism of Witness Extraction}
 
-\textbf{Theorem:} The introduction of the \texttt{obtain} statement renders the \texttt{LogiVeri} language semantically non-deterministic.
+\textbf{Theorem:} The introduction of the \texttt{obtain} expression renders the \texttt{LogiVeri} language semantically non-deterministic.
 
 \begin{proof}
 To prove non-determinism, we must show that there exists a configuration $\langle S, \sigma, s \rangle$ that can validly transition to more than one distinct subsequent configuration.
 
-Consider the statement $S = \mathtt{obtain}(\texttt{\&}x,\; \exists\, x \in \textbf{Int}.\; \texttt{\&}x > 0 \land \texttt{\&}x < 5)$ evaluated under a standard integer scope. According to the operational semantic rule $[\text{obt}_{\text{os}}]$, the transition is valid if the extraction function $\mathcal{W}(x, \phi, \sigma, s)$ yields a concrete witness $v$ such that the model satisfies the constraints.
+Consider the statement $S = y \texttt{ := } \mathtt{obtain}(\texttt{\&}x,\; \exists\, x \in \textbf{Int}.\; \texttt{\&}x > 0 \land \texttt{\&}x < 5)$ evaluated under a standard integer scope where $y$ is declared. According to the operational semantic rule $[\text{obt}_{\text{os}}]$, the \texttt{obtain} expression evaluates to a concrete witness $v$ such that the model satisfies the constraints.
 
 In this scenario, the constraints are satisfied by multiple distinct models, specifically where $x \in \{1, 2, 3, 4\}$. Under the formal semantics of the extraction function $\mathcal{W}$, any of these witnesses is a mathematically valid yield. Consequently, the single initial configuration can legally transition to any of the following distinct states:
 \begin{itemize}
-    \item $\langle \sigma[\mathtt{obtvar} \mapsto 1],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
-    \item $\langle \sigma[\mathtt{obtvar} \mapsto 2],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
-    \item $\langle \sigma[\mathtt{obtvar} \mapsto 3],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
-    \item $\langle \sigma[\mathtt{obtvar} \mapsto 4],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
+    \item $\langle \sigma[y \mapsto 1],\, s \rangle$
+    \item $\langle \sigma[y \mapsto 2],\, s \rangle$
+    \item $\langle \sigma[y \mapsto 3],\, s \rangle$
+    \item $\langle \sigma[y \mapsto 4],\, s \rangle$
 \end{itemize}
 
-Because the transition relation ($\rightarrow$) maps a single pre-state to a set of multiple valid post-states, it ceases to be a partial function and becomes a one-to-many relation. While a specific underlying implementation of the \mathtt{Z3} solver may deterministically return the same witness (e.g., always returning $1$) due to internal heuristics, the \textit{formal semantics} of the language place no such restriction. Therefore, \texttt{LogiVeri} is inherently non-deterministic.
+Because the transition relation ($\rightarrow$) maps a single pre-state to a set of multiple valid post-states, it ceases to be a partial function and becomes a one-to-many relation. While a specific underlying implementation of the $\mathtt{Z3}$ solver may deterministically return the same witness (e.g., always returning $1$) due to internal heuristics, the \textit{formal semantics} of the language place no such restriction. Therefore, \texttt{LogiVeri} is inherently non-deterministic.
 \end{proof}
 
 \newpage
@@ -223,7 +230,7 @@ The instruction set $\langle \mathit{Command} \rangle$ is extended as follows:
 \centering
 \renewcommand{\arraystretch}{2.2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{$}l<{$} @{\quad \triangleright \quad} >{$}l<{$} @{}}
 \hline\hline
 
 \langle \texttt{VERIP}\; id,\,\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
@@ -235,7 +242,7 @@ The instruction set $\langle \mathit{Command} \rangle$ is extended as follows:
 
 \langle \texttt{OBT}\; x,\, id,\, \phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
 \begin{cases}
-\langle c ,\, e,\, \sigma[\mathtt{obtvar} \mapsto v], s[\mathtt{obtvar} \mapsto t_x],\, pc + 1 \rangle & \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot  \\
+\langle c ,\, v : e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot  \\
 \langle c ,\, e,\, \hat{\sigma},\, s,\, pc + 1 \rangle & \text{if } \mathcal{W}(x, \phi, \sigma, s) = \bot  \\
 \end{cases} \\
 
@@ -247,11 +254,11 @@ The instruction set $\langle \mathit{Command} \rangle$ is extended as follows:
 
 The \texttt{VERIP} instruction mimics the original \texttt{VERI} instruction, but instead of asserting the specification and halting the program on failure, it safely pushes the boolean truth value ($1$ or $0$) to the stack $e$. This allows the abstract machine to consume the logical result for conditional jumps (e.g., \texttt{JZ}).
 
-The \texttt{OBT} instruction queries the solver for the identifier $x$ under the constraint $\phi$. If a valid witness $v$ is synthesized, it is assigned to \texttt{obtvar}.
+The \texttt{OBT} instruction queries the solver for the identifier $x$ under the constraint $\phi$. If a valid witness $v$ is synthesized, it is pushed onto the evaluation stack $e$. This mirrors the semantics of other value-producing IR instructions such as \texttt{PUSH} and \texttt{READ}.
 
 \section{Compilation to LogiVerIR}
 
-With the operational semantics of the abstract machine defined, we seamlessly extend the compilation function $\mathcal{C}$ and the boolean compilation helper $\mathcal{CB}$. 
+With the operational semantics of the abstract machine defined, we seamlessly extend the compilation function $\mathcal{C}$ and the boolean compilation helper $\mathcal{CB}$. Because \texttt{obtain} is now an arithmetic expression, its compilation rule belongs to the arithmetic compilation function $\mathcal{CA}$.
 
 \begin{table}[h!]
 \centering
@@ -262,7 +269,7 @@ $\begin{array}{ll}
 
 \mathcal{CB}(\{ \phi \}) = \mathtt{VERIP}\; id_\phi, \phi \\[1.5ex]
 
-\mathcal{C}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})) = 
+\mathcal{CA}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})) = 
 \mathtt{OBT}\; x,\, id_\phi,\, \phi\\[1.5ex]
 
 \end{array}$%
@@ -274,7 +281,7 @@ $\begin{array}{ll}
 \newpage
 \section{Provably Correct Implementation of LogiVeri}
 
-To ensure that the \texttt{LogiVeri} extension preserves the rigorous mathematical guarantees of the original \texttt{SelVeri} language, we must extend the compiler correctness proofs. Specifically, we must demonstrate that the compilation mapping of the new boolean specification expression and the \texttt{obtain} statement maintain strict equivalence between the high-level semantics and the \texttt{LogiVerIR} abstract machine.
+To ensure that the \texttt{LogiVeri} extension preserves the rigorous mathematical guarantees of the original \texttt{SelVeri} language, we must extend the compiler correctness proofs. Specifically, we must demonstrate that the compilation mapping of the new boolean specification expression and the \texttt{obtain} expression maintain strict equivalence between the high-level semantics and the \texttt{LogiVerIR} abstract machine.
 
 \subsection{Correctness of Specification as Boolean Expressions}
 
@@ -311,28 +318,28 @@ We consider the two non-erroneous subcases based on the satisfiability of the fo
     \end{aligned}
     \]
 \end{itemize}
-In the edge case where \mathtt{Z3} returns \texttt{unknown} (or times out), the high-level evaluation yields $\bot$, which deterministically routes to an error state. Mirroring this perfectly, the IR instruction transitions to $\hat{\sigma}$. Thus, the equivalence strictly holds for all evaluations.
+In the edge case where $\mathtt{Z3}$ returns \texttt{unknown} (or times out), the high-level evaluation yields $\bot$, which deterministically routes to an error state. Mirroring this perfectly, the IR instruction transitions to $\hat{\sigma}$. Thus, the equivalence strictly holds for all evaluations.
 \end{proof}
 
 \subsection{Correctness of Witness Extraction (\texttt{obtain})}
 
-\textbf{Theorem:} For any valid statement $P = \mathtt{obtain}(\texttt{\&}x, \{ \phi \})$, its compilation is correct. Assuming the witness extraction succeeds ($\mathcal{W}(x, \phi, \sigma, s) = v \neq \bot$):
+\textbf{Theorem:} For any valid arithmetic expression $E = \mathtt{obtain}(\texttt{\&}x, \{ \phi \})$, its compilation is correct. Assuming the witness extraction succeeds ($\mathcal{W}(x, \phi, \sigma, s) = v \neq \bot$):
 \[
-\langle P,\, \sigma,\, s \rangle \; \rightarrow \; \langle \sigma[\mathtt{obtvar} \mapsto v],\, s[\mathtt{obtvar} \mapsto t_x] \rangle
+\mathcal{A}(E, \sigma, s) = v
 \]
 implies:
 \[
-\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \; \triangleright^{\ast} \; \langle \epsilon,\, e,\, \sigma[\mathtt{obtvar} \mapsto v],\, s[\mathtt{obtvar} \mapsto t_x],\, pc + 1 \rangle
+\langle \mathcal{CA}(E) : c,\, e,\, \sigma,\, s,\, pc \rangle \; \triangleright^{\ast} \; \langle c,\, v : e,\, \sigma,\, s,\, pc + 1 \rangle
 \]
 
 \begin{proof}
-We evaluate the compilation function $\mathcal{C}$ mapped to the \texttt{obtain} statement.
+We evaluate the compilation function $\mathcal{CA}$ mapped to the \texttt{obtain} expression.
 \[
 \begin{aligned}
-\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle 
-&= \langle \mathcal{C}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})),\, e,\, \sigma,\, s,\, pc \rangle \\
-&= \langle \mathtt{OBT}\; x,\, id_\phi,\, \phi,\, e,\, \sigma,\, s,\, pc \rangle && \text{(definition of $\mathcal{C}$)} \\
-&\triangleright \langle \epsilon,\, e,\, \sigma[\mathtt{obtvar} \mapsto v],\, s[\mathtt{obtvar} \mapsto t_x],\, pc + 1 \rangle && \text{(operational semantics of \texttt{OBT})}
+\langle \mathcal{CA}(E) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+&= \langle \mathcal{CA}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+&= \langle \mathtt{OBT}\; x,\, id_\phi,\, \phi : c,\, e,\, \sigma,\, s,\, pc \rangle && \text{(definition of $\mathcal{CA}$)} \\
+&\triangleright \langle c,\, v : e,\, \sigma,\, s,\, pc + 1 \rangle && \text{(operational semantics of \texttt{OBT})}
 \end{aligned}
 \]
 

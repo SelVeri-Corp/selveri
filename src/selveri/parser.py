@@ -204,8 +204,8 @@ class ListAssign(Stmt):
 class Pass(Stmt): pass
 
 @dataclass(frozen=True)
-class Obtain(Stmt):
-    """obtain(&x, φ) — extract a witness from Z3 for bound variable x"""
+class AObtain(AExp):
+    """obtain(&x, φ) — arithmetic expression yielding the witness value"""
     var_name: str
     spec: RawSpec
 
@@ -288,8 +288,8 @@ class AstBuilder(Transformer):
     def bspec(self, slot: Token):
         return BSpec(self.spec_slots[str(slot)])
 
-    def obtain_stmt(self, name: Token, slot: Token):
-        return Obtain(str(name), self.spec_slots[str(slot)])
+    def a_obtain(self, name: Token, slot: Token):
+        return AObtain(str(name), self.spec_slots[str(slot)])
 
     def if_stmt(self, cond, then_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
     def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
@@ -402,6 +402,20 @@ def parse_selveri(src: str) -> Program:
     return AstBuilder(raw_specs).transform(tree)
 
 
+def _iter_aexp_specs(aexp: AExp) -> Iterator[RawSpec]:
+    """Yield any RawSpec embedded inside arithmetic expressions (AObtain nodes)."""
+    if isinstance(aexp, AObtain):
+        yield aexp.spec
+    elif isinstance(aexp, AUnOp):
+        yield from _iter_aexp_specs(aexp.rhs)
+    elif isinstance(aexp, ABinOp):
+        yield from _iter_aexp_specs(aexp.left)
+        yield from _iter_aexp_specs(aexp.right)
+    elif isinstance(aexp, AIndex):
+        yield from _iter_aexp_specs(aexp.base)
+        yield from _iter_aexp_specs(aexp.index)
+
+
 def _iter_bexp_specs(bexp: BExp) -> Iterator[RawSpec]:
     """Yield any RawSpec embedded inside boolean expressions (BSpec nodes)."""
     if isinstance(bexp, BSpec):
@@ -411,14 +425,22 @@ def _iter_bexp_specs(bexp: BExp) -> Iterator[RawSpec]:
     elif isinstance(bexp, BBinOp):
         yield from _iter_bexp_specs(bexp.left)
         yield from _iter_bexp_specs(bexp.right)
+    elif isinstance(bexp, BCompare):
+        yield from _iter_aexp_specs(bexp.left)
+        yield from _iter_aexp_specs(bexp.right)
+    elif isinstance(bexp, BTruthy):
+        yield from _iter_aexp_specs(bexp.aexp)
 
 def _iter_stmt_specs(stmts: List[Stmt]) -> Iterator[RawSpec]:
     for stmt in stmts:
         if isinstance(stmt, SpecAnnot):
             yield stmt.spec
             continue
-        if isinstance(stmt, Obtain):
-            yield stmt.spec
+        if isinstance(stmt, Assign):
+            yield from _iter_aexp_specs(stmt.aexp)
+            continue
+        if isinstance(stmt, (Write, WriteLine)):
+            yield from _iter_aexp_specs(stmt.aexp)
             continue
         if isinstance(stmt, If):
             yield from _iter_bexp_specs(stmt.cond)
@@ -429,6 +451,10 @@ def _iter_stmt_specs(stmts: List[Stmt]) -> Iterator[RawSpec]:
         if isinstance(stmt, While):
             yield from _iter_bexp_specs(stmt.cond)
             yield from _iter_stmt_specs(stmt.body)
+            continue
+        if isinstance(stmt, Return):
+            yield from _iter_aexp_specs(stmt.value)
+            continue
 
 
 def collect_raw_specs(program: Program) -> List[RawSpec]:

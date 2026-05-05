@@ -1,58 +1,58 @@
 // =====================================================
-// LogiVeri: Witness Extraction via obtain
+// LogiVeri: Witness Extraction via obtain (arithmetic expression)
 // All specs should PASS
 // =====================================================
 
 // --- Basic obtain with integer witness ---
 y : Int;
 y := 5;
-obtain(&x, {Exists x in Int . &x = y});
 r1 : Int;
-r1 := obtvar;
+r1 := obtain(&x, {Exists x in Int . &x = y});
 {r1 = 5};
 
 // --- Obtain with constrained range ---
-obtain(&a, {(Exists a in [1...10] . &a * &a = 9)});
 r2 : Int;
-r2 := obtvar;
+r2 := obtain(&a, {(Exists a in [1...10] . &a * &a = 9)});
 {r2 = 3};
 
-obtain(&a, {Exists a in [1...10]. Exists b in [5,6,7,9]. &a * &a = &b});
-r2 := obtvar;
+r2 := obtain(&a, {Exists a in [1...10]. Exists b in [5,6,7,9]. &a * &a = &b});
 writeline(r2);
-writeline(obtvar);
 {r2 = 3};
 
-obtain(&b, {Exists b in [5,6,7,9]. Exists a in [1...10]. &a * &a = &b});
-r2 := obtvar;
+r2 := obtain(&b, {Exists b in [5,6,7,9]. Exists a in [1...10]. &a * &a = &b});
 writeline(r2);
-writeline(obtvar);
 {r2 = 9};
 
-obtain(&b, {Exists a in [1...10]. Exists b in [5,6,7,9]. &a * &a = &b}); // nested quantifier test
-r2 := obtvar;
+r2 := obtain(&b, {Exists a in [1...10]. Exists b in [5,6,7,9]. &a * &a = &b}); // nested quantifier test
 writeline(r2);
-writeline(obtvar);
 {r2 = 9};
 
 
 // --- Obtain with arithmetic constraint ---
 b : Int;
 b := 7;
-obtain(&z, {Exists z in Int . &z + 3 = b});
 r3 : Int;
-r3 := obtvar;
+r3 := obtain(&z, {Exists z in Int . &z + 3 = b});
 {r3 = 4};
 
 // --- Obtain used multiple times ---
 c : Int;
 c := 20;
-obtain(&m, {Exists m in Int . &m * 2 = c});
 r4 : Int;
-r4 := obtvar;
+r4 := obtain(&m, {Exists m in Int . &m * 2 = c});
 {r4 = 10};
 
-obtain(&n, {Exists n in Int . &n + r4 = c});
 r5 : Int;
-r5 := obtvar;
+r5 := obtain(&n, {Exists n in Int . &n + r4 = c});
 {r5 = 10};
+
+// --- Obtain directly as arithmetic expression ---
+
+
+if (obtain(&i, {Exists i in [2 ... 5]. &i = 2}) - 2) then // obtains 2, so 2-2 = 0, which is false
+    writeline(07);
+else
+    writeline(obtain(&w, {Exists w in Int . &w = 42 * 100})); // obtains 4200
+fi
+
+

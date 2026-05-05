@@ -38,9 +38,6 @@ stmt_seq: stmt*
                | write_stmt
                | writeline_stmt
                | spec_annot
-               | obtain_stmt
-
-obtain_stmt: "obtain" "(" "&" IDENT "," SPEC_SLOT ")"                  -> obtain_stmt
 
 write_stmt: "write" "(" aexp ")"                                        -> write_stmt
 writeline_stmt: "writeline" "(" aexp ")"                                -> writeline_stmt
@@ -99,6 +96,7 @@ aexp: aexp_sum                                                              -> a
          | indexed_value                                                  
          | "(" aexp ")"
          | "read" "(" ")"                                                 -> a_read
+         | "obtain" "(" "&" IDENT "," SPEC_SLOT ")"                       -> a_obtain
 
 // ------------------ BOOLEAN EXPRESSIONS ------------------
 bexp: b_or                                                                -> bexp
@@ -151,7 +149,6 @@ func_stmt_seq: func_stmt*
                     | "pass"                                                 -> pass_stmt
                     | return_stmt
                     | spec_annot
-                    | obtain_stmt
 
 ?func_unterminated_stmt: func_if_stmt
                         | func_while_stmt
