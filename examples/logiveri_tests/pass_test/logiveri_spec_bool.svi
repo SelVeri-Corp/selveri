@@ -70,3 +70,22 @@ else
 fi
 
 {pi_check = 1};
+
+
+// -----------------------------
+
+ww : Int;
+ww := 42;
+
+i : Int;
+i := 0;
+while {Historically ww = 42} do
+    i := i + 1;
+    if i = 37 then ww := 43; fi
+od
+{i = 37};
+writeline(i);
+
+
+// -----------------------------
+

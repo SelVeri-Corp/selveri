@@ -13,3 +13,9 @@ if {x > 100} then
 else
     {x > 100};
 fi
+
+
+ww : Int;
+ww := 43;
+
+if {Always ww = 43} then pass; else pass; fi
