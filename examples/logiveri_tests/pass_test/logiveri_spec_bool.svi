@@ -1,0 +1,72 @@
+// =====================================================
+// LogiVeri: Specification as Boolean Expression
+// All specs should PASS
+// =====================================================
+
+// --- Basic FOL spec as if-condition ---
+pi : Float;
+pi := 3.14;
+
+x : Int;
+x := 5;
+
+if {x > 0} then
+    y : Int;
+    y := 1;
+    {y = 1};
+fi
+
+// --- FOL spec as else routing ---
+a : Int;
+a := 3;
+
+if {a > 100} then
+    pass;
+else
+    {a = 3};
+fi
+
+// --- FOL spec as while-condition ---
+z : Int;
+z := 3;
+while {z > 0} do
+    z := z - 1;
+od
+{z = 0};
+
+// --- Negated spec boolean ---
+n : Int;
+n := 0;
+if {n > 0} then
+    pass;
+fi
+// n > 0 is false, so the then-branch is skipped.
+// No assertion inside, so we just verify n is still 0.
+{n = 0};
+
+// --- Compound boolean with spec ---
+c : Int;
+c := 7;
+if {c > 5} then
+    if {c < 10} then
+        {c = 7};
+    fi
+fi
+
+// --- pLTL spec as boolean ---
+w : Int;
+w := 10;
+{w = 10};
+if {Previously w = 10} then
+    {w = 10};
+fi
+
+pi_check : Int;
+pi_check := -1;
+if {Once (!(pi = 3.14))} then
+    pi_check := 0;
+else
+    pi_check := 1;
+fi
+
+{pi_check = 1};

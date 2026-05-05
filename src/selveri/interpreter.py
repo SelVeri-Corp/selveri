@@ -136,6 +136,16 @@ def _parse_label_line(line: str) -> IRInstr:
         if len(args) != 2:
             raise IRParseError(f"Invalid VERI arguments: {line}")
         args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+    elif op == "VERIP":
+        args = _split_top_level_commas(rest)
+        if len(args) != 2:
+            raise IRParseError(f"Invalid VERIP arguments: {line}")
+        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+    elif op == "OBT":
+        args = _split_top_level_commas(rest)
+        if len(args) != 3:
+            raise IRParseError(f"Invalid OBT arguments: {line}")
+        args = (args[0].strip(), _parse_scalar_token(args[1]), _parse_scalar_token(args[2]))
     else:
         args = [_parse_scalar_token(p) for p in _split_top_level_commas(rest)]
 
@@ -371,11 +381,11 @@ class SelVerIRInterpreter:
     # ---------- lookup ----------
     def _fresh_scope(self, parent: Optional[Scope] = None) -> Scope:
         depth = parent.depth + 1 if parent is not None else 0
-        return Scope(types={"retvar": None}, depth=depth, parent=parent)
+        return Scope(types={"retvar": None, "obtvar": None}, depth=depth, parent=parent)
 
     def _fresh_state(self, parent: Optional[State] = None) -> State:
         depth = parent.depth + 1 if parent is not None else 0
-        return State(values={"retvar": _UNSET}, depth=depth, parent=parent)
+        return State(values={"retvar": _UNSET, "obtvar": _UNSET}, depth=depth, parent=parent)
 
     def _fresh_runtime(
         self,
@@ -427,7 +437,7 @@ class SelVerIRInterpreter:
 
     def _declare(self, name: str, decl_type: DeclType, value: Any) -> None:
         scope = self.runtime.scope
-        if name in scope.types and name != "retvar":
+        if name in scope.types and name not in ("retvar", "obtvar"):
             raise IRRuntimeError(f"{name} has already been declared.")
         scope[name] = decl_type
         self.runtime.state[name] = value
@@ -752,6 +762,27 @@ class SelVerIRInterpreter:
             self.pc += 1
             return
 
+        if op == "VERIP":
+            spec_id = int(instr.args[0]) if instr.args else -1
+            if self.verifier is not None:
+                result = self._dispatch_verifier_spec_boolean(spec_id)
+                self._push(1 if result else 0)
+            else:
+                self._push(1)  # without verifier, optimistically treat as True
+            self.pc += 1
+            return
+
+        if op == "OBT":
+            var_name = str(instr.args[0]).strip()
+            spec_id = int(instr.args[1])
+            if self.verifier is not None:
+                witness_value, witness_type = self._dispatch_obtain(var_name, spec_id)
+                self._set_obtvar(witness_value, witness_type)
+            else:
+                raise IRRuntimeError("OBT requires a verifier to be attached.")
+            self.pc += 1
+            return
+
         if op == "STEP":
             if self.verifier is not None:
                 self.verifier.on_step(self._snapshot_runtime_configuration())
@@ -992,6 +1023,21 @@ class SelVerIRInterpreter:
     def _dispatch_verifier_spec(self, spec_id: int, raw_spec: Any) -> None:
         assert self.verifier is not None
         self.verifier.handle_veri(spec_id, self._snapshot_runtime_configuration())
+
+    def _dispatch_verifier_spec_boolean(self, spec_id: int) -> bool:
+        assert self.verifier is not None
+        return self.verifier.check_spec_boolean(spec_id, self._snapshot_runtime_configuration())
+
+    def _dispatch_obtain(self, var_name: str, spec_id: int) -> Tuple[Any, DeclType]:
+        assert self.verifier is not None
+        return self.verifier.extract_witness(var_name, spec_id, self._snapshot_runtime_configuration())
+
+    def _set_obtvar(self, value: Any, decl_type: DeclType) -> None:
+        scope = self.runtime.scope
+        state = self.runtime.state
+        coerced_value = _coerce_value(value, decl_type)
+        state["obtvar"] = coerced_value
+        scope["obtvar"] = decl_type
 
 
 # -----------------------

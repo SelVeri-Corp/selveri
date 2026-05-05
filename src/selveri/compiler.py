@@ -8,17 +8,17 @@ from typing import Dict, List, Optional, Tuple, Union
 from .parser import (
     parse_selveri,
     Program,
-    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
+    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, Obtain,
     TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
     AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
-    BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
+    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
     FunctionDecl, Write, WriteLine,
 )
 from .specs import RawSpec
 
 from .errors import CompilerError
 
-RESERVED_NAMES = ["retvar", "read", "write", "len"]
+RESERVED_NAMES = ["retvar", "obtvar", "read", "write", "len"]
 
 # -----------------------
 # IR instruction model
@@ -35,6 +35,10 @@ class IRInstr:
 
     def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
         if self.op == "VERI" and index == 1 and isinstance(arg, str):
+            return repr(arg)
+        if self.op == "VERIP" and index == 1 and isinstance(arg, str):
+            return repr(arg)
+        if self.op == "OBT" and index == 2 and isinstance(arg, str):
             return repr(arg)
         return str(arg)
 
@@ -142,6 +146,7 @@ class SelVeriCompiler:
         # starting scope with retvar
         self.scope = _ScopeFrame() # parent scope
         self.scope.bindings["retvar"] = None
+        self.scope.bindings["obtvar"] = None
         self.current_return_type: Optional[TypeNode] = None
         # functions to be compiled (declaration object, pc)
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
@@ -167,6 +172,7 @@ class SelVeriCompiler:
         parent = None if fresh_env else self.scope
         self.scope = _ScopeFrame(parent=parent)
         self.scope.bindings["retvar"] = None
+        self.scope.bindings["obtvar"] = None
 
     def _leave_scope(self) -> None:
         if self.scope.parent is None:
@@ -184,6 +190,8 @@ class SelVeriCompiler:
         if type_node is None:
             if name == "retvar":
                 raise CompilerError("retvar has no type until a function call returns.")
+            if name == "obtvar":
+                raise CompilerError("obtvar has no type until an obtain statement executes.")
             raise CompilerError(f"Internal: unbound variable: {name}")
         return type_node
 
@@ -745,6 +753,10 @@ class SelVeriCompiler:
                 self.emit("XOR")
                 return
             raise CompilerError(f"Unsupported boolean operator: {expr.op}")
+        if isinstance(expr, BSpec):
+            self.raw_specs[expr.spec.spec_id] = expr.spec
+            self.emit("VERIP", expr.spec.spec_id, expr.spec.text)
+            return
         raise CompilerError(f"Unsupported boolean expression: {type(expr).__name__}")
 
     def C_stmt(self, stmt: Stmt) -> None:
@@ -784,6 +796,14 @@ class SelVeriCompiler:
             return
         if isinstance(stmt, WriteLine):
             self._compile_writeline(stmt)
+            return
+        if isinstance(stmt, Obtain):
+            self.raw_specs[stmt.spec.spec_id] = stmt.spec
+            self.emit("OBT", stmt.var_name, stmt.spec.spec_id, stmt.spec.text)
+            # After obtain, obtvar has an unknown-at-compile-time type.
+            # Set it to BasicType() so it's compatible with any numeric target.
+            self.scope.bindings["obtvar"] = BasicType()
+            self.emit("STEP")
             return
         raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
 
@@ -1000,6 +1020,7 @@ class SelVeriCompiler:
         self.emit("FUNCENV", func.name, f"{func.return_type}")
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
+        self.scope.bindings["obtvar"] = None
         self.current_return_type = func.return_type
 
         # Parameters are pushed left-to-right by the caller, so bind them from the

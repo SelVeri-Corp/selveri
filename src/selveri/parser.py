@@ -178,6 +178,11 @@ class BCompare(BExp):
 class BTruthy(BExp):
     aexp: AExp
 
+@dataclass(frozen=True)
+class BSpec(BExp):
+    """A specification used as a boolean expression: {φ}"""
+    spec: RawSpec
+
 
 # Statements
 @dataclass(frozen=True)
@@ -197,6 +202,12 @@ class ListAssign(Stmt):
 
 @dataclass(frozen=True)
 class Pass(Stmt): pass
+
+@dataclass(frozen=True)
+class Obtain(Stmt):
+    """obtain(&x, φ) — extract a witness from Z3 for bound variable x"""
+    var_name: str
+    spec: RawSpec
 
 @dataclass(frozen=True)
 class SpecAnnot(Stmt):
@@ -273,6 +284,12 @@ class AstBuilder(Transformer):
     def pass_stmt(self): return Pass()
     def empty_stmt(self): return Pass()
     def while_stmt(self, cond, body_seq): return While(cond=cond, body=body_seq or [Pass()])
+
+    def bspec(self, slot: Token):
+        return BSpec(self.spec_slots[str(slot)])
+
+    def obtain_stmt(self, name: Token, slot: Token):
+        return Obtain(str(name), self.spec_slots[str(slot)])
 
     def if_stmt(self, cond, then_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
     def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
@@ -385,17 +402,32 @@ def parse_selveri(src: str) -> Program:
     return AstBuilder(raw_specs).transform(tree)
 
 
+def _iter_bexp_specs(bexp: BExp) -> Iterator[RawSpec]:
+    """Yield any RawSpec embedded inside boolean expressions (BSpec nodes)."""
+    if isinstance(bexp, BSpec):
+        yield bexp.spec
+    elif isinstance(bexp, BNot):
+        yield from _iter_bexp_specs(bexp.rhs)
+    elif isinstance(bexp, BBinOp):
+        yield from _iter_bexp_specs(bexp.left)
+        yield from _iter_bexp_specs(bexp.right)
+
 def _iter_stmt_specs(stmts: List[Stmt]) -> Iterator[RawSpec]:
     for stmt in stmts:
         if isinstance(stmt, SpecAnnot):
             yield stmt.spec
             continue
+        if isinstance(stmt, Obtain):
+            yield stmt.spec
+            continue
         if isinstance(stmt, If):
+            yield from _iter_bexp_specs(stmt.cond)
             yield from _iter_stmt_specs(stmt.then_s)
             if stmt.else_s is not None:
                 yield from _iter_stmt_specs(stmt.else_s)
             continue
         if isinstance(stmt, While):
+            yield from _iter_bexp_specs(stmt.cond)
             yield from _iter_stmt_specs(stmt.body)
 
 

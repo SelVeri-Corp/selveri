@@ -38,6 +38,9 @@ stmt_seq: stmt*
                | write_stmt
                | writeline_stmt
                | spec_annot
+               | obtain_stmt
+
+obtain_stmt: "obtain" "(" "&" IDENT "," SPEC_SLOT ")"                  -> obtain_stmt
 
 write_stmt: "write" "(" aexp ")"                                        -> write_stmt
 writeline_stmt: "writeline" "(" aexp ")"                                -> writeline_stmt
@@ -117,6 +120,7 @@ bexp: b_or                                                                -> bex
       | comparison
       | aexp                                                              -> truthy
       | "(" bexp ")"
+      | SPEC_SLOT                                                         -> bspec
 
 comparison: aexp COMP_OP aexp                                             -> compare
 
@@ -147,6 +151,7 @@ func_stmt_seq: func_stmt*
                     | "pass"                                                 -> pass_stmt
                     | return_stmt
                     | spec_annot
+                    | obtain_stmt
 
 ?func_unterminated_stmt: func_if_stmt
                         | func_while_stmt

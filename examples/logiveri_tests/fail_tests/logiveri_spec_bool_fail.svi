@@ -1,0 +1,15 @@
+// =====================================================
+// LogiVeri: spec-boolean fail — false spec routes to else 
+// which contains a failing assertion
+// =====================================================
+
+x : Int;
+x := 5;
+
+// x > 100 is false, so the else-branch executes.
+// The else-branch contains a spec that should fail (x > 100 is false).
+if {x > 100} then
+    pass;
+else
+    {x > 100};
+fi

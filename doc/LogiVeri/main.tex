@@ -1,0 +1,368 @@
+\documentclass{article}
+
+% Language setting
+\usepackage[english]{babel}
+
+% Set page size and margins
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath, amssymb, array} 
+\usepackage{enumitem}
+\usepackage{amsthm} 
+\usepackage{bussproofs}
+\usepackage{graphicx}
+\usepackage{tabularx} 
+\usepackage{tablefootnote}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+
+\title{LogiVeri: Logic Programming Extension for SelVeri \\ Syntax and Semantics Document}
+\author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document formalizes \texttt{LogiVeri}, a constraint-driven logic programming extension to the \texttt{SelVeri} language. By blurring the line between executable imperatives and static verification, \texttt{LogiVeri} allows programmers to utilize First-Order Logic (FOL) and Past-Linear-Temporal Logic (pLTL) specifications directly as boolean truth values in control flow, and to dynamically extract satisfying witnesses from the \texttt{Z3} SMT solver directly into the program state.
+\end{abstract}
+
+\newpage
+\section{Extended High-Level Syntax}
+
+To support the logic programming capabilities of \texttt{LogiVeri}, we extend the core grammar of \texttt{SelVeri}. We introduce a mechanism to evaluate specifications as standard boolean expressions, and a new statement to query the solver for existential witnesses.
+
+\subsection{Boolean Expressions}
+We extend the $\langle \mathit{BExp} \rangle$ ruleset. A specification enclosed in curly braces can now be utilized anywhere a boolean expression is expected (e.g., in \texttt{if} guards or \texttt{while} conditions).
+
+\[
+\begin{array}{rcl}
+\langle \mathit{BAtom} \rangle
+&::=&
+\mathtt{true}
+\;\mid\;
+\mathtt{false}
+\;\mid\;
+\langle \mathit{Comparison} \rangle
+\;\mid\;
+\langle \mathit{AExp} \rangle 
+\;\mid\;
+(\langle \mathit{BExp} \rangle)
+\;\mid\;
+\textbf{\{} \langle \mathit{Spec} \rangle \textbf{\}} \\[4pt]
+\end{array}
+\]
+
+\subsection{Statements}
+We extend the $\langle \mathit{TermStmt} \rangle$ ruleset to include the \texttt{obtain} statement. This statement binds an identifier to a witness extracted from the provided specification.
+
+\[
+\begin{array}{rcl}
+\langle \mathit{TermStmt} \rangle
+&::=&
+\langle \mathit{Decl} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{Assign} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{ListAssign} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{FuncCall} \rangle\texttt{;}
+\;\mid\;
+\langle \mathit{IOStmt} \rangle\texttt{;}
+\;\mid\;
+\mathtt{pass}\texttt{;} \\[2pt]
+&& \mid\;
+\mathbf{\mathtt{obtain}( \texttt{\&}\langle \mathit{Ident} \rangle, \textbf{\{} \langle \mathit{Spec} \rangle \textbf{\}} ) \texttt{;}} \\[4pt]
+\end{array}
+\]
+
+\section{Extended High-Level Semantics}
+
+\subsection{Semantics of Specification-based Booleans}
+Let $\mathcal{M}_{\mathtt{Z3}}$ be the mapping function that outputs the corresponding Z3 solver state for a given program state $\sigma$ and scope $s$, and $\mathcal{ZF}$ be the FOL mapping function. The boolean valuation function $\mathcal{B}$ is extended for specifications as follows:
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.6} 
+\large 
+\makebox[\textwidth][c]{%
+\fbox{%
+\begin{tabular}{rl}
+\(\mathcal{B}(\{ \phi \}, \sigma, s)\) & \(= 
+\left\{
+  \begin{array}{ll}
+    1 & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi) \\
+    0 & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \not\models \mathcal{ZF}(\phi) \\
+    \bot & \text{if } \mathtt{Z3} \text{ returns \texttt{unknown} or timeout}
+  \end{array}
+\right.\) \\
+\end{tabular}
+}%
+}
+\end{table}
+
+\subsection{Operational Semantics of \texttt{obtain}}
+To formalize the extraction of a witness without violating the static typing and lexical scoping invariants of standard variables, we introduce a special, dynamically-typed reserved variable \texttt{obtvar}, completely analogous to \texttt{retvar}. It stores the value and type of the most recently extracted witness.
+
+We define an extraction function $\mathcal{W}(x, \phi, \sigma, s)$. If $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)$, \mathtt{Z3} produces a satisfying model $M$. $\mathcal{W}$ evaluates the existentially bound variable $x$ under this model $M$ and returns its concrete value $v \in \textbf{Val}$. Let $t_x$ denote the inferred type of the bound variable $x$ inside $\phi$. If the formula is unsatisfiable or undecidable, $\mathcal{W}$ yields $\bot$.
+
+The structural operational semantics for the \texttt{obtain} statement are:
+
+\begin{table}[!ht]
+\centering
+\renewcommand{\arraystretch}{1.3} 
+\makebox[\textwidth][c]{%
+\begin{tabular}{|r l|}
+\hline
+
+\([ \text{obt}_{\text{os}} ]\) &
+\(\langle \mathtt{obtain}(\texttt{\&}x, \{ \phi \}), \sigma, s \rangle \rightarrow \langle \sigma[\mathtt{obtvar} \mapsto v], s[\mathtt{obtvar} \mapsto t_x] \rangle \quad \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot\) \\[6pt]
+
+\([ \text{obt}^{\bot}_{\text{os}} ]\) &
+\(\langle \mathtt{obtain}(\texttt{\&}x, \{ \phi \}), \sigma, s \rangle \rightarrow \hat{\sigma} \quad \text{if } \mathcal{W}(x, \phi, \sigma, s) = \bot\) \\
+
+\hline
+\end{tabular}
+}
+\end{table}
+
+If no witness exists that satisfies $\phi$, the program deterministically transitions to the erroneous state $\hat{\sigma}$. Otherwise, the programmer can subsequently assign the extracted witness to a standard variable via a standard assignment, such as \texttt{y := obtvar;}.
+
+\subsection{Accepted Forms of \texttt{obtain}}
+
+The concrete syntax is \texttt{obtain(\&$x$, \{$\phi$\});} where \texttt{\&$x$} names the target bound variable whose witness is extracted, and $\phi$ is a specification containing an existential quantifier binding~$x$. The specification $\phi$ must contain a sub-formula of the form $\exists\, x \in D.\; \psi$ for some domain $D$ and body $\psi$.
+
+\subsubsection*{Supported Domains}
+
+The domain $D$ of the existential quantifier determines both the Z3 sort of the bound variable and the constraints added to the solver:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Domain form} & \textbf{Z3 sort} & \textbf{Constraint added} \\
+\hline
+\texttt{Int} & $\mathbb{Z}$ (unbounded) & none \\
+\texttt{Float} & $\mathbb{R}$ (unbounded) & none \\
+\texttt{[$l$...$h$]} (range) & $\mathbb{Z}$ & $l \leq x \leq h$ \\
+\texttt{[$l$;$h$]}, \texttt{($l$;$h$)}, etc. (interval) & $\mathbb{R}$ & corresponding endpoint inclusion \\
+\texttt{[$v_1, v_2, \ldots, v_n$]} (value list) & $\mathbb{Z}$ & $x = v_1 \lor x = v_2 \lor \cdots \lor x = v_n$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsubsection*{Nested Quantifiers}
+
+The specification may contain multiple nested quantifiers. When \texttt{obtain} targets a specific bound variable, all quantifiers on the path from the specification root to the target existential are \emph{flattened}: each bound variable is introduced as a free Z3 variable with its domain constraints, and the innermost body is checked for satisfiability. For example:
+
+\[
+\mathtt{obtain}(\texttt{\&}b,\;\; \exists\, a \in [1\ldots 10].\; \exists\, b \in [5,6,7,9].\; \texttt{\&}a * \texttt{\&}a = \texttt{\&}b)
+\]
+
+Both $a$ and $b$ are introduced as free integer variables. The solver finds a satisfying assignment (e.g., $a = 3,\, b = 9$) and the value of the \emph{target} variable $b$ is stored in \texttt{obtvar}. Note that the choice of witness is non-deterministic when multiple satisfying assignments exist, as established in the determinism analysis below.
+
+\section{Determinism of LogiVeri}
+
+The original \texttt{SelVeri} language was strictly deterministic, meaning its small-step operational semantics transition relation ($\rightarrow$) formed a partial function. Introducing the \texttt{LogiVeri} constraint-driven extensions requires us to re-evaluate this property. We must analyze the two new additions independently: specification-based boolean expressions ($\{ \phi \}$) and witness extraction (\texttt{obtain}).
+
+\subsection{Determinism of Specification-Booleans}
+
+\textbf{Theorem:} A subset of \texttt{LogiVeri} that extends \texttt{SelVeri} \textit{only} with the specification-boolean expression $\{ \phi \}$ remains strictly deterministic.
+
+\begin{proof}
+To prove this, we must show that the extended boolean valuation function $\mathcal{B}$ still maps any valid configuration to exactly one value in $\{0, 1, \bot\}$. 
+
+For any given specification $\{ \phi \}$, the function evaluates the entailment $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)$. For a fully instantiated state and scope, this is a closed First-Order Logic formula. The semantic truth value of a closed FOL formula is absolute—it is either satisfiable ($1$), unsatisfiable ($0$), or undecidable/timeout ($\bot$). Assuming a standardized solver oracle (\texttt{Z3}), this evaluation yields exactly one deterministic outcome. 
+
+Because the evaluation of $\{ \phi \}$remains a partial function, the mutual exclusivity of the operational semantic rules relying on $\mathcal{B}$ (such as $[\text{if}^{1}_{\text{os}}]$ and $[\text{if}^{0}_{\text{os}}]$) is perfectly preserved. Thus, routing control flow via specifications maintains the deterministic guarantees of the language.
+\end{proof}
+
+\subsection{Non-Determinism of Witness Extraction}
+
+\textbf{Theorem:} The introduction of the \texttt{obtain} statement renders the \texttt{LogiVeri} language semantically non-deterministic.
+
+\begin{proof}
+To prove non-determinism, we must show that there exists a configuration $\langle S, \sigma, s \rangle$ that can validly transition to more than one distinct subsequent configuration.
+
+Consider the statement $S = \mathtt{obtain}(\texttt{\&}x,\; \exists\, x \in \textbf{Int}.\; \texttt{\&}x > 0 \land \texttt{\&}x < 5)$ evaluated under a standard integer scope. According to the operational semantic rule $[\text{obt}_{\text{os}}]$, the transition is valid if the extraction function $\mathcal{W}(x, \phi, \sigma, s)$ yields a concrete witness $v$ such that the model satisfies the constraints.
+
+In this scenario, the constraints are satisfied by multiple distinct models, specifically where $x \in \{1, 2, 3, 4\}$. Under the formal semantics of the extraction function $\mathcal{W}$, any of these witnesses is a mathematically valid yield. Consequently, the single initial configuration can legally transition to any of the following distinct states:
+\begin{itemize}
+    \item $\langle \sigma[\mathtt{obtvar} \mapsto 1],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
+    \item $\langle \sigma[\mathtt{obtvar} \mapsto 2],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
+    \item $\langle \sigma[\mathtt{obtvar} \mapsto 3],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
+    \item $\langle \sigma[\mathtt{obtvar} \mapsto 4],\, s[\mathtt{obtvar} \mapsto \textbf{Int}] \rangle$
+\end{itemize}
+
+Because the transition relation ($\rightarrow$) maps a single pre-state to a set of multiple valid post-states, it ceases to be a partial function and becomes a one-to-many relation. While a specific underlying implementation of the \mathtt{Z3} solver may deterministically return the same witness (e.g., always returning $1$) due to internal heuristics, the \textit{formal semantics} of the language place no such restriction. Therefore, \texttt{LogiVeri} is inherently non-deterministic.
+\end{proof}
+
+\newpage
+\section{LogiVerIR: Extended Intermediate Representation}
+
+To execute these high-level paradigms on the abstract machine, we introduce two new \texttt{SelVerIR} instructions: \texttt{VERIP} and \texttt{OBT}. 
+
+\subsection{IR Syntax Extensions}
+The instruction set $\langle \mathit{Command} \rangle$ is extended as follows:
+\[
+\begin{array}{rcl}
+\langle \mathit{Command} \rangle
+&::=& 
+\dots
+\;\mid\; \mathbf{\mathtt{VERIP} \;\; \langle \mathit{IntLit} \rangle\mathtt{,} \langle \mathit{Spec} \rangle}
+\;\mid\; \mathbf{\mathtt{OBT} \;\; \langle \mathit{ident} \rangle\mathtt{,} \langle \mathit{IntLit} \rangle\mathtt{,} \langle \mathit{Spec} \rangle}
+\end{array}
+\]
+
+\subsection{IR Operational Semantics}
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt} 
+\centering
+\renewcommand{\arraystretch}{2.2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\hline\hline
+
+\langle \texttt{VERIP}\; id,\,\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
+\begin{cases}
+\langle c ,\, 1 : e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
+\langle c ,\, 0 : e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \not\models \mathcal{ZF}(\phi)  \\
+\langle c ,\, e,\, \hat{\sigma},\, s,\, pc + 1 \rangle & \text{if } \mathtt{Z3} \text{ returns \texttt{unknown}}
+\end{cases} \\
+
+\langle \texttt{OBT}\; x,\, id,\, \phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
+\begin{cases}
+\langle c ,\, e,\, \sigma[\mathtt{obtvar} \mapsto v], s[\mathtt{obtvar} \mapsto t_x],\, pc + 1 \rangle & \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot  \\
+\langle c ,\, e,\, \hat{\sigma},\, s,\, pc + 1 \rangle & \text{if } \mathcal{W}(x, \phi, \sigma, s) = \bot  \\
+\end{cases} \\
+
+\hline\hline
+\end{tabular*}
+\caption{Operational semantics of LogiVerIR instructions}
+\label{tab:logiverir-sos}
+\end{table}
+
+The \texttt{VERIP} instruction mimics the original \texttt{VERI} instruction, but instead of asserting the specification and halting the program on failure, it safely pushes the boolean truth value ($1$ or $0$) to the stack $e$. This allows the abstract machine to consume the logical result for conditional jumps (e.g., \texttt{JZ}).
+
+The \texttt{OBT} instruction queries the solver for the identifier $x$ under the constraint $\phi$. If a valid witness $v$ is synthesized, it is assigned to \texttt{obtvar}.
+
+\section{Compilation to LogiVerIR}
+
+With the operational semantics of the abstract machine defined, we seamlessly extend the compilation function $\mathcal{C}$ and the boolean compilation helper $\mathcal{CB}$. 
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.8} 
+\resizebox{300}{!}{%
+\fbox{%
+$\begin{array}{ll}
+
+\mathcal{CB}(\{ \phi \}) = \mathtt{VERIP}\; id_\phi, \phi \\[1.5ex]
+
+\mathcal{C}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})) = 
+\mathtt{OBT}\; x,\, id_\phi,\, \phi\\[1.5ex]
+
+\end{array}$%
+}%
+}
+\caption{Compilation rules for LogiVeri extensions}
+\end{table}
+
+\newpage
+\section{Provably Correct Implementation of LogiVeri}
+
+To ensure that the \texttt{LogiVeri} extension preserves the rigorous mathematical guarantees of the original \texttt{SelVeri} language, we must extend the compiler correctness proofs. Specifically, we must demonstrate that the compilation mapping of the new boolean specification expression and the \texttt{obtain} statement maintain strict equivalence between the high-level semantics and the \texttt{LogiVerIR} abstract machine.
+
+\subsection{Correctness of Specification as Boolean Expressions}
+
+\textbf{Theorem:} Given any non-erroneous program state $\sigma$, scope $s$, and boolean specification expression $b = \{ \phi \}$, the compilation $\mathcal{CB}$ is correct:
+\[
+\langle \mathcal{CB}(\{ \phi \}) : c,\, e,\, \sigma,\, s,\, pc \rangle \; \triangleright^{\ast} \;
+\langle c,\, \mathcal{B}(\{ \phi \}, \sigma, s) : e,\, \sigma,\, s,\, pc + 1 \rangle
+\]
+
+\begin{proof}
+We prove this by evaluating the definition of $\mathcal{CB}(\{ \phi \})$ alongside the operational semantics of the \texttt{VERIP} instruction.
+\[
+\begin{aligned}
+\langle \mathcal{CB}(\{ \phi \}) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+&= \langle \mathtt{VERIP}\; id_\phi, \phi : c,\, e,\, \sigma,\, s,\, pc \rangle && \text{(definition of $\mathcal{CB}$)}
+\end{aligned}
+\]
+We consider the two non-erroneous subcases based on the satisfiability of the formula $\phi$:
+\begin{itemize}
+    \item \textbf{Subcase 1: } $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)$
+    \[
+    \begin{aligned}
+    \langle \mathtt{VERIP}\; id_\phi, \phi : c,\, e,\, \sigma,\, s,\, pc \rangle 
+    &\triangleright \langle c,\, 1 : e,\, \sigma,\, s,\, pc + 1 \rangle && \text{(operational semantics of \texttt{VERIP})} \\
+    &= \langle c,\, \mathcal{B}(\{ \phi \}, \sigma, s) : e,\, \sigma,\, s,\, pc + 1 \rangle && \text{(definition of $\mathcal{B}$)}
+    \end{aligned}
+    \]
+    \item \textbf{Subcase 2: } $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \not\models \mathcal{ZF}(\phi)$
+    \[
+    \begin{aligned}
+    \langle \mathtt{VERIP}\; id_\phi, \phi : c,\, e,\, \sigma,\, s,\, pc \rangle 
+    &\triangleright \langle c,\, 0 : e,\, \sigma,\, s,\, pc + 1 \rangle && \text{(operational semantics of \texttt{VERIP})} \\
+    &= \langle c,\, \mathcal{B}(\{ \phi \}, \sigma, s) : e,\, \sigma,\, s,\, pc + 1 \rangle && \text{(definition of $\mathcal{B}$)}
+    \end{aligned}
+    \]
+\end{itemize}
+In the edge case where \mathtt{Z3} returns \texttt{unknown} (or times out), the high-level evaluation yields $\bot$, which deterministically routes to an error state. Mirroring this perfectly, the IR instruction transitions to $\hat{\sigma}$. Thus, the equivalence strictly holds for all evaluations.
+\end{proof}
+
+\subsection{Correctness of Witness Extraction (\texttt{obtain})}
+
+\textbf{Theorem:} For any valid statement $P = \mathtt{obtain}(\texttt{\&}x, \{ \phi \})$, its compilation is correct. Assuming the witness extraction succeeds ($\mathcal{W}(x, \phi, \sigma, s) = v \neq \bot$):
+\[
+\langle P,\, \sigma,\, s \rangle \; \rightarrow \; \langle \sigma[\mathtt{obtvar} \mapsto v],\, s[\mathtt{obtvar} \mapsto t_x] \rangle
+\]
+implies:
+\[
+\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \; \triangleright^{\ast} \; \langle \epsilon,\, e,\, \sigma[\mathtt{obtvar} \mapsto v],\, s[\mathtt{obtvar} \mapsto t_x],\, pc + 1 \rangle
+\]
+
+\begin{proof}
+We evaluate the compilation function $\mathcal{C}$ mapped to the \texttt{obtain} statement.
+\[
+\begin{aligned}
+\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle 
+&= \langle \mathcal{C}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})),\, e,\, \sigma,\, s,\, pc \rangle \\
+&= \langle \mathtt{OBT}\; x,\, id_\phi,\, \phi,\, e,\, \sigma,\, s,\, pc \rangle && \text{(definition of $\mathcal{C}$)} \\
+&\triangleright \langle \epsilon,\, e,\, \sigma[\mathtt{obtvar} \mapsto v],\, s[\mathtt{obtvar} \mapsto t_x],\, pc + 1 \rangle && \text{(operational semantics of \texttt{OBT})}
+\end{aligned}
+\]
+
+If $\mathcal{W}$ fails and yields $\bot$, the high-level operational semantic rule $[\text{obt}^{\bot}_{\text{os}}]$ transitions the program state to $\hat{\sigma}$. Perfectly reflecting this, the abstract machine \texttt{OBT} instruction explicitly transitions to $\hat{\sigma}$ upon extraction failure. Therefore, the compilation strategy is correct.
+\end{proof}
+
+\subsection{Transfinite Correctness of Divergent Programs}
+
+With the base cases for finite-step execution securely established for the \texttt{LogiVeri} logic extensions, we must address the correctness of divergent (infinite looping or non-terminating) programs under this new paradigm. 
+
+The original mathematical proof for divergent programs in \texttt{SelVeri} relies on the \textit{decomposition lemma} and transfinite induction (limit-ordinal induction) applied over repeating finite execution chunks. Because the \texttt{LogiVeri} extensions (\texttt{\{ $\phi$ \}} and \texttt{obtain}) strictly evaluate in a finite number of discrete execution steps, and compile down to a finite, static sequence of \texttt{LogiVerIR} instructions, they completely satisfy the prerequisite bounds of the decomposition lemma. 
+
+Consequently, the original transfinite induction proof remains fully valid without any modification. The resulting program states and stabilization limits after executing an infinite trace $\omega$ of a divergent \texttt{LogiVeri} program and its compiled \texttt{LogiVerIR} counterpart are guaranteed to be mathematically identical.
+
+\subsection{Determinism of LogiVerIR}
+
+Having established the provable correctness of the compilation from \texttt{LogiVeri} to \texttt{LogiVerIR}, we can directly deduce the deterministic properties of the extended abstract machine.
+
+\textbf{Theorem:} The \texttt{LogiVerIR} abstract machine is semantically non-deterministic, perfectly mirroring the non-determinism of the high-level \texttt{LogiVeri} language.
+
+\begin{proof}
+By the correctness of the compilation function $\mathcal{C}$, the operational semantics of the high-level language are strictly preserved in the intermediate representation. We can evaluate the determinism of the transition relation ($\triangleright$) for the two new abstract machine instructions:
+
+\begin{itemize}
+    \item \textbf{Determinism of \texttt{VERIP}:} The \texttt{VERIP} instruction relies exclusively on the boolean evaluation $\mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)$. As argued in the high-level determinism proofs, this FOL entailment yields a single, mathematically deterministic truth value ($1$, $0$, or $\bot$). Thus, the execution of \texttt{VERIP} preserves a strict partial function transition.
+    
+    \item \textbf{Non-Determinism of \texttt{OBT}:} The \texttt{OBT} instruction directly invokes the high-level witness extraction function $\mathcal{W}(x, \phi, \sigma, s)$ to determine which value $v$ is pushed to the stack $e$. Because $\mathcal{W}$ maps to a set of valid witnesses for a loosely constrained formula $\phi$ (e.g., $\exists\, x \in \textbf{Int}.\; \texttt{\&}x > 0 \land \texttt{\&}x < 5$), the \texttt{OBT} instruction can legally transition a single abstract machine configuration into multiple distinct configurations (e.g., pushing $1$, $2$, $3$, or $4$ to the stack).
+\end{itemize}
+
+Because a single \texttt{LogiVerIR} configuration containing an \texttt{OBT} instruction can branch into multiple mathematically valid subsequent IR-configurations, the intermediate transition relation ($\triangleright$) ceases to be a partial function. Therefore, the abstract machine inherits the exact non-deterministic nature of the high-level language, exactly as the compiler correctness proofs imply.
+\end{proof}
+
+\end{document}
