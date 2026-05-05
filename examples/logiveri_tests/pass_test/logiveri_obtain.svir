@@ -39,37 +39,47 @@
 38: LOAD obtvar
 39: WRITELN
 40: VERI 7, 'r2 = 9'
-41: DECL INT, b
+41: OBT b, 8, 'Exists a in [1...10]. Exists b in [5,6,7,9]. &a * &a = &b'
 42: STEP
-43: PUSH 7
-44: STORE b
+43: LOAD obtvar
+44: STORE r2
 45: STEP
-46: OBT z, 8, 'Exists z in Int . &z + 3 = b'
-47: STEP
-48: DECL INT, r3
-49: STEP
-50: LOAD obtvar
-51: STORE r3
+46: LOAD r2
+47: WRITELN
+48: LOAD obtvar
+49: WRITELN
+50: VERI 9, 'r2 = 9'
+51: DECL INT, b
 52: STEP
-53: VERI 9, 'r3 = 4'
-54: DECL INT, c
+53: PUSH 7
+54: STORE b
 55: STEP
-56: PUSH 20
-57: STORE c
-58: STEP
-59: OBT m, 10, 'Exists m in Int . &m * 2 = c'
-60: STEP
-61: DECL INT, r4
+56: OBT z, 10, 'Exists z in Int . &z + 3 = b'
+57: STEP
+58: DECL INT, r3
+59: STEP
+60: LOAD obtvar
+61: STORE r3
 62: STEP
-63: LOAD obtvar
-64: STORE r4
+63: VERI 11, 'r3 = 4'
+64: DECL INT, c
 65: STEP
-66: VERI 11, 'r4 = 10'
-67: OBT n, 12, 'Exists n in Int . &n + r4 = c'
+66: PUSH 20
+67: STORE c
 68: STEP
-69: DECL INT, r5
+69: OBT m, 12, 'Exists m in Int . &m * 2 = c'
 70: STEP
-71: LOAD obtvar
-72: STORE r5
-73: STEP
-74: VERI 13, 'r5 = 10'
+71: DECL INT, r4
+72: STEP
+73: LOAD obtvar
+74: STORE r4
+75: STEP
+76: VERI 13, 'r4 = 10'
+77: OBT n, 14, 'Exists n in Int . &n + r4 = c'
+78: STEP
+79: DECL INT, r5
+80: STEP
+81: LOAD obtvar
+82: STORE r5
+83: STEP
+84: VERI 15, 'r5 = 10'
