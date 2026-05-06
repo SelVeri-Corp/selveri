@@ -121,7 +121,7 @@ class SpecAstBuilder(Transformer):
     def suntil(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_future_type(l, r), "Until", l, r)
     def sand(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "&&", l, r)
     def sor(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "||", l, r)
-    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r), "=>", l, r)
+    def simp(self, l: Spec, r: Spec): return SpecBinOp(self._next_uid(), self.deduce_spec_type(l,r, is_imp=True), "=>", l, r)
     # state_spec subgrammar (non-temporal quantified bodies; same AST as temporal-level operators)
     def state_snot(self, rhs: Spec): return self.snot(rhs)
     def state_sand(self, l: Spec, r: Spec): return self.sand(l, r)
@@ -151,23 +151,27 @@ class SpecAstBuilder(Transformer):
         return SpecQuant(self._next_uid(), SpecType.FOL, "Exists", str(var), domain, body)
 
 
-    def deduce_spec_type(self, spec1 : Spec, spec2: Spec) -> SpecType:
+    def deduce_spec_type(self, spec1 : Spec, spec2: Spec, is_imp: bool = False) -> SpecType:
         if spec1.type == spec2.type:
             return spec1.type
         if spec1.type == SpecType.FOL:
             return spec2.type
         if spec2.type == SpecType.FOL:
-            return spec2.type
-        raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+            return spec1.type
+        
+        if is_imp and spec1.type == SpecType.pLTL and spec2.type == SpecType.fLTL:
+            return SpecType.sLTL
+
+        raise VerifierRuntimeError("Only 'pLTL => fLTL' is allowed for mixed LTL formulae!")
 
     def deduce_past_type(self, spec1: Spec, spec2: Spec) -> SpecType:
         if SpecType.fLTL in {spec1.type, spec2.type}:
-            raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+            raise VerifierRuntimeError("Only 'pLTL => fLTL' is allowed for mixed LTL formulae!")
         return SpecType.pLTL
 
     def deduce_future_type(self, spec1: Spec, spec2: Spec) -> SpecType:
         if SpecType.pLTL in {spec1.type, spec2.type}:
-            raise VerifierRuntimeError("Mixed LTL formulae are not allowed!")
+            raise VerifierRuntimeError("Only 'pLTL => fLTL' is allowed for mixed LTL formulae!")
         return SpecType.fLTL
 
 
