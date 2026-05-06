@@ -138,14 +138,14 @@ To accurately preserve the semantics of both the program's memory and the logica
 The runtime configuration consists of a hierarchical \textbf{Scope} (lexical environments) and a \textbf{State} (memory values). The mapper enforces a strict lexical depth matching mechanism to preserve vertical isolation.
 
 \subsubsection{Lexical Scoping and Variable Naming}
-To ensure independent history tracking for horizontally isolated blocks, every variable $v$ mapped to \mathtt{Z3} is prefixed with its owner scope's unique identifier (\texttt{scope\_id}). We define the naming function $\mathcal{ZN}$ as:
+To ensure independent history tracking for horizontally isolated blocks, every variable $v$ mapped to \texttt{Z3} is prefixed with its owner scope's unique identifier (\texttt{scope\_id}). We define the naming function $\mathcal{ZN}$ as:
 \[
 \mathcal{ZN}(v, id) = \texttt{\_s}\langle id \rangle\texttt{\_}v
 \]
 
 
 \subsubsection{Scope Mapping}
-Let $\mathcal{ZS}$ be the mapping function from \texttt{SelVeri} types to \mathtt{Z3} Sorts. Variables are declared in the \texttt{free\_var\_map} according to their type:
+Let $\mathcal{ZS}$ be the mapping function from \texttt{SelVeri} types to \texttt{Z3} Sorts. Variables are declared in the \texttt{free\_var\_map} according to their type:
 
 \begin{table}[h!]
 \centering
@@ -163,7 +163,7 @@ $\begin{array}{ll}
 \end{table}
 
 \subsubsection{State Mapping}
-For a given state mapping variable $v$ to value $val$, assertions are added to the \mathtt{Z3} solver to constrain the free variables. 
+For a given state mapping variable $v$ to value $val$, assertions are added to the \texttt{Z3} solver to constrain the free variables. 
 If $v$ is of a basic type (\texttt{INT} or \texttt{FLOAT}):
 \[
 \texttt{solver.add}( \mathcal{ZN}(v, id) == val )
@@ -176,7 +176,7 @@ If $v$ is a \texttt{LIST} of size $n$, the array is constrained element by eleme
 \newpage
 \subsection{Specification Mapping}
 
-The mapper recursively translates Abstract Syntax Tree (AST) nodes of the specification into \mathtt{Z3} expressions. We define $\mathcal{ZA}$ for arithmetic expressions, $\mathcal{ZB}$ for boolean expressions, and $\mathcal{ZF}$ for generic FOL formulas.
+The mapper recursively translates Abstract Syntax Tree (AST) nodes of the specification into \texttt{Z3} expressions. We define $\mathcal{ZA}$ for arithmetic expressions, $\mathcal{ZB}$ for boolean expressions, and $\mathcal{ZF}$ for generic FOL formulas.
 
 
 \subsubsection{Mapping of Arithmetic Expressions ($\mathcal{ZA}$)}
@@ -220,7 +220,7 @@ $\begin{array}{ll}
 }
 \end{table}
 
-\textit{Note: $\mathit{LF_{Z3}}$ is the \mathtt{Z3} equivalent of the list flattening logic, computed dynamically using dimension length shadows ($\texttt{\_}lst\texttt{\_len\_}d$) from the mapping scope.}
+\textit{Note: $\mathit{LF_{Z3}}$ is the \texttt{Z3} equivalent of the list flattening logic, computed dynamically using dimension length shadows ($\texttt{\_}lst\texttt{\_len\_}d$) from the mapping scope.}
 
 \newpage
 \subsubsection{Mapping of Boolean Expressions ($\mathcal{ZB}$)}
@@ -280,7 +280,7 @@ The \texttt{SpecQuant} mapping dictates how $\forall$ (\texttt{Forall}) and $\ex
 \begin{itemize}
     \item \textbf{Infinite Domains (Z3 Native Quantifiers)}
     
-    If the domain is unbounded (\texttt{DomainType}), \mathtt{Z3} native quantifiers are utilized directly:
+    If the domain is unbounded (\texttt{DomainType}), \texttt{Z3} native quantifiers are utilized directly:
     \[
     \begin{aligned}
     \mathcal{ZF}(\forall x \in \texttt{INT} \cdot \phi) \quad &\implies \quad \texttt{ForAll}(x_{z3}, \mathcal{ZF}(\phi)) \\
@@ -328,27 +328,7 @@ Let $\mathcal{M}_{\mathtt{Z3}}$ be the function outputting the corresponding sol
 
 \langle \texttt{VERI}\;\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
 \begin{cases}
-\langle c ,\, e,\, \sigma,\, s,\, pc + 1 \rangle &\section{Discrete time steps}
-￼
-To verify temporal logic formulae (both past and future LTL), the \texttt{SelVerifier} engine requires a well-defined notion of discrete time. Tracking every microscopic operation of the \texttt{SelVerIR} abstract machine (such as pushing and popping intermediate values from the stack) would lead to an explosion in the state space and is logically redundant. Instead, temporal progression must be synchronized with observable mutations in the program's memory, \textit{id est}, scope and program state.
-￼
-\subsection{The \texttt{STEP} Instruction}
-To formalize this synchronization, the \texttt{SelVerIR} instruction set is augmented with a dedicated \texttt{STEP} command. During the compilation phase, the compiler strategically emits a \texttt{STEP} instruction immediately following any high-level statement that mutates the observable state or scope---specifically, after variable declarations (\texttt{DECL}, \texttt{LDECL}) and assignments (\texttt{STORE}, \texttt{LSTORE}).
-￼
-The execution of the \texttt{STEP} instruction acts as a global clock tick for the verification engine, effectively partitioning the continuous execution into discrete, meaningful moments.
-￼
-\subsection{Operational Semantics and State Tracking}
-When the abstract machine encounters a \texttt{STEP} instruction, the verification engine's \texttt{on\_step} hook is invoked[cite: 10]. This momentarily halts standard execution to perform the following temporal maintenance routines in strictly this order:
-￼
-\begin{enumerate}
-    \item \textbf{History Snapshot (for past-LTL):} The engine captures the current \texttt{RuntimeConfiguration} snapshot (comprising the current program state and scope) and appends it to the \texttt{history} array[cite: 10]. It also initializes a new, empty dictionary in \texttt{pltl\_memo} to cache temporal evaluations for this specific step[cite: 10].
-    
-    \item \textbf{Global Clock Increment:} The internal monotonic clock (\texttt{last\_step}) is incremented by exactly one[cite: 10].
-    
-    \item \textbf{Automaton Advancement (for future-LTL):} The engine delegates the captured snapshot to \texttt{advance\_future\_obligations}[cite: 10]. It iterates over all pending future obligations residing in the \texttt{fltl\_pending} queue, evaluating their propositional atoms against the snapshot, and advancing their underlying Deterministic Finite Automata (DFA) to their respective next states[cite: 10].
-\end{enumerate}
-￼
-By abstracting the granular execution steps into discrete memory snapshots, the \texttt{STEP} instruction elegantly bridges the gap between the imperative execution model of \texttt{SelVeri} and the strict discrete-time semantics of Linear Temporal Logic. \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
+\langle c ,\, e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
 \langle c ,\, e,\, \hat{\sigma} \footnotemark,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s)  \not\models \footnotemark \mathcal{ZF}(\phi)  \\
 \end{cases} \\
 
@@ -404,7 +384,7 @@ In standard past-LTL over infinite traces, properties evaluate back to time zero
 Let $H = \langle \sigma_0, \sigma_1, \dots, \sigma_k \rangle$ be the sequence of recorded states (history), where $k$ is the current execution step. Let $s_{init}$ be the initial valid step for the specification $\phi$. We define the evaluation function $\mathcal{V}(\phi, k, s_{init})$ as follows:
 
 \begin{itemize}
-    \item \textbf{Base Case (FOL):} If $\phi$ is a pure FOL formula, it is evaluated directly against the current state snapshot using \mathtt{Z3}:
+    \item \textbf{Base Case (FOL):} If $\phi$ is a pure FOL formula, it is evaluated directly against the current state snapshot using \texttt{Z3}:
     \[
     \mathcal{V}(\phi, k, s_{init}) = \mathcal{M}_{\mathtt{Z3}}(\sigma_k, s_k) \models \mathcal{ZF}(\phi)
     \]
@@ -440,7 +420,7 @@ Let $H = \langle \sigma_0, \sigma_1, \dots, \sigma_k \rangle$ be the sequence of
 \subsection{Soundness of past-LTL verification}
 The soundness of the past-LTL verification framework is established in three parts:
 \begin{enumerate}
-    \item \textbf{Base Soundness:} The leaves of the temporal Abstract Syntax Tree (AST) are pure FOL formulae. As argued in \textbf{section 3}, the evaluation of these base FOL propositions using the \texttt{Z3Mapper} and the \mathtt{Z3} solver is sound.
+    \item \textbf{Base Soundness:} The leaves of the temporal Abstract Syntax Tree (AST) are pure FOL formulae. As argued in \textbf{section 3}, the evaluation of these base FOL propositions using the \texttt{Z3Mapper} and the \texttt{Z3} solver is sound.
     \item \textbf{Trace Finiteness:} The program emits a finite, discrete string of states $H$. The boundary condition $s_{init}$ ensures that no temporal operator queries a state before its constituent variables have well-defined semantics.
     \item \textbf{Structural Induction:} The recursive transition rules exactly mirror the well-established mathematical semantics of past-LTL over finite traces \cite{pnueli1985past}. By construction, the sequential network computes the truth value of a formula of depth $d$ at step $k$ assuming the correct computation of formulae of depth $d-1$ at step $k$, and formulae of depth $d$ at step $k-1$. By simultaneous structural induction on the temporal AST depth and mathematical induction on the discrete execution steps, the evaluation strictly preserves the semantics of standard finite-trace past-LTL.
 \end{enumerate}
@@ -487,6 +467,44 @@ The soundness of the future-LTL verification relies on the following pillars:
 \end{enumerate}
 
 \newpage
+\section{Verification of separated-LTL formulae}
+
+A fundamental theoretical basis for combining past and future temporal operators is Gabbay's separation theorem \cite{gabbay1989declarative, gabbay1994temporal}. Formulated by Dov M. Gabbay, this theorem states that any arbitrary linear temporal logic formula containing both past and future operators can be rewritten into a logically equivalent separated form. In this form, specifications can be structured as boolean combinations of purely past, present, and future subformulae, often taking a ``pLTL $\implies$ fLTL'' shape where past conditions logically trigger future obligations. This separation is highly advantageous for executable temporal logic and system verification, as it avoids complex temporal overlaps and enables concise execution rules. 
+
+Separated Linear Temporal Logic (sLTL) specifications natively combine past and future temporal operators into a single, unified implication. In \texttt{SelVeri}, an sLTL formula acts as a conditional temporal guarantee: a future-LTL obligation is strictly enforced if and only if a specific past-LTL history condition holds at the current execution step.
+
+\subsection{Structure and Semantics}
+An sLTL specification is internally represented as a binary structure, comprising a past-LTL premise (the left-hand side, $\phi_p$) and a future-LTL conclusion (the right-hand side, $\phi_f$). 
+
+The operational semantics for verifying an sLTL formula at step $k$ with a valid starting step $s_{init}$ relies on the principle of vacuous truth:
+\begin{enumerate}
+    \item \textbf{Initial Step Deduction:} If not explicitly provided, the engine deduces $s_{init}$ for the past-LTL premise by determining the maximum initialization or declaration step among its free variables.
+    \item \textbf{Past Evaluation:} The verifier evaluates $\phi_p$ over the execution history up to the current step ($k$) using the \texttt{verify\_past\_LTL} routine.
+    \item \textbf{Future Delegation:} 
+    \begin{itemize}
+        \item If $\phi_p$ evaluates to \texttt{True}, the verifier triggers the future-LTL evaluation process, mapping $\phi_f$ into a state-tracking automaton and appending it to the pending future obligations.
+        \item If $\phi_p$ evaluates to \texttt{False}, the specification is vacuously \texttt{True} for the current state, and execution proceeds without tracking $\phi_f$.
+    \end{itemize}
+\end{enumerate}
+
+Formally, this evaluation step can be summarized as:
+\[
+\mathcal{V}_{sLTL}(\phi_p \implies \phi_f, k) = 
+\begin{cases} 
+  \text{Track } \mathcal{V}_{fLTL}(\phi_f, k) & \text{if } \mathcal{V}_{pLTL}(\phi_p, k, s_{init}) \text{ is True} \\
+  \texttt{true} & \text{otherwise}
+\end{cases}
+\]
+
+\subsection{Soundness Argument}
+The soundness of the sLTL verification seamlessly inherits the soundness guarantees of its underlying components. The evaluation reduces to a standard material implication $\phi_p \implies \phi_f$:
+\begin{enumerate}
+    \item \textbf{Vacuous Truth:} If the past-LTL premise $\phi_p$ evaluates to false, the implication is vacuously true, which perfectly aligns with standard propositional logic semantics. The accurate evaluation of $\phi_p$ is guaranteed by the established soundness of the pLTL module.
+    \item \textbf{Delegated Soundness:} If $\phi_p$ evaluates to true, the truth value of the entire sLTL formula becomes strictly equivalent to the truth value of the future-LTL conclusion $\phi_f$. Because the fLTL tracking via deterministic finite automata is shown to be sound, this delegated evaluation is also logically sound.
+\end{enumerate}
+Consequently, because both the past history evaluation and the future state-tracking are sound, their conditional composition in \texttt{SelVeri} remains strictly sound.
+
+\newpage
 \begin{thebibliography}{9}
 
 \bibitem{demoura2008proofs}
@@ -519,6 +537,14 @@ J.~G.~Henriksen, J.~Jensen, M.~J{\o}rgensen, N.~Klarlund, B.~Paige, T.~Rauhe, an
 ``Mona: Monadic second-order logic in practice,''
 \emph{Tools and Algorithms for the Construction and Analysis of Systems (TACAS)}, Lecture Notes in Computer Science, vol. 1019. Springer, Berlin, Heidelberg, pp. 89--110, 1995.
 
-\end{thebibliography}
+\bibitem{gabbay1989declarative}
+D.~M.~Gabbay,
+``Declarative Past and Imperative Future: Executable Temporal Logic for Interactive Systems,''
+\emph{Proceedings of the Colloquium of Temporal Logic in Specification}, Lecture Notes in Computer Science, vol. 398. Springer, Berlin, Heidelberg, pp. 67--89, 1989.
 
+\bibitem{gabbay1994temporal}
+D.~M.~Gabbay, I.~Hodkinson, and M.~Reynolds,
+\emph{Temporal Logic: Mathematical Foundations and Computational Aspects}, Volume I. Oxford University Press, 1994.
+
+\end{thebibliography}
 \end{document}
