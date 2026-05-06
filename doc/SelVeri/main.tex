@@ -945,6 +945,8 @@ function P_2_3(x1: Int, x2: Int, x3: Int) -> Int ::
     return x2;
 end
     \end{verbatim}
+
+    Similarly, list index accessing (\texttt{lst[i]}) can be interpreted as another example of projection function in \texttt{SelVeri}.
 \end{itemize}
 
 \newpage
@@ -989,7 +991,7 @@ function h(x: Int, y: Int) -> Int ::
         call g(x, counter, accum);
         accum := retvar;
         counter := counter + 1;
-    od;
+    od
     
     return accum;
 end
@@ -1013,7 +1015,7 @@ function mu_f(x: Int) -> Int ::
         y := y + 1;
         call f(x, y);
         res := retvar;
-    od;
+    od
     
     return y;
 end
