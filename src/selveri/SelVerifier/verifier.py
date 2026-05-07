@@ -130,7 +130,9 @@ class VerificationEngine:
             start_step = self.pltl_deduce_inital_step(spec, snapshot.scope)
             return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
         else:
-            raise VerificationError("Specification-booleans with fLTL are not supported.")
+            raise VerificationError(
+                f"Specification-booleans with {spec.type.name} are not supported."
+            )
 
     def extract_witness(
         self,
