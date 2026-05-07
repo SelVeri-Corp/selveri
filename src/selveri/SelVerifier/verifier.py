@@ -323,8 +323,10 @@ class VerificationEngine:
             if start_step is None:
                 start_step = self.pltl_deduce_inital_step(spec, snapshot.scope)
             return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
-        else: # spec.type == SpecType.fLTL:
+        elif spec.type == SpecType.fLTL:
             return self.verify_future_LTL(spec, snapshot, lexical_depth, raw_spec)
+        else: # spec.type == SpecType.sLTL:
+            return self.verify_separated_LTL(spec, snapshot, start_step, lexical_depth, raw_spec)
     
     ################# FOL Verification #################
 
@@ -342,6 +344,18 @@ class VerificationEngine:
         else: # unknown
             raise VerificationError(f"Z3-solver returned unknown for FOL verification. Reason: {solver.reason_unknown()}")
 
+
+    ################# sLTL Verification #################
+    
+    def verify_separated_LTL(self, spec: Spec, snapshot: RuntimeConfiguration, start_step: int, lexical_depth: int, raw_spec: RawSpec) -> bool:
+        spec_pltl = spec.left
+        spec_fltl = spec.right
+
+        if start_step is None:
+            start_step = self.pltl_deduce_inital_step(spec_pltl, snapshot.scope)
+        if self.verify_past_LTL(spec_pltl, self.last_step - 1, start_step, lexical_depth):
+            return self.verify_future_LTL(spec_fltl, snapshot, lexical_depth, raw_spec)
+        return True # vacous truth if past is false
 
     ################# pLTL Verification #################
 

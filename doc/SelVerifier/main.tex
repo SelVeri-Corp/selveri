@@ -326,7 +326,7 @@ Let $\mathcal{M}_{\mathtt{Z3}}$ be the function outputting the corresponding sol
 \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
 \hline\hline
 
-\langle \texttt{VERI}\; id,\,\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
+\langle \texttt{VERI}\;\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
 \begin{cases}
 \langle c ,\, e,\, \sigma,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s) \models \mathcal{ZF}(\phi)  \\
 \langle c ,\, e,\, \hat{\sigma} \footnotemark,\, s,\, pc + 1 \rangle & \text{if } \mathcal{M}_{\mathtt{Z3}}(\sigma, s)  \not\models \footnotemark \mathcal{ZF}(\phi)  \\
@@ -467,6 +467,44 @@ The soundness of the future-LTL verification relies on the following pillars:
 \end{enumerate}
 
 \newpage
+\section{Verification of separated-LTL formulae}
+
+A fundamental theoretical basis for combining past and future temporal operators is Gabbay's separation theorem \cite{gabbay1989declarative, gabbay1994temporal}. Formulated by Dov M. Gabbay, this theorem states that any arbitrary linear temporal logic formula containing both past and future operators can be rewritten into a logically equivalent separated form. In this form, specifications can be structured as boolean combinations of purely past, present, and future subformulae, often taking a ``pLTL $\implies$ fLTL'' shape where past conditions logically trigger future obligations. This separation is highly advantageous for executable temporal logic and system verification, as it avoids complex temporal overlaps and enables concise execution rules. 
+
+Separated Linear Temporal Logic (sLTL) specifications natively combine past and future temporal operators into a single, unified implication. In \texttt{SelVeri}, an sLTL formula acts as a conditional temporal guarantee: a future-LTL obligation is strictly enforced if and only if a specific past-LTL history condition holds at the current execution step.
+
+\subsection{Structure and Semantics}
+An sLTL specification is internally represented as a binary structure, comprising a past-LTL premise (the left-hand side, $\phi_p$) and a future-LTL conclusion (the right-hand side, $\phi_f$). 
+
+The operational semantics for verifying an sLTL formula at step $k$ with a valid starting step $s_{init}$ relies on the principle of vacuous truth:
+\begin{enumerate}
+    \item \textbf{Initial Step Deduction:} If not explicitly provided, the engine deduces $s_{init}$ for the past-LTL premise by determining the maximum initialization or declaration step among its free variables.
+    \item \textbf{Past Evaluation:} The verifier evaluates $\phi_p$ over the execution history up to the current step ($k$) using the \texttt{verify\_past\_LTL} routine.
+    \item \textbf{Future Delegation:} 
+    \begin{itemize}
+        \item If $\phi_p$ evaluates to \texttt{True}, the verifier triggers the future-LTL evaluation process, mapping $\phi_f$ into a state-tracking automaton and appending it to the pending future obligations.
+        \item If $\phi_p$ evaluates to \texttt{False}, the specification is vacuously \texttt{True} for the current state, and execution proceeds without tracking $\phi_f$.
+    \end{itemize}
+\end{enumerate}
+
+Formally, this evaluation step can be summarized as:
+\[
+\mathcal{V}_{sLTL}(\phi_p \implies \phi_f, k) = 
+\begin{cases} 
+  \text{Track } \mathcal{V}_{fLTL}(\phi_f, k) & \text{if } \mathcal{V}_{pLTL}(\phi_p, k, s_{init}) \text{ is True} \\
+  \texttt{true} & \text{otherwise}
+\end{cases}
+\]
+
+\subsection{Soundness Argument}
+The soundness of the sLTL verification seamlessly inherits the soundness guarantees of its underlying components. The evaluation reduces to a standard material implication $\phi_p \implies \phi_f$:
+\begin{enumerate}
+    \item \textbf{Vacuous Truth:} If the past-LTL premise $\phi_p$ evaluates to false, the implication is vacuously true, which perfectly aligns with standard propositional logic semantics. The accurate evaluation of $\phi_p$ is guaranteed by the established soundness of the pLTL module.
+    \item \textbf{Delegated Soundness:} If $\phi_p$ evaluates to true, the truth value of the entire sLTL formula becomes strictly equivalent to the truth value of the future-LTL conclusion $\phi_f$. Because the fLTL tracking via deterministic finite automata is shown to be sound, this delegated evaluation is also logically sound.
+\end{enumerate}
+Consequently, because both the past history evaluation and the future state-tracking are sound, their conditional composition in \texttt{SelVeri} remains strictly sound.
+
+\newpage
 \begin{thebibliography}{9}
 
 \bibitem{demoura2008proofs}
@@ -499,6 +537,14 @@ J.~G.~Henriksen, J.~Jensen, M.~J{\o}rgensen, N.~Klarlund, B.~Paige, T.~Rauhe, an
 ``Mona: Monadic second-order logic in practice,''
 \emph{Tools and Algorithms for the Construction and Analysis of Systems (TACAS)}, Lecture Notes in Computer Science, vol. 1019. Springer, Berlin, Heidelberg, pp. 89--110, 1995.
 
-\end{thebibliography}
+\bibitem{gabbay1989declarative}
+D.~M.~Gabbay,
+``Declarative Past and Imperative Future: Executable Temporal Logic for Interactive Systems,''
+\emph{Proceedings of the Colloquium of Temporal Logic in Specification}, Lecture Notes in Computer Science, vol. 398. Springer, Berlin, Heidelberg, pp. 67--89, 1989.
 
+\bibitem{gabbay1994temporal}
+D.~M.~Gabbay, I.~Hodkinson, and M.~Reynolds,
+\emph{Temporal Logic: Mathematical Foundations and Computational Aspects}, Volume I. Oxford University Press, 1994.
+
+\end{thebibliography}
 \end{document}

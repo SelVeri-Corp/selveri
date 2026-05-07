@@ -1665,7 +1665,7 @@ Similar to our proof of the correctness of \texttt{while}-statements, this assum
 
   \item \textbf{case 11:} $P = read$
 
-  \item \textbf{case 13:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
+  \item \textbf{case 12:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
 
     Assume
 
@@ -1784,5 +1784,9 @@ Now, as our formalization enhanced, we can attempt to prove the correctness of d
         
     \end{itemize}
 \end{proof}
+
+\section{Turing-completeness of \texttt{SelVerIR}}
+
+As \texttt{SelVeri} is a Turing-complete programming language that can be embedded into \texttt{SelVerIR} in a semantically-equivalent way, via the compilation function $\mathcal{C}$; \texttt{SelVerIR} is able to compute any computable function, hence is Turing-complete.
 
 \end{document}

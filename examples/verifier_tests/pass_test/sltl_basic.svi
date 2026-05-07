@@ -1,0 +1,33 @@
+// =====================================================
+// sLTL Basic: all specs should PASS (True)
+// Separated LTL: pLTL => fLTL
+// =====================================================
+
+x : Int;
+x := 0;
+
+x := 2;
+
+// At this point (step 1), the past condition is evaluated for step 0.
+// At step 0, x was 0, so Once (x = 0) is True.
+// The future condition Eventually (x = 5) must hold.
+{ (Once x = 0) => (Eventually x = 5) };
+
+x := 5;
+
+x := 10;
+
+// At this point (step 3), the past condition is evaluated for step 2.
+// At step 2, x was 5, so Previously (x = 5) is True.
+// The future condition Next (x = 20) must hold.
+{ (Previously x = 5) => (Next x = 20) };
+
+x := 20;
+
+// Vacuous truth test:
+// At this point (step 5), the past condition is evaluated for step 4.
+// At step 4, x was 20. Previously (x = 0) is False.
+// Since the left side is False, the right side doesn't have to hold.
+{ (Previously x = 0) => (Always x = 100) };
+
+x := 30; // Not 100, but it should pass because of vacuous truth.
