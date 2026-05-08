@@ -286,10 +286,14 @@ class AstBuilder(Transformer):
         return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
     def a_len(self, name): return ALen(str(name))
-    def a_index(self, base, idx):
+    def _mk_a_index(self, base, idx):
         if not isinstance(base, AExp):
             base = AVar(str(base))
         return AIndex(base, idx)
+    def a_index_base(self, base, idx):
+        return self._mk_a_index(base, idx)
+    def a_index_chain(self, base, idx):
+        return self._mk_a_index(base, idx)
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)
