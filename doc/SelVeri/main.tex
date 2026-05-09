@@ -939,10 +939,10 @@ function S(x: Int) -> Int ::
 end
     \end{verbatim}
     
-    \item \textbf{Projection Function} $P_i^k(x_1, \dots, x_k) = x_i$: Supported natively by the parameter passing and scope rules ($s(x_i) = \textbf{Int}$) of \texttt{SelVeri} function declarations. For example, $P_2^3(x_1, x_2, x_3) = x_2$ is implemented as:
+    \item \textbf{Projection Function} $P_i^k(x_1, \dots, x_k) = x_i$: Supported natively by the parameter passing and scope rules ($s(x_i) = \textbf{Int}$) of \texttt{SelVeri} function declarations. For example, $P_i^k(x_1, \dots, x_k) = x_i$ is implemented as:
     \begin{verbatim}
-function P_2_3(x1: Int, x2: Int, x3: Int) -> Int ::
-    return x2;
+function P_i_k(x1 : t_i, ..., x_k : t_k) -> t_i ::
+    return x_i;
 end
     \end{verbatim}
 
@@ -951,26 +951,32 @@ end
 
 \newpage
 \textit{2. Closure Under Composition} \\
-Given a function $h(\vec{x}) = f(g_1(\vec{x}), \dots, g_m(\vec{x}))$, \texttt{SelVeri} natively handles composition through sequential function calls and the dynamically-typed \texttt{retvar} mechanism. Each inner function $g_i$ can be evaluated using a $\mathtt{call}\; g_i(\dots)$ statement. By the $[\text{call}_{\text{os}}]$ and $[\text{ret}_{\text{os}}]$ rules, the result is safely stored in the \texttt{retvar} scope, assigned to an intermediate variable, and subsequently passed as an argument to the outer function $f$. For example, a composition $h(x) = f(g_1(x), g_2(x))$ is implemented as:
+Given a function $h(\vec{x}) = f(g_1(\vec{x}), \dots, g_m(\vec{x}))$, \texttt{SelVeri} natively handles composition through sequential function calls and the dynamically-typed \texttt{retvar} mechanism. Each inner function $g_i$ can be evaluated using a $\mathtt{call}\; g_i(\dots)$ statement. By the $[\text{call}_{\text{os}}]$ and $[\text{ret}_{\text{os}}]$ rules, the result is safely stored in the \texttt{retvar} scope, assigned to an intermediate variable, and subsequently passed as an argument to the outer function $f$. For example, a composition $h(x_1, \dots x_n) = f(g_1(x^1_1 \dots x_{m_1}^1), \dots g_k(x^k_1 \dots x_{m_k}^k))$ is implemented as:
 \begin{verbatim}
-function h(x: Int) -> Int ::
-    res_g1: Int;
-    res_g2: Int;
-    final_res: Int;
+function h(x_1: t_1, ..., x_n : t_n) -> t_r ::
+    res_g1 : t_r_1;
+    .
+    .
+    .
+    res_gk : t_r_k
+    final_res : t_r;
     
-    call g1(x);
+    call g1(x_1_1, ..., x_1_m_1);
     res_g1 := retvar;
+    .
+    .
+    .
+    call gk(x_k_1, ..., x_k_m_k);
+    res_gk := retvar;
     
-    call g2(x);
-    res_g2 := retvar;
-    
-    call f(res_g1, res_g2);
+    call f(res_g1, ..., res_gk);
     final_res := retvar;
     
     return final_res;
 end
 \end{verbatim}
 
+\newpage
 \textit{3. Closure Under Primitive Recursion} \\
 A function defined by primitive recursion takes the form:
 \begin{align*}
@@ -979,16 +985,16 @@ h(\vec{x}, y+1) &= g(\vec{x}, y, h(\vec{x}, y))
 \end{align*}
 This is realized iteratively via \texttt{SelVeri}'s $\mathtt{while}$ loop. Because the \texttt{Int} type models unbounded integers natively without overflow, we can simulate the recursive steps from $0$ up to $y$:
 \begin{verbatim}
-function h(x: Int, y: Int) -> Int ::
+function h(x_1 : t_1, ..., x_k : t_k y: Int) -> t_r ::
     counter: Int;
-    accum: Int;
+    accum: t_r;
     
-    call f(x);
+    call f(x_1 ... x_k);
     accum := retvar;
     counter := 0;
     
     while counter < y do
-        call g(x, counter, accum);
+        call g(x_1 ... x_k, counter, accum);
         accum := retvar;
         counter := counter + 1;
     od
@@ -1000,20 +1006,21 @@ The loop's structural soundness is strictly guaranteed by the mutually exclusive
 
 Note that in the above example the arity of $g$ is assumed to be 1; however, by increasing the number of arguments, any finite arity $k$ can work.  \\
 
+\newpage
 \textit{4. Closure Under Minimization ($\mu$-operator)} \\
 The minimization operator $\mu y [f(\vec{x}, y) = 0]$ finds the smallest $y$ such that $f(\vec{x}, y) = 0$. This unbounded search introduces the potential for partial functions (non-halting programs), a strict requirement for full Turing-completeness. In \texttt{SelVeri}, this translates to an unbounded $\mathtt{while}$ loop checking an arithmetic evaluation interpreted as a boolean:
 \begin{verbatim}
-function mu_f(x: Int) -> Int ::
-    y: Int;
+function mu_f(x_1 : t_1 ... x_k : t_k) -> t_y ::
+    y: t_y;
     res: Int;
     
     y := 0;
-    call f(x, y);
+    call f(x_1 ... x_k, y);
     res := retvar;
     
     while not (res = 0) do
         y := y + 1;
-        call f(x, y);
+        call f(x_1 ... x_k, y);
         res := retvar;
     od
     
