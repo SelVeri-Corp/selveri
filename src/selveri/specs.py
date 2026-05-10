@@ -31,7 +31,7 @@ class SourceSpan:
 
 @dataclass(frozen=True)
 class RawSpec:
-    spec_id: int | str # spec id can be an integer or the name of the spec
+    spec_id: str # spec id is the name of the spec or the sequential id given by the compiler
     formula_text: Optional[str] = None
     kind: RawSpecKind = RawSpecKind.SPEC
     location: Optional[SourceSpan] = None

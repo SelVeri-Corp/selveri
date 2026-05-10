@@ -8,7 +8,7 @@ from ..compiler import IRInstr
 from ..defs import RuntimeConfiguration, FutureObligation
 from ..errors import ParserError, VerificationError, VerifierRuntimeError
 from ..spec_parser import parse_spec
-from ..specs import ParsedSpec, RawSpec, Spec, SpecType, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+from ..specs import ParsedSpec, RawSpec, RawSpecKind, Spec, SpecType, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
 from .future_automaton import compile_future_automaton
 from .future_mapper import FutureLTLMapper
 from .mapper import Z3Mapper
@@ -56,17 +56,14 @@ class VerificationEngine:
                 continue
             if len(instr.args) < 2:
                 raise VerificationError("Malformed VERI instruction encountered during verifier preparation.")
-            raw_specs.append(
-                RawSpec(
-                    spec_id=int(instr.args[0]),
-                    text=str(instr.args[1]),
-                )
-            )
+            spec_id = str(instr.args[0])
+            formula = str(instr.args[1])
+            raw_specs.append(RawSpec(spec_id=spec_id, formula_text=formula, kind=RawSpecKind.SPEC))
         return raw_specs
 
     def parse_raw_spec(self, raw_spec: RawSpec) -> ParsedSpec:
         try:
-            spec_ast = parse_spec(raw_spec.text)
+            spec_ast = parse_spec(raw_spec.formula_text)
         except ParserError as exc:
             if raw_spec.location is None:
                 raise VerificationError(
@@ -454,10 +451,10 @@ class VerificationEngine:
 
     def raise_spec_failure(self, raw_spec: RawSpec, detail: str) -> None:
         raise VerificationError(
-            f"Specification #{raw_spec.spec_id} failed: {detail}: {raw_spec.text}"
+            f"Specification {raw_spec.spec_id} failed: {detail}: {raw_spec.text}"
         )
 
     def raise_future_failure(self, obligation: FutureObligation, detail: str) -> None:
         raise VerificationError(
-            f"Future specification #{obligation.spec_id} failed: {detail}: {obligation.source_spec}"
+            f"Future specification {obligation.spec_id} failed: {detail}: {obligation.source_spec}"
         )
