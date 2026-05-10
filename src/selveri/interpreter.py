@@ -13,7 +13,6 @@ from .errors import IRRuntimeError, IRParseError
 from .compiler import IRInstr
 from .runtime import DeclType, Scope, State, _UNSET
 from .SelVerifier.verifier import VerificationEngine
-from .SelVerifier.mapper import Z3Mapper
 
 
 @dataclass
@@ -489,6 +488,9 @@ class SelVerIRInterpreter:
     ) -> ExecutionResult:
         self.load(program) # load the program into the interpreter
 
+        if self.verifier is not None:
+            self.verifier.handle_program_start()
+
         while 0 <= self.pc < len(self.code):
             if self.steps >= self.max_steps:
                 raise IRRuntimeError("Maximum execution step limit reached.")
@@ -667,6 +669,8 @@ class SelVerIRInterpreter:
                 state_parent=self.runtime.state,
                 scope_parent=self.runtime.scope,
             )
+            if self.verifier is not None:
+                self.verifier.on_scope_enter(self.runtime.scope.scope_id)
             self.pc += 1
             return
 
@@ -701,6 +705,8 @@ class SelVerIRInterpreter:
                 return_type=return_type if return_type is not None else frame.return_type,
             )
             self.runtime = self._fresh_runtime()
+            if self.verifier is not None:
+                self.verifier.on_scope_enter(self.runtime.scope.scope_id)
             self.pc += 1
             return
 
@@ -709,16 +715,36 @@ class SelVerIRInterpreter:
             return
 
         if op == "VERI":
-            spec_id = int(instr.args[0]) if instr.args else -1
+            spec_id = instr.args[0] if instr.args else -1
             raw_spec = instr.args[1] if len(instr.args) > 1 else None
             if self.verifier is not None:
                 self._dispatch_verifier_spec(spec_id, raw_spec)
             self.pc += 1
             return
 
+        if op == "SPEC_START":
+            if len(instr.args) != 1:
+                raise IRRuntimeError("SPEC_START expects one name.")
+            name = str(instr.args[0]).strip()
+            if self.verifier is not None:
+                self.verifier.handle_plt_start_marker(name, self._snapshot_runtime_configuration())
+            self.pc += 1
+            return
+
+        if op == "SPEC_END":
+            if len(instr.args) != 1:
+                raise IRRuntimeError("SPEC_END expects one name.")
+            if self.verifier is not None:
+                self.verifier.handle_flt_end_marker(
+                    instr.args[0],
+                    self._snapshot_runtime_configuration(),
+                )
+            self.pc += 1
+            return
+
         if op == "STEP":
             if self.verifier is not None:
-                self.verifier.on_step(self._snapshot_runtime_configuration())
+                self.verifier.handle_step(self._snapshot_runtime_configuration())
             self.pc += 1
             return
 
@@ -937,6 +963,10 @@ class SelVerIRInterpreter:
             return_value = self._pop_list_packet(expected_size=return_type.size)
         else:
             return_value = self._pop()
+
+        leaving_scope_id = self.runtime.scope.scope_id
+        if self.verifier is not None:
+            self.verifier.on_scope_exit(leaving_scope_id)
 
         frame = self.call_stack.pop()
         self.runtime = frame.runtime
