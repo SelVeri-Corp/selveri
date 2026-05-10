@@ -827,14 +827,10 @@ class SelVeriCompiler:
         if isinstance(stmt, SpecAnnot):
             spec = stmt.spec
             if spec.kind == RawSpecKind.SPEC_START:
-                if spec.spec_name is None:
-                    raise CompilerError("Internal: domain-start annotation has no name.")
-                self._emit_plt_start_marker(spec.spec_name)
+                self._emit_plt_start_marker(spec.spec_id)
                 return
             if spec.kind == RawSpecKind.SPEC_END:
-                if spec.spec_name is None:
-                    raise CompilerError("Internal: domain-end annotation has no name.")
-                target = self._lookup_named_spec_for_flt_end(spec.spec_name)
+                target = self._lookup_named_spec_for_flt_end(spec.spec_id)
                 self.emit("SPEC_END", target.spec_id)
                 return
             if spec.kind == RawSpecKind.SPEC_NAMED:

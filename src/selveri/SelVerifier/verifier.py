@@ -23,7 +23,7 @@ class VerificationEngine:
         self.history: list[RuntimeConfiguration] = list()
         self.pltl_memo: Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
         self.fltl_pending: Dict[tuple[int, str], FutureObligation] = dict() # for future LTL verification pending obligations
-        self.spec_ids: set[str] = set()
+        self.spec_ids: set[tuple[int, str]] = set()
 
         # for past-LTL start markers
         self.pltl_start_marker_step: Dict[tuple[int, str], int] = dict()
@@ -43,8 +43,8 @@ class VerificationEngine:
         self.last_step += 1
         self.advance_future_obligations(snapshot)
 
-    def resolve_spec(self, spec_id: str, formula_text: str) -> ParsedSpec: # resolve a spec
-        if spec_id in self.spec_ids:
+    def resolve_spec(self, scope_id: int, spec_id: str, formula_text: str) -> ParsedSpec: # resolve a spec
+        if (scope_id, spec_id) in self.spec_ids:
             raise VerificationError(f"Duplicate specification id: {spec_id}")
         
         raw_spec = RawSpec(spec_id=spec_id, formula_text=formula_text)
@@ -58,12 +58,12 @@ class VerificationEngine:
                 f"#{spec_id} at "
                 f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
             ) from None
-        self.spec_ids.add(spec_id)
+        self.spec_ids.add((scope_id, spec_id))
         return ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.spec_type, ast=spec_ast)
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
     def handle_veri(self, spec_id: str, formula_text: str, snapshot: RuntimeConfiguration) -> None:
-        parsed_spec = self.resolve_spec(spec_id, formula_text)
+        parsed_spec = self.resolve_spec(snapshot.scope.scope_id, spec_id, formula_text)
         result = self.verify(parsed_spec, snapshot)
         if not result:
             self.raise_spec_failure(parsed_spec, "the current execution state does not satisfy the specification")
