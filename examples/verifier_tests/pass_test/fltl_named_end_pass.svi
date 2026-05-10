@@ -3,16 +3,15 @@
 // =====================================================
 
 x : Int;
-x := 0;
+x := 1;
 
 if 1 = 1 then
     { psi := Always x > 0 };
-
-    x := 1;
     x := 2;
 
     // END is strict and inclusive; the current step is checked too.
     { end psi };
+    x := -1;
 fi
 
-{ x = 2 };
+{ x = -1 };
