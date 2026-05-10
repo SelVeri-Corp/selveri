@@ -157,19 +157,19 @@ def classify_raw_spec_body(text: str) -> Tuple[RawSpecKind, Optional[str], Optio
     Parse a `{ ... }` body into kind, optional logical name, and formula text.
 
     Returns ``formula_text`` suitable for ``parse_spec`` for SPEC kinds;
-    ``None`` for domain markers.
+    ``None`` for spec markers.
     """
     stripped = text.strip()
     if not stripped:
         raise ValueError("Empty specification annotation.")
 
-    m_dom_s = _SPEC_START_RE.match(stripped)
-    if m_dom_s: # domain start
-        return RawSpecKind.DOMAIN_START, m_dom_s.group(1), None
+    m_spec_s = _SPEC_START_RE.match(stripped)
+    if m_spec_s: # spec start
+        return RawSpecKind.SPEC_START, m_spec_s.group(1), None
 
-    m_dom_e = _SPEC_END_RE.match(stripped)
-    if m_dom_e: # domain end
-        return RawSpecKind.DOMAIN_END, m_dom_e.group(1), None
+    m_spec_e = _SPEC_END_RE.match(stripped)
+    if m_spec_e: # spec end
+        return RawSpecKind.SPEC_END, m_spec_e.group(1), None
 
     m_assign = _NAMED_SPEC_RE.match(stripped)
     if m_assign: # named spec
