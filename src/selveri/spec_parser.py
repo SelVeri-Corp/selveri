@@ -87,10 +87,14 @@ class SpecAstBuilder(Transformer):
     def a_bound_var(self, name): return ABoundVar(str(name))
 
     def a_len(self, name): return ALen(str(name))
-    def a_index(self, base, idx): 
-        if not isinstance(base, AExp): 
-            base = AVar(str(base)) 
-        return AIndex(base, idx)  
+    def _mk_a_index(self, base, idx):
+        if not isinstance(base, AExp):
+            base = AVar(str(base))
+        return AIndex(base, idx)
+    def a_index_base(self, base, idx):
+        return self._mk_a_index(base, idx)
+    def a_index_chain(self, base, idx):
+        return self._mk_a_index(base, idx) 
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
     def sub(self, l, r): return ABinOp("-", l, r)
@@ -110,7 +114,7 @@ class SpecAstBuilder(Transformer):
 
     # specs
     def sbexp(self, bexp: BExp): return SpecFromBExp(self._next_uid(), SpecType.FOL, bexp)
-    def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), rhs.type, "!", rhs)
+    def snot(self, rhs: Spec): return SpecUnOp(self._next_uid(), rhs.spec_type, "!", rhs)
     def spreviously(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Previously", rhs)
     def sonce(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Once", rhs)
     def shistorically(self, rhs: Spec): return SpecUnOp(self._next_uid(), SpecType.pLTL, "Historically", rhs)
@@ -141,36 +145,36 @@ class SpecAstBuilder(Transformer):
     def interval_halfopen(self, lo, hi): return DomainInterval(lo, hi, left_closed=True, right_closed=False)
     def interval_halfclosed(self, lo, hi): return DomainInterval(lo, hi, left_closed=False, right_closed=True)
     def sforall(self, var, domain, body): 
-        if body.type != SpecType.FOL:
+        if body.spec_type != SpecType.FOL:
             raise VerifierRuntimeError("LTL formulae cannot be quantified!")
         return SpecQuant(self._next_uid(), SpecType.FOL, "Forall", str(var), domain, body)
 
     def sexists(self, var, domain, body): 
-        if body.type != SpecType.FOL:
+        if body.spec_type != SpecType.FOL:
             raise VerifierRuntimeError("LTL formulae cannot be quantified!")
         return SpecQuant(self._next_uid(), SpecType.FOL, "Exists", str(var), domain, body)
 
 
     def deduce_spec_type(self, spec1 : Spec, spec2: Spec, is_imp: bool = False) -> SpecType:
-        if spec1.type == spec2.type:
-            return spec1.type
-        if spec1.type == SpecType.FOL:
-            return spec2.type
-        if spec2.type == SpecType.FOL:
-            return spec1.type
+        if spec1.spec_type == spec2.spec_type:
+            return spec1.spec_type
+        if spec1.spec_type == SpecType.FOL:
+            return spec2.spec_type
+        if spec2.spec_type == SpecType.FOL:
+            return spec1.spec_type
         
-        if is_imp and spec1.type == SpecType.pLTL and spec2.type == SpecType.fLTL:
+        if is_imp and spec1.spec_type == SpecType.pLTL and spec2.spec_type == SpecType.fLTL:
             return SpecType.sLTL
 
         raise VerifierRuntimeError("Only 'pLTL => fLTL' is allowed for mixed LTL formulae!")
 
     def deduce_past_type(self, spec1: Spec, spec2: Spec) -> SpecType:
-        if SpecType.fLTL in {spec1.type, spec2.type}:
+        if SpecType.fLTL in {spec1.spec_type, spec2.spec_type}:
             raise VerifierRuntimeError("Only 'pLTL => fLTL' is allowed for mixed LTL formulae!")
         return SpecType.pLTL
 
     def deduce_future_type(self, spec1: Spec, spec2: Spec) -> SpecType:
-        if SpecType.pLTL in {spec1.type, spec2.type}:
+        if SpecType.pLTL in {spec1.spec_type, spec2.spec_type}:
             raise VerifierRuntimeError("Only 'pLTL => fLTL' is allowed for mixed LTL formulae!")
         return SpecType.fLTL
 

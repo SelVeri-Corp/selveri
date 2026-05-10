@@ -59,7 +59,7 @@ class VerificationEngine:
                 f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
             ) from None
         self.spec_ids.add(spec_id)
-        return ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.type, ast=spec_ast)
+        return ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.spec_type, ast=spec_ast)
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
     def handle_veri(self, spec_id: str, formula_text: str, snapshot: RuntimeConfiguration) -> None:
@@ -116,10 +116,14 @@ class VerificationEngine:
             else:
                 start_step = self.pltl_deduce_inital_step(spec.ast, snapshot.scope)
             return self.verify_past_LTL(spec.ast, self.last_step - 1, start_step, lexical_depth)
-        elif spec.type == SpecType.fLTL:
+        elif spec.spec_type == SpecType.fLTL:
             return self.verify_future_LTL(spec, snapshot, lexical_depth)
-        else: # spec.type == SpecType.sLTL:
-            return self.verify_separated_LTL(spec.ast, snapshot, start_step, lexical_depth, raw_spec)
+        else: # spec.spec_type == SpecType.sLTL:
+            if (sid, spec.spec_id) in self.pltl_start_marker_step:
+                start_step = self.pltl_start_marker_step.pop((sid, spec.spec_id))
+            else:
+                start_step = self.pltl_deduce_inital_step(spec.ast, snapshot.scope)
+            return self.verify_separated_LTL(spec, snapshot, start_step, lexical_depth)
     
     ################# FOL Verification #################
 
@@ -140,14 +144,13 @@ class VerificationEngine:
 
     ################# sLTL Verification #################
     
-    def verify_separated_LTL(self, spec: Spec, snapshot: RuntimeConfiguration, start_step: int, lexical_depth: int, raw_spec: RawSpec) -> bool:
-        spec_pltl = spec.left
-        spec_fltl = spec.right
+    def verify_separated_LTL(self, spec: ParsedSpec, snapshot: RuntimeConfiguration, start_step: int, lexical_depth: int) -> bool:
+        spec_ast_pltl = spec.ast.left
+        spec_ast_fltl = spec.ast.right
+        spec_fltl = ParsedSpec(spec_id=spec.spec_id, formula_text=spec.formula_text, spec_type=SpecType.fLTL, ast=spec_ast_fltl)
 
-        if start_step is None:
-            start_step = self.pltl_deduce_inital_step(spec_pltl, snapshot.scope)
-        if self.verify_past_LTL(spec_pltl, self.last_step - 1, start_step, lexical_depth):
-            return self.verify_future_LTL(spec_fltl, snapshot, lexical_depth, raw_spec)
+        if self.verify_past_LTL(spec_ast_pltl, self.last_step - 1, start_step, lexical_depth):
+            return self.verify_future_LTL(spec_fltl, snapshot, lexical_depth)
         return True # vacous truth if past is false
 
     ################# pLTL Verification #################
@@ -156,7 +159,7 @@ class VerificationEngine:
         if spec in self.pltl_memo[step]: # memoization for efficiency
             return self.pltl_memo[step][spec]
         
-        if spec.type == SpecType.FOL:
+        if spec.spec_type == SpecType.FOL:
             result = self.verify_FOL(spec, self.history[step], lexical_depth)
         
         elif isinstance(spec, SpecUnOp):
@@ -198,7 +201,7 @@ class VerificationEngine:
                 raise VerificationError(f"Unsupported binary operator for pLTL: {spec.op}")
         
         else:
-            raise VerificationError(f"Unexpected specification type for pLTL: {spec.type}")
+            raise VerificationError(f"Unexpected specification type for pLTL: {spec.spec_type}")
 
         self.pltl_memo[step][spec] = result
         return result
@@ -444,7 +447,7 @@ class VerificationEngine:
         Check if the state reached by the future obligations is an accepting state.
         '''
         self.advance_future_obligations(final_snapshot)
-        for obligation in self.fltl_pending:
+        for obligation in self.fltl_pending.values():
             if obligation.current_state not in obligation.automaton.accepting_states:
                 self.raise_future_failure(
                     obligation,

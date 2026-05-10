@@ -17,6 +17,7 @@ class RawSpecKind(Enum):
     """Classification of `{ ... }` annotation bodies after preprocessing."""
 
     SPEC = "spec"
+    SPEC_NAMED = "spec_named"
     SPEC_START = "spec_start"
     SPEC_END = "spec_end"
 
@@ -97,7 +98,7 @@ class DomainVar(Domain):
 @dataclass(frozen=True)
 class Spec:
     uid: int
-    type : SpecType
+    spec_type : SpecType
 
     def __hash__(self) -> int:
         return self.uid
