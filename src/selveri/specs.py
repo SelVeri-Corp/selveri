@@ -32,11 +32,9 @@ class SourceSpan:
 @dataclass(frozen=True)
 class RawSpec:
     spec_id: int | str # spec id can be an integer or the name of the spec
-    text: str
-    location: Optional[SourceSpan] = None
-    kind: RawSpecKind = RawSpecKind.SPEC
-    spec_name: Optional[str] = None
     formula_text: Optional[str] = None
+    kind: RawSpecKind = RawSpecKind.SPEC
+    location: Optional[SourceSpan] = None
 
 class Domain:
     pass

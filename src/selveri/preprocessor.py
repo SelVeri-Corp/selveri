@@ -131,14 +131,12 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
 
             raw_specs[placeholder] = RawSpec(
                 spec_id=identifier,
-                text=raw_text,
+                formula_text=formula_text,
                 location=SourceSpan(
                     start=SourceLocation(line=start_line, column=start_column),
                     end=SourceLocation(line=end_line, column=end_column),
                 ),
-                kind=kind,
-                spec_name=spec_name,
-                formula_text=formula_text,
+                kind=kind
             )
             rewritten.append(placeholder)
             index = close_index + 1
@@ -150,9 +148,9 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
 
     return "".join(rewritten), raw_specs
 
-_NAMED_BODY_ASSIGN_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:=\s*(.*)$", re.DOTALL)
-_DOMAIN_START_RE = re.compile(r"^start\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
-_DOMAIN_END_RE = re.compile(r"^end\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
+_NAMED_SPEC_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:=\s*(.*)$", re.DOTALL)
+_SPEC_START_RE = re.compile(r"^start\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
+_SPEC_END_RE = re.compile(r"^end\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
 
 def classify_raw_spec_body(text: str) -> Tuple[RawSpecKind, Optional[str], Optional[str]]:
     """
@@ -165,16 +163,16 @@ def classify_raw_spec_body(text: str) -> Tuple[RawSpecKind, Optional[str], Optio
     if not stripped:
         raise ValueError("Empty specification annotation.")
 
-    m_dom_s = _DOMAIN_START_RE.match(stripped)
-    if m_dom_s:
+    m_dom_s = _SPEC_START_RE.match(stripped)
+    if m_dom_s: # domain start
         return RawSpecKind.DOMAIN_START, m_dom_s.group(1), None
 
-    m_dom_e = _DOMAIN_END_RE.match(stripped)
-    if m_dom_e:
+    m_dom_e = _SPEC_END_RE.match(stripped)
+    if m_dom_e: # domain end
         return RawSpecKind.DOMAIN_END, m_dom_e.group(1), None
 
-    m_assign = _NAMED_BODY_ASSIGN_RE.match(stripped)
-    if m_assign:
+    m_assign = _NAMED_SPEC_RE.match(stripped)
+    if m_assign: # named spec
         name, formula = m_assign.group(1), m_assign.group(2).strip()
         if name in ("start", "end"):
             raise ValueError(f"Reserved specification name '{name}'; choose another identifier.")
