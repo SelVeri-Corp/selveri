@@ -14,9 +14,10 @@ from .parser import (
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
     FunctionDecl,
 )
-from .specs import RawSpec
+from .spec_parser import parse_spec as parse_spec_formula
+from .specs import RawSpec, RawSpecKind, SpecType as VerifierSpecType
 
-from .errors import CompilerError
+from .errors import CompilerError, ParserError
 
 # -----------------------
 # IR instruction model
@@ -32,7 +33,7 @@ class IRInstr:
         return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
 
     def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
-        if self.op == "VERI" and index == 1 and isinstance(arg, str):
+        if self.op == "VERI" and isinstance(arg, str):
             return repr(arg)
         return str(arg)
 
@@ -145,7 +146,9 @@ class SelVeriCompiler:
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
-        self.raw_specs: Dict[int, RawSpec] = {}
+        self.raw_specs: Dict[int | str, RawSpec] = {}
+        # None = `{ start name }` seen; awaiting `{ name := ... }`. RawSpec = defined named spec.
+        self.spec_frames: List[Dict[str, Optional[RawSpec]]] = []
 
     # ---------- utilities ----------
     def pc(self) -> int:
@@ -170,6 +173,64 @@ class SelVeriCompiler:
         if self.scope.parent is None:
             raise CompilerError("Internal: cannot leave the root scope.")
         self.scope = self.scope.parent
+
+    def _finalize_spec_frame(self) -> None:
+        frame = self.spec_frames[-1]
+        for name, entry in frame.items():
+            if entry is None:
+                raise CompilerError(
+                    f"`{{ start {name} }}` requires a matching `{{ {name} := ... }}` in this scope."
+                )
+
+    def _emit_plt_start_marker(self, name: str) -> None:
+        frame = self.spec_frames[-1]
+        if name not in frame:
+            frame[name] = None
+            self.emit("SPEC_START", name)
+            return
+        if frame[name] is None:
+            raise CompilerError(f"Duplicate `{{ start {name} }}` in this scope.")
+        raise CompilerError(
+            f"`{{ start {name} }}` must appear before `{{ {name} := ... }}` in this scope."
+        )
+
+    def _register_named_spec_definition(self, name: str, spec: RawSpec, formula: str) -> None:
+        frame = self.spec_frames[-1]
+        pending_plt_start = name in frame and frame[name] is None
+        try:
+            ast = parse_spec_formula(formula)
+        except ParserError as exc:
+            raise CompilerError(f"Invalid specification formula for '{name}': {exc}") from None
+
+        if pending_plt_start:
+            if ast.type != VerifierSpecType.pLTL:
+                raise CompilerError(
+                    "`{ start ... }` applies only to past temporal (pLTL) specifications."
+                )
+        if name in frame and frame[name] is not None:
+            raise CompilerError(f"Duplicate specification name '{name}' in the same scope.")
+        frame[name] = spec
+
+    def _lookup_named_spec_for_flt_end(self, name: str) -> RawSpec:
+        frame = self.spec_frames[-1]
+        if name not in frame:
+            raise CompilerError(
+                f"No specification named '{name}' in this scope (required for `{{ end {name} }}`)."
+            )
+        entry = frame[name]
+        if entry is None:
+            raise CompilerError(
+                f"`{{ end {name} }}` requires `{{ {name} := ... }}` earlier in this scope."
+            )
+        raw = entry
+        formula = raw.formula_text if raw.formula_text is not None else raw.text.strip()
+        try:
+            ast = parse_spec_formula(formula)
+        except ParserError as exc:
+            raise CompilerError(f"Cannot validate end marker for '{name}': {exc}") from None
+        if ast.type != VerifierSpecType.fLTL:
+            raise CompilerError("`{ end ... }` applies only to future temporal (fLTL) specifications.")
+        return raw
 
     def _list_len_name(self, base: str, dim: int) -> str:
         return f"_{base}_len_{dim}"
@@ -758,8 +819,29 @@ class SelVeriCompiler:
             self.emit("NOOP")
             return
         if isinstance(stmt, SpecAnnot):
-            self.raw_specs[stmt.spec.spec_id] = stmt.spec
-            self.emit("VERI", stmt.spec.spec_id, stmt.spec.text)
+            spec = stmt.spec
+            if spec.kind == RawSpecKind.DOMAIN_START:
+                if spec.spec_name is None:
+                    raise CompilerError("Internal: domain-start annotation has no name.")
+                self._emit_plt_start_marker(spec.spec_name)
+                return
+            if spec.kind == RawSpecKind.DOMAIN_END:
+                if spec.spec_name is None:
+                    raise CompilerError("Internal: domain-end annotation has no name.")
+                target = self._lookup_named_spec_for_flt_end(spec.spec_name)
+                self.emit("SPEC_END", target.spec_id)
+                return
+
+            # handle both named and unnamed specs
+            formula = spec.formula_text if spec.formula_text is not None else spec.text.strip()
+            if spec.kind == RawSpecKind.SPEC:
+                if spec.spec_name is not None:
+                    self._register_named_spec_definition(spec.spec_name, spec, formula)
+                else:
+                    self._register_spec_definition(spec, formula)
+
+            self.raw_specs[spec.spec_id] = spec
+            self.emit("VERI", spec.spec_id, formula)
             return
         if isinstance(stmt, If):
             self._compile_if(stmt)
@@ -927,8 +1009,11 @@ class SelVeriCompiler:
         self._set_retvar_type(func_decl.return_type)
 
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
+        self.spec_frames.append({})
         for stmt in stmts:
             self.C_stmt(stmt)
+        self._finalize_spec_frame()
+        self.spec_frames.pop()
 
     def _register_functions(self, program: Program) -> None:
         for func in program.func_decls:
