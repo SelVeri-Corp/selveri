@@ -1,0 +1,15 @@
+// =====================================================
+// Named pLTL explicit START too early: expected failure
+// =====================================================
+// This should raise a SpecDomainBounds-style verification error:
+// explicit START is earlier than conservative automatic START.
+
+if 1 = 1 then
+    { start phi };
+
+    y : Int;
+    y := 5;
+
+    // y is first initialized after START, so conservative START is later.
+    { phi := Previously (y = 0) };
+fi

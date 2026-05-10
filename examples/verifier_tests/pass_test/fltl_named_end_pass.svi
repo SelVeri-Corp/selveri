@@ -1,0 +1,18 @@
+// =====================================================
+// Named fLTL with explicit strict END: should PASS
+// =====================================================
+
+x : Int;
+x := 0;
+
+if 1 = 1 then
+    { psi := Always x > 0 };
+
+    x := 1;
+    x := 2;
+
+    // END is strict and inclusive; the current step is checked too.
+    { end psi };
+fi
+
+{ x = 2 };
