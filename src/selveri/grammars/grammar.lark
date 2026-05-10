@@ -37,9 +37,14 @@ empty_stmt: ";"
                | list_assign
                | pass_stmt
                | func_call
+               | write_stmt
+               | writeline_stmt
                | spec_annot
 
 pass_stmt: "pass"
+
+write_stmt: "write" "(" aexp ")"
+writeline_stmt: "writeline" "(" aexp ")"
 
 spec_annot: SPEC_SLOT
 
@@ -94,6 +99,7 @@ aexp: aexp_sum
          | "len" "(" IDENT ")"                                            -> a_len
          | indexed_value                                                  
          | "(" aexp ")"
+         | "read" "(" ")"                                                 -> a_read
 
 // ------------------ BOOLEAN EXPRESSIONS ------------------
 bexp: b_or

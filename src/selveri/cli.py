@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from time import perf_counter
 
 from .compiler import SelVeriCompiler
 from .interpreter import interpret_ir_code
@@ -14,14 +15,18 @@ def run_pipeline(
     output_ir: Path | None,
     max_steps: int,
     print_ir: bool,
+    debug: bool,
 ) -> int:
     with input_path.open("r", encoding="utf-8") as f:
         source = f.read()
 
+    start_time = perf_counter()
     program = parse_selveri(source)
     compiler = SelVeriCompiler()
     code = compiler.compile_program(program)
     ir_text = "\n".join(instr.render() for instr in code)
+    end_time = perf_counter()
+    print(f"Compilation time: {end_time - start_time:.6f} seconds")
 
     if output_ir is not None:
         output_ir.parent.mkdir(parents=True, exist_ok=True)
@@ -32,15 +37,22 @@ def run_pipeline(
         print(ir_text)
         print()
 
+    verifier_start_time = perf_counter()
     verifier = VerificationEngine()
     verifier.prepare_program(code, raw_specs=compiler.raw_specs.values())
+    verifier_end_time = perf_counter()
+    print(f"Verifier time: {verifier_end_time - verifier_start_time:.6f} seconds")
+    start_time = perf_counter()
     result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
+    end_time = perf_counter()
+    print(f"\nExecution time: {end_time - start_time:.6f} seconds")
 
-    print("Final state:")
-    print(result.state)
-    print("\nFinal stack:")
-    print(result.stack)
-    print(f"\nSteps: {result.steps}")
+    if debug:
+        print("Final state:")
+        print(result.state)
+        print("\nFinal stack:")
+        print(result.stack)
+    print(f"Steps: {result.steps}")
     return 0
 
 
@@ -72,6 +84,11 @@ def main() -> int:
         action="store_true",
         help="Print generated SelVerIR before interpretation",
     )
+    arg_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print debug information",
+    )
     args = arg_parser.parse_args()
 
     output_ir = None
@@ -83,4 +100,5 @@ def main() -> int:
         output_ir=output_ir,
         max_steps=args.max_steps,
         print_ir=args.print_ir,
+        debug=args.debug,
     )

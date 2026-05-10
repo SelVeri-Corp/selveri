@@ -86,3 +86,5 @@ lst := retvar;
 
 { Forall i in [1...len(lst) - 1] . lst[&i - 1] <= lst[&i] };
 { Exists j in [1...len(lst) - 1] . lst[&j - 1] = lst[&j] }; // there are two 9s
+
+writeline(lst);

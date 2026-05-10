@@ -1,0 +1,22 @@
+x : Int;
+x := 5;
+writeline(x);
+write(4);
+writeline(2);
+
+y : List[Int, 1, 5];
+i : Int;
+i := 0;
+while i < 5 do
+    y[i] := x;
+    x := x + 2;
+    i := i + 1;
+od
+writeline(y);
+
+z : Int;
+z := read();
+writeline(z);
+w : Float;
+w := read();
+writeline(w);

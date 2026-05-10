@@ -35,7 +35,11 @@ for f in "$EXAMPLES_DIR"/*.svi; do
     name=$(basename "$f")
     total=$((total + 1))
 
-    output=$(selveri "$f" 2>&1)
+    if [ "$name" = "example_io.svi" ]; then
+        output=$(echo -e "5\n3.14" | selveri "$f" 2>&1)
+    else
+        output=$(selveri "$f" 2>&1)
+    fi
     exit_code=$?
 
     if [ $exit_code -eq 0 ]; then

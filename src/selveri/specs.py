@@ -11,6 +11,7 @@ class SpecType(Enum):
     FOL = 0
     pLTL = 1
     fLTL = 2
+    sLTL = 3 # separated LTL formulae in the form of 'pLTL => fLTL'
 
 class RawSpecKind(Enum):
     """Classification of `{ ... }` annotation bodies after preprocessing."""
