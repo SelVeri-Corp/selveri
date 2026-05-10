@@ -139,5 +139,7 @@ class SpecQuant(Spec):
 
 @dataclass(frozen=True)
 class ParsedSpec:
-    raw_spec: RawSpec
+    spec_id: str
+    formula_text: str
+    spec_type: SpecType
     ast: Spec

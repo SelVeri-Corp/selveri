@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
-from z3 import Not, Solver, simplify, sat, unsat, unknown
+from typing import Any, Dict
+from z3 import Not, Solver, simplify, sat, unsat
 from sympy import Basic
 
-from ..compiler import IRInstr
 from ..defs import RuntimeConfiguration, FutureObligation
-from ..errors import ParserError, VerificationError, VerifierRuntimeError
+from ..errors import ParserError, SpecDomainBoundsError, VerificationError, VerifierRuntimeError
 from ..spec_parser import parse_spec
-from ..specs import ParsedSpec, RawSpec, RawSpecKind, Spec, SpecType, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+from ..specs import ParsedSpec, RawSpec, Spec, SpecBinOp, SpecFromBExp, SpecQuant, SpecType, SpecUnOp
 from .future_automaton import compile_future_automaton
 from .future_mapper import FutureLTLMapper
 from .mapper import Z3Mapper
@@ -23,119 +22,102 @@ class VerificationEngine:
         self.initialization_steps : Dict[str, int] = dict() # stores the initial assignment steps of variables
         self.history: list[RuntimeConfiguration] = list()
         self.pltl_memo: Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
-        self.fltl_pending: list[FutureObligation] = list() # for future LTL verification pending obligations
-        self.specs_by_id: Dict[int, ParsedSpec] = dict()
-        self.prepared = False
+        self.fltl_pending: Dict[tuple[int, str], FutureObligation] = dict() # for future LTL verification pending obligations
+        self.spec_ids: set[str] = set()
+
+        # for past-LTL start markers
+        self.pltl_start_marker_step: Dict[tuple[int, str], int] = dict()
 
 
-    ################# Spec Compilation #################
-
-    # the verifier owns spec parsing and caches parsed ASTs before execution starts.
-    def prepare_program(
-        self,
-        program: Iterable[IRInstr],
-        *,
-        raw_specs: Optional[Iterable[RawSpec]] = None,
-    ) -> None:
-        collected_specs = list(raw_specs) if raw_specs is not None else self.collect_raw_specs(program) # collect raw specs from the program
-        
-        self.specs_by_id.clear()
-        for raw_spec in collected_specs: # parse and register the raw specs
-            parsed_spec = self.parse_raw_spec(raw_spec)
-            spec_id = parsed_spec.raw_spec.spec_id
-            if spec_id in self.specs_by_id:
-                raise VerificationError(f"Duplicate specification id: {spec_id}")
-            self.specs_by_id[spec_id] = parsed_spec
-
-        self.prepared = True # the program is prepared
-
-    def collect_raw_specs(self, program: Iterable[IRInstr]) -> List[RawSpec]:
-        raw_specs: List[RawSpec] = []
-        for instr in program:
-            if instr.op != "VERI":
-                continue
-            if len(instr.args) < 2:
-                raise VerificationError("Malformed VERI instruction encountered during verifier preparation.")
-            spec_id = str(instr.args[0])
-            formula = str(instr.args[1])
-            raw_specs.append(RawSpec(spec_id=spec_id, formula_text=formula, kind=RawSpecKind.SPEC))
-        return raw_specs
-
-    def parse_raw_spec(self, raw_spec: RawSpec) -> ParsedSpec:
-        try:
-            spec_ast = parse_spec(raw_spec.formula_text)
-        except ParserError as exc:
-            if raw_spec.location is None:
-                raise VerificationError(
-                    f"Failed to parse specification #{raw_spec.spec_id}: {exc}"
-                ) from None
-            raise VerifierRuntimeError(
-                "Failed to parse specification "
-                f"#{raw_spec.spec_id} at "
-                f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
-            ) from None
-        return ParsedSpec(raw_spec=raw_spec, ast=spec_ast)
-
-    def resolve_spec(self, spec_id: int) -> ParsedSpec: # resolve a spec by its id
-        if not self.prepared:
-            raise VerificationError("Specifications must be prepared before execution starts.")
-        if spec_id not in self.specs_by_id:
-            raise VerificationError(f"Unknown specification id: {spec_id}")
-        return self.specs_by_id[spec_id]
-
-    def handle_veri(self, spec_id: int, snapshot: RuntimeConfiguration) -> ParsedSpec:
-        parsed_spec = self.resolve_spec(spec_id) # resolve the spec by its id
-        result = self.on_veri(parsed_spec, snapshot) # call the on_veri callback
-        if parsed_spec.ast.type != SpecType.fLTL and not result:
-            self.raise_spec_failure(
-                parsed_spec.raw_spec,
-                "the current execution state does not satisfy the specification",
-            )
-        return parsed_spec
-
-    ################# ###########################    
-    ################# Verifying #################
-    #############################################        
-    
-    def on_program_start(self) -> None:
+    ################# Program Handling #################
+    def handle_program_start(self) -> None:
         self.last_step = 0
         self.history.clear()
         self.pltl_memo.clear()
         self.fltl_pending.clear()
+        self.pltl_start_marker_step.clear()
 
-    def on_step(self, snapshot: RuntimeConfiguration) -> None:
-        # TODO: investigate the memory management here
+    def handle_step(self, snapshot: RuntimeConfiguration) -> None:
         self.history.append(snapshot)
         self.pltl_memo[self.last_step] = dict()
         self.last_step += 1
         self.advance_future_obligations(snapshot)
 
+    def resolve_spec(self, spec_id: str, formula_text: str) -> ParsedSpec: # resolve a spec
+        if spec_id in self.spec_ids:
+            raise VerificationError(f"Duplicate specification id: {spec_id}")
+        
+        raw_spec = RawSpec(spec_id=spec_id, formula_text=formula_text)
+        try:
+            spec_ast = parse_spec(formula_text)
+        except ParserError as exc:
+            if raw_spec.location is None:
+                raise VerificationError(f"Failed to parse specification #{spec_id}: {exc}") from None
+            raise VerifierRuntimeError(
+                "Failed to parse specification "
+                f"#{spec_id} at "
+                f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
+            ) from None
+        self.spec_ids.add(spec_id)
+        return ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.type, ast=spec_ast)
+
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
-    def on_veri(self, parsed_spec: ParsedSpec, snapshot: RuntimeConfiguration) -> bool:
-        return self.verify(
-            parsed_spec.ast,
-            snapshot,
-            raw_spec=parsed_spec.raw_spec,
-        )
+    def handle_veri(self, spec_id: str, formula_text: str, snapshot: RuntimeConfiguration) -> None:
+        parsed_spec = self.resolve_spec(spec_id, formula_text)
+        result = self.verify(parsed_spec, snapshot)
+        if not result:
+            self.raise_spec_failure(parsed_spec, "the current execution state does not satisfy the specification")
+
+    def handle_plt_start_marker(self, spec_name: str, snapshot: RuntimeConfiguration) -> None:
+        """Strict inclusive domain start for past-LTL (records ``last_step`` at this program point)."""
+        key = (snapshot.scope.scope_id, spec_name)
+        if key in self.pltl_start_marker_step:
+            raise SpecDomainBoundsError(f"Duplicate `{{ start {spec_name} }}` marker for this scope.")
+        self.pltl_start_marker_step[key] = self.last_step
+
+    def handle_flt_end_marker(self, spec_name: str, snapshot: RuntimeConfiguration) -> None:
+        """
+        Strict end for future-LTL: verify one transition at this snapshot, require an accepting state,
+        then drop the obligation (no further runtime checks for this spec).
+        """
+        obligation = self.fltl_pending.get((snapshot.scope.scope_id, spec_name))
+        if obligation is None:
+            raise VerificationError(
+                f"No pending future-LTL obligation for specification {spec_name} at `{{ end ... }}`."
+                f"This is due to either a missing {{ {spec_name} := ... }} or an explicit future-LTL domain end marker"
+                "being later than the conservative automatic end bound."
+            )
+        self.advance_future_obligation(obligation, snapshot)
+        if obligation.current_state not in obligation.automaton.accepting_states:
+            self.raise_future_failure(
+                obligation,
+                f"The automaton did not end in an accepting state."
+            )
+        self.fltl_pending.pop((snapshot.scope.scope_id, spec_name))
+
+    ################# ###########################    
+    ################# Verifying #################
+    #############################################        
 
     def verify(
         self,
-        spec: Spec,
+        spec: ParsedSpec,
         snapshot: RuntimeConfiguration,
-        raw_spec: RawSpec,
-        start_step : Optional[int] = None,
     ) -> bool:
         # lexical_depth captures the depth at which the spec is defined. This is passed to 
         # historical evaluations to ensure we don't resolve inner-scope variables that the spec shouldn't see.
         lexical_depth = snapshot.scope.depth
-        if spec.type == SpecType.FOL:
-            return self.verify_FOL(spec, snapshot, lexical_depth)
-        elif spec.type == SpecType.pLTL:
-            if start_step is None:
-                start_step = self.pltl_deduce_inital_step(spec, snapshot.scope)
-            return self.verify_past_LTL(spec, self.last_step - 1, start_step, lexical_depth)
+        sid = snapshot.scope.scope_id
+        if spec.spec_type == SpecType.FOL:
+            return self.verify_FOL(spec.ast, snapshot, lexical_depth)
+        elif spec.spec_type == SpecType.pLTL:
+            if (sid, spec.spec_id) in self.pltl_start_marker_step:
+                start_step = self.pltl_start_marker_step.pop((sid, spec.spec_id))
+            else:
+                start_step = self.pltl_deduce_inital_step(spec.ast, snapshot.scope)
+            return self.verify_past_LTL(spec.ast, self.last_step - 1, start_step, lexical_depth)
         else: # spec.type == SpecType.fLTL:
-            return self.verify_future_LTL(spec, snapshot, lexical_depth, raw_spec)
+            return self.verify_future_LTL(spec, snapshot, lexical_depth)
     
     ################# FOL Verification #################
 
@@ -206,7 +188,6 @@ class VerificationEngine:
 
         self.pltl_memo[step][spec] = result
         return result
-
 
     def pltl_deduce_inital_step(self, spec: Spec, lexical_scope: Any) -> int:
         variables = self._spec_get_free_variables(spec, set())
@@ -313,22 +294,21 @@ class VerificationEngine:
 
     def verify_future_LTL(
         self,
-        spec: Spec,
+        spec: ParsedSpec,
         snapshot: RuntimeConfiguration,
         lexical_depth: int,
-        raw_spec: RawSpec,
     ) -> bool:
         '''
         Verify a future LTL specification.
         '''
-        mapped_formula = FutureLTLMapper().map(spec)
+        mapped_formula = FutureLTLMapper().map(spec.ast)
         automaton = compile_future_automaton(
             mapped_formula.formula_text,
             mapped_formula.atom_table.keys(),
         )
         obligation = FutureObligation(
-            spec_id=raw_spec.spec_id,
-            source_spec=raw_spec.text,
+            spec_id=spec.spec_id,
+            source_spec=spec.formula_text,
             created_at_step=self.last_step,
             scope_id=snapshot.scope.scope_id,
             lexical_depth=lexical_depth,
@@ -338,7 +318,7 @@ class VerificationEngine:
             steps_to_skip=0,
         )
         self.advance_future_obligation(obligation, snapshot) # TODO: is it correct to directly move from the initial state?
-        self.fltl_pending.append(obligation)
+        self.fltl_pending[(snapshot.scope.scope_id, spec.spec_id)] = obligation
         return True
 
     def evaluate_future_atoms(
@@ -359,7 +339,7 @@ class VerificationEngine:
         '''
         Advance all the future obligations by one step.
         '''
-        for obligation in self.fltl_pending:
+        for obligation in self.fltl_pending.values():
             if obligation.steps_to_skip > 0:
                 obligation.steps_to_skip -= 1
                 continue
@@ -426,16 +406,24 @@ class VerificationEngine:
         )
         return bool(substituted_guard) # return the boolean value of the substituted guard formula
 
+    def on_scope_enter(self, _scope_id: int) -> None:
+        """Hook when the interpreter enters a nested runtime scope (CSCOPE / FUNCENV)."""
+        return
+
     def on_scope_exit(self, leaving_scope_id: int) -> None:
-        '''
-        Handle the exit of a scope.
-        '''
-        to_remove: list[int] = []
-        for idx, obligation in enumerate(self.fltl_pending):
-            if obligation.scope_id == leaving_scope_id:
-                to_remove.append(idx)
-        for idx in reversed(to_remove):
-            self.fltl_pending.pop(idx)
+        """Hook when the interpreter exits a nested runtime scope (PSCOPE / RET)."""
+        stale_plt = [k for k in self.pltl_start_marker_step if k[0] == leaving_scope_id]
+        if stale_plt:
+            names = ", ".join(repr(k[1]) for k in stale_plt)
+            raise SpecDomainBoundsError(
+                f"Unused past-LTL start marker(s) (no matching named specification in this scope): {names}"
+            )
+
+        self.fltl_pending = {
+            key: obligation
+            for key, obligation in self.fltl_pending.items()
+            if key[0] != leaving_scope_id
+        }
 
     def on_program_end(self, final_snapshot: RuntimeConfiguration) -> None:
         '''
@@ -449,9 +437,9 @@ class VerificationEngine:
                     f"the execution ended in non-accepting automaton state {obligation.current_state}",
                 )
 
-    def raise_spec_failure(self, raw_spec: RawSpec, detail: str) -> None:
+    def raise_spec_failure(self, parsed_spec: ParsedSpec, detail: str) -> None:
         raise VerificationError(
-            f"Specification {raw_spec.spec_id} failed: {detail}: {raw_spec.text}"
+            f"Specification {parsed_spec.spec_id} failed: {detail}: {parsed_spec.formula_text}"
         )
 
     def raise_future_failure(self, obligation: FutureObligation, detail: str) -> None:
