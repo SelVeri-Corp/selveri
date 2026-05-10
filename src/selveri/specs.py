@@ -12,6 +12,12 @@ class SpecType(Enum):
     pLTL = 1
     fLTL = 2
 
+class RawSpecKind(Enum):
+    """Classification of `{ ... }` annotation bodies after preprocessing."""
+
+    SPEC = "spec"
+    SPEC_START = "spec_start"
+    SPEC_END = "spec_end"
 
 @dataclass(frozen=True)
 class SourceLocation:
@@ -25,9 +31,12 @@ class SourceSpan:
 
 @dataclass(frozen=True)
 class RawSpec:
-    spec_id: int
+    spec_id: int | str # spec id can be an integer or the name of the spec
     text: str
     location: Optional[SourceSpan] = None
+    kind: RawSpecKind = RawSpecKind.SPEC
+    spec_name: Optional[str] = None
+    formula_text: Optional[str] = None
 
 class Domain:
     pass

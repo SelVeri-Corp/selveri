@@ -2,10 +2,11 @@
 Preprocessor takes high level source code and extracts raw specs. Replaces spec annotations with placeholder tokens to keep the high level parser independent from spec syntax.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
+import re
 
 from .errors import PreprocessorError
-from .specs import RawSpec, SourceLocation, SourceSpan
+from .specs import RawSpec, SourceLocation, SourceSpan, RawSpecKind
 
 
 def _advance_position(ch: str, line: int, column: int) -> Tuple[int, int]:
@@ -108,17 +109,38 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
                 start_line,
                 start_column,
             )
-            placeholder = f"__SELVERI_SPEC_{next_spec_id}__"
+            try:
+                kind, spec_name, formula_text = classify_raw_spec_body(raw_text)
+            except ValueError as exc:
+                raise PreprocessorError(str(exc)) from None
+            
+            identifier = ""
+            if spec_name:
+                identifier = spec_name
+            else:
+                identifier = next_spec_id
+                next_spec_id += 1
+
+
+            if kind == RawSpecKind.DOMAIN_START:
+                placeholder = f"_SELVERI_SPEC_START_{identifier}"
+            elif kind == RawSpecKind.DOMAIN_END:
+                placeholder = f"_SELVERI_SPEC_END_{identifier}"
+            else:
+                placeholder = f"_SELVERI_SPEC_{identifier}"
+
             raw_specs[placeholder] = RawSpec(
-                spec_id=next_spec_id,
+                spec_id=identifier,
                 text=raw_text,
                 location=SourceSpan(
                     start=SourceLocation(line=start_line, column=start_column),
                     end=SourceLocation(line=end_line, column=end_column),
                 ),
+                kind=kind,
+                spec_name=spec_name,
+                formula_text=formula_text,
             )
             rewritten.append(placeholder)
-            next_spec_id += 1
             index = close_index + 1
             continue
 
@@ -127,3 +149,38 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
         line, column = _advance_position(ch, line, column)
 
     return "".join(rewritten), raw_specs
+
+_NAMED_BODY_ASSIGN_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:=\s*(.*)$", re.DOTALL)
+_DOMAIN_START_RE = re.compile(r"^start\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
+_DOMAIN_END_RE = re.compile(r"^end\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
+
+def classify_raw_spec_body(text: str) -> Tuple[RawSpecKind, Optional[str], Optional[str]]:
+    """
+    Parse a `{ ... }` body into kind, optional logical name, and formula text.
+
+    Returns ``formula_text`` suitable for ``parse_spec`` for SPEC kinds;
+    ``None`` for domain markers.
+    """
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("Empty specification annotation.")
+
+    m_dom_s = _DOMAIN_START_RE.match(stripped)
+    if m_dom_s:
+        return RawSpecKind.DOMAIN_START, m_dom_s.group(1), None
+
+    m_dom_e = _DOMAIN_END_RE.match(stripped)
+    if m_dom_e:
+        return RawSpecKind.DOMAIN_END, m_dom_e.group(1), None
+
+    m_assign = _NAMED_BODY_ASSIGN_RE.match(stripped)
+    if m_assign:
+        name, formula = m_assign.group(1), m_assign.group(2).strip()
+        if name in ("start", "end"):
+            raise ValueError(f"Reserved specification name '{name}'; choose another identifier.")
+        if not formula:
+            raise ValueError(f"Named specification '{name}' has an empty formula.")
+        return RawSpecKind.SPEC, name, formula
+
+    # spec without a name
+    return RawSpecKind.SPEC, None, stripped
