@@ -122,9 +122,9 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
                 next_spec_id += 1
 
 
-            if kind == RawSpecKind.DOMAIN_START:
+            if kind == RawSpecKind.SPEC_START:
                 placeholder = f"_SELVERI_SPEC_START_{identifier}"
-            elif kind == RawSpecKind.DOMAIN_END:
+            elif kind == RawSpecKind.SPEC_END:
                 placeholder = f"_SELVERI_SPEC_END_{identifier}"
             else:
                 placeholder = f"_SELVERI_SPEC_{identifier}"
@@ -178,7 +178,7 @@ def classify_raw_spec_body(text: str) -> Tuple[RawSpecKind, Optional[str], Optio
             raise ValueError(f"Reserved specification name '{name}'; choose another identifier.")
         if not formula:
             raise ValueError(f"Named specification '{name}' has an empty formula.")
-        return RawSpecKind.SPEC, name, formula
+        return RawSpecKind.SPEC_NAMED, name, formula
 
     # spec without a name
     return RawSpecKind.SPEC, None, stripped

@@ -344,7 +344,8 @@ class SelVerIRInterpreter:
                 raise IRParseError(f"Duplicate function environment: {name}")
             self.functions[name] = FunctionEntry(name=name, pc=instr.label, return_type=return_type)
         self.reset_runtime() # reset the runtime state
-        self._prepare_verifier()
+        if self.verifier is not None:
+            self.verifier.handle_program_start()
 
     def reset_runtime(self) -> None:
         self.stack = [] # clear the stack
@@ -752,9 +753,9 @@ class SelVerIRInterpreter:
 
         if op == "VERI":
             spec_id = instr.args[0] if instr.args else -1
-            raw_spec = instr.args[1] if len(instr.args) > 1 else None
+            formula_text = instr.args[1] if len(instr.args) > 1 else None
             if self.verifier is not None:
-                self._dispatch_verifier_spec(spec_id, raw_spec)
+                self._dispatch_verifier_spec(spec_id, formula_text)
             self.pc += 1
             return
 
@@ -1009,19 +1010,14 @@ class SelVerIRInterpreter:
         self._set_retvar(return_value, return_type)
         self.pc = frame.return_pc
 
-    def _prepare_verifier(self) -> None:
-        if self.verifier is None:
-            return
-        self.verifier.prepare_program(self.code)
-
     def _finish_verifier(self) -> None:
         if self.verifier is None:
             return
         self.verifier.on_program_end(self._snapshot_runtime_configuration())
 
-    def _dispatch_verifier_spec(self, spec_id: int, raw_spec: Any) -> None:
+    def _dispatch_verifier_spec(self, spec_id: int, formula_text: str) -> None:
         assert self.verifier is not None
-        self.verifier.handle_veri(spec_id, self._snapshot_runtime_configuration())
+        self.verifier.handle_veri(spec_id, formula_text, self._snapshot_runtime_configuration())
 
 
 # -----------------------

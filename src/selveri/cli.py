@@ -37,12 +37,8 @@ def run_pipeline(
         print(ir_text)
         print()
 
-    verifier_start_time = perf_counter()
-    verifier = VerificationEngine()
-    verifier.prepare_program(code, raw_specs=compiler.raw_specs.values())
-    verifier_end_time = perf_counter()
-    print(f"Verifier time: {verifier_end_time - verifier_start_time:.6f} seconds")
     start_time = perf_counter()
+    verifier = VerificationEngine()
     result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
     end_time = perf_counter()
     print(f"\nExecution time: {end_time - start_time:.6f} seconds")

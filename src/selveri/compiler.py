@@ -148,7 +148,7 @@ class SelVeriCompiler:
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
-        self.raw_specs: Dict[int | str, RawSpec] = {}
+        self.raw_specs: Dict[str, RawSpec] = {}
         # None = `{ start name }` seen; awaiting `{ name := ... }`. RawSpec = defined named spec.
         self.spec_frames: List[Dict[str, Optional[RawSpec]]] = []
 
@@ -205,7 +205,7 @@ class SelVeriCompiler:
             raise CompilerError(f"Invalid specification formula for '{name}': {exc}") from None
 
         if pending_plt_start:
-            if ast.type != VerifierSpecType.pLTL:
+            if ast.spec_type != VerifierSpecType.pLTL:
                 raise CompilerError(
                     "`{ start ... }` applies only to past temporal (pLTL) specifications."
                 )
@@ -230,7 +230,7 @@ class SelVeriCompiler:
             ast = parse_spec_formula(formula)
         except ParserError as exc:
             raise CompilerError(f"Cannot validate end marker for '{name}': {exc}") from None
-        if ast.type != VerifierSpecType.fLTL:
+        if ast.spec_type != VerifierSpecType.fLTL:
             raise CompilerError("`{ end ... }` applies only to future temporal (fLTL) specifications.")
         return raw
 
@@ -826,29 +826,26 @@ class SelVeriCompiler:
             return
         if isinstance(stmt, SpecAnnot):
             spec = stmt.spec
-            if spec.kind == RawSpecKind.DOMAIN_START:
+            if spec.kind == RawSpecKind.SPEC_START:
                 if spec.spec_name is None:
                     raise CompilerError("Internal: domain-start annotation has no name.")
                 self._emit_plt_start_marker(spec.spec_name)
                 return
-            if spec.kind == RawSpecKind.DOMAIN_END:
+            if spec.kind == RawSpecKind.SPEC_END:
                 if spec.spec_name is None:
                     raise CompilerError("Internal: domain-end annotation has no name.")
                 target = self._lookup_named_spec_for_flt_end(spec.spec_name)
                 self.emit("SPEC_END", target.spec_id)
                 return
-
-            # handle both named and unnamed specs
-            formula = spec.formula_text if spec.formula_text is not None else spec.text.strip()
+            if spec.kind == RawSpecKind.SPEC_NAMED:
+                self._register_named_spec_definition(spec.spec_id, spec, spec.formula_text)
+                self.raw_specs[spec.spec_id] = spec
+                self.emit("VERI", spec.spec_id, spec.formula_text)
+                return
             if spec.kind == RawSpecKind.SPEC:
-                if spec.spec_name is not None:
-                    self._register_named_spec_definition(spec.spec_name, spec, formula)
-                else:
-                    self._register_spec_definition(spec, formula)
-
-            self.raw_specs[spec.spec_id] = spec
-            self.emit("VERI", spec.spec_id, formula)
-            return
+                self.raw_specs[spec.spec_id] = spec
+                self.emit("VERI", spec.spec_id, spec.formula_text)
+                return
         if isinstance(stmt, If):
             self._compile_if(stmt)
             return

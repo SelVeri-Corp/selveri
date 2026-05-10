@@ -362,11 +362,22 @@ class AstBuilder(Transformer):
     def return_stmt(self, expr):
         return Return(expr)
 
-    def func_call(self, name, args):
-        return FuncCall(str(name), args or [])
+    def func_call(self, name, args=None):
+        # With inlined arg_list (grammar.lark), one argument is passed as a bare aexp;
+        # zero arguments go through arg_list_opt -> []; two or more use arg_list -> list.
+        if args is None:
+            normalized: List[AExp] = []
+        elif isinstance(args, list):
+            normalized = args
+        else:
+            normalized = [args]
+        return FuncCall(str(name), normalized)
 
     def arg_list_opt(self, args=None):
-        return args or []
+        if args is None:
+            return []
+        # Single-arg calls pass one AExp here (arg_list is inlined in grammar.lark).
+        return args if isinstance(args, list) else [args]
 
     def arg_list(self, *args):
         return list(args)
