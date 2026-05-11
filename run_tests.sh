@@ -100,6 +100,10 @@ for f in "$FAIL_DIR"/*.svi; do
         spec=$(echo "$output" | grep -oP 'Specification #\K\d+' || echo "?")
         echo -e "  ${GREEN}✓${RESET} ${name}  (failed at spec #${spec})"
         passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "selveri.errors.CompilerError: Compiler error: No specification named"; then
+        spec=$(echo "$output" | grep -oP "named '\K[^']+" || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at missing spec '${spec}')"
+        passed=$((passed + 1))
     elif [ $exit_code -eq 0 ]; then
         # Check if the file has any active (uncommented) specs
         active_specs=$(grep -cP '^\s*\{' "$f" || true)
