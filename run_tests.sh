@@ -101,8 +101,20 @@ for f in "$FAIL_DIR"/*.svi; do
         echo -e "  ${GREEN}✓${RESET} ${name}  (failed at spec #${spec})"
         passed=$((passed + 1))
     elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "selveri.errors.CompilerError: Compiler error: No specification named"; then
-        spec=$(echo "$output" | grep -oP "named '\K[^']+" || echo "?")
+        spec=$(echo "$output" | tail -n 1 | grep -oP "named '\K[^']+" || echo "?")
         echo -e "  ${GREEN}✓${RESET} ${name}  (failed at missing spec '${spec}')"
+        passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "was not declared at the point of"; then
+        spec=$(echo "$output" | tail -n 1 | grep -oP "specification '\K[^']+" || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at undeclared var for marker '${spec}')"
+        passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "applies only to past temporal (pLTL) specifications"; then
+        spec=$(echo "$output" | grep -oP '\{ start \K[^ ]+' || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at invalid pLTL spec '${spec}')"
+        passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "applies only to future temporal (fLTL) specifications"; then
+        spec=$(echo "$output" | grep -oP '\{ end \K[^ ]+' || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at invalid fLTL spec '${spec}')"
         passed=$((passed + 1))
     elif [ $exit_code -eq 0 ]; then
         # Check if the file has any active (uncommented) specs

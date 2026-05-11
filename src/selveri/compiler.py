@@ -15,7 +15,7 @@ from .parser import (
     FunctionDecl, Write, WriteLine,
 )
 from .spec_parser import parse_spec as parse_spec_formula
-from .specs import RawSpec, RawSpecKind, SpecType as VerifierSpecType
+from .specs import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
 
 from .errors import CompilerError, ParserError
 
@@ -103,6 +103,14 @@ class _ScopeFrame:
             return None
         return owner.lists[name]
 
+    def get_all_bound_variables(self) -> set[str]:
+        vars = set()
+        cur = self
+        while cur is not None:
+            vars.update(cur.bindings.keys())
+            cur = cur.parent
+        return vars
+
 
 def is_empty_stmt_seq(stmts: Optional[List[Stmt]]) -> bool:
     if stmts is None:
@@ -187,29 +195,83 @@ class SelVeriCompiler:
     def _emit_plt_start_marker(self, name: str) -> None:
         frame = self.spec_frames[-1]
         if name not in frame:
-            frame[name] = None
+            frame[name] = self.scope.get_all_bound_variables()
             self.emit("SPEC_START", name)
             return
-        if frame[name] is None:
+        if isinstance(frame[name], set) or frame[name] is None:
             raise CompilerError(f"Duplicate `{{ start {name} }}` in this scope.")
         raise CompilerError(
             f"`{{ start {name} }}` must appear before `{{ {name} := ... }}` in this scope."
         )
 
+    def _get_spec_free_vars(self, spec: Spec) -> set[str]:
+        free = set()
+        from .specs import SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+        from .spec_parser import ABoundVar
+        from .parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
+        from .specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        
+        def walk_aexp(a):
+            if isinstance(a, ABoundVar): pass
+            elif isinstance(a, AVar): free.add(a.name)
+            elif isinstance(a, ALen): free.add(a.name)
+            elif isinstance(a, AIndex): walk_aexp(a.base); walk_aexp(a.index)
+            elif isinstance(a, AUnOp): walk_aexp(a.rhs)
+            elif isinstance(a, ABinOp): walk_aexp(a.left); walk_aexp(a.right)
+            elif isinstance(a, FuncCall):
+                for arg in a.args: walk_aexp(arg)
+            elif isinstance(a, ListLit):
+                for item in a.items: walk_aexp(item)
+
+        def walk_bexp(b):
+            if isinstance(b, BNot): walk_bexp(b.rhs)
+            elif isinstance(b, BBinOp): walk_bexp(b.left); walk_bexp(b.right)
+            elif isinstance(b, BCompare): walk_aexp(b.left); walk_aexp(b.right)
+            elif isinstance(b, BTruthy): walk_aexp(b.aexp)
+
+        def walk_domain(d):
+            if isinstance(d, DomainIdent): free.add(d.name)
+            elif isinstance(d, DomainValues):
+                for item in d.items: walk_aexp(item)
+            elif isinstance(d, DomainRange) or isinstance(d, DomainInterval):
+                walk_aexp(d.lo); walk_aexp(d.hi)
+
+        def walk_spec(s):
+            if isinstance(s, SpecFromBExp): walk_bexp(s.bexp)
+            elif isinstance(s, SpecUnOp): walk_spec(s.rhs)
+            elif isinstance(s, SpecBinOp): walk_spec(s.left); walk_spec(s.right)
+            elif isinstance(s, SpecQuant):
+                walk_domain(s.domain)
+                walk_spec(s.body)
+                
+        walk_spec(spec)
+        return free
+
     def _register_named_spec_definition(self, name: str, spec: RawSpec, formula: str) -> None:
         frame = self.spec_frames[-1]
-        pending_plt_start = name in frame and frame[name] is None
+        pending_plt_start = name in frame and (frame[name] is None or isinstance(frame[name], set))
         try:
             ast = parse_spec_formula(formula)
         except ParserError as exc:
             raise CompilerError(f"Invalid specification formula for '{name}': {exc}") from None
 
         if pending_plt_start:
+            declared_vars = frame[name] if isinstance(frame[name], set) else set()
+            free_vars = self._get_spec_free_vars(ast)
+            for v in free_vars:
+                if v not in declared_vars:
+                    raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ start {name} }}`.")
             if ast.spec_type != VerifierSpecType.pLTL:
                 raise CompilerError(
-                    "`{ start ... }` applies only to past temporal (pLTL) specifications."
+                    f"`{{ start {name} }}` applies only to past temporal (pLTL) specifications."
                 )
-        if name in frame and frame[name] is not None:
+        else:
+            free_vars = self._get_spec_free_vars(ast)
+            declared_vars = self.scope.get_all_bound_variables()
+            for v in free_vars:
+                if v not in declared_vars:
+                    raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ {name} := ... }}`.")
+        if name in frame and frame[name] is not None and not isinstance(frame[name], set):
             raise CompilerError(f"Duplicate specification name '{name}' in the same scope.")
         frame[name] = spec
 
@@ -231,7 +293,7 @@ class SelVeriCompiler:
         except ParserError as exc:
             raise CompilerError(f"Cannot validate end marker for '{name}': {exc}") from None
         if ast.spec_type != VerifierSpecType.fLTL:
-            raise CompilerError("`{ end ... }` applies only to future temporal (fLTL) specifications.")
+            raise CompilerError(f"`{{ end {name} }}` applies only to future temporal (fLTL) specifications.")
         return raw
 
     def _list_len_name(self, base: str, dim: int) -> str:
