@@ -113,7 +113,7 @@ class VerificationEngine:
             )
         return parsed_spec
 
-    ################# LogiVeri Extensions #################
+    ################# SelVeri LP Extensions #################
 
     def check_spec_boolean(self, spec_id: int, snapshot: RuntimeConfiguration) -> bool:
         """Evaluate a specification as a boolean value (VERIP instruction).

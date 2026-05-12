@@ -1,5 +1,0 @@
-0: DECL INT, y
-1: STEP
-2: OBT x, 0, 'Exists x in Int . &x > 10 && &x < 5'
-3: STORE y
-4: STEP

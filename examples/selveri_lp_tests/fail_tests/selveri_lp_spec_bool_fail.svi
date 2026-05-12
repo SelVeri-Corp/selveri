@@ -1,5 +1,5 @@
 // =====================================================
-// LogiVeri: spec-boolean fail — false spec routes to else 
+// SelVeri LP: spec-boolean fail — false spec routes to else 
 // which contains a failing assertion
 // =====================================================
 

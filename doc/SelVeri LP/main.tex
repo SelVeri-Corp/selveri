@@ -19,20 +19,20 @@
 \setlength{\parskip}{\smallskipamount}
 \setlength{\parindent}{0pt}
 
-\title{LogiVeri: Logic Programming Extension for SelVeri \\ Syntax and Semantics Document}
+\title{SelVeri LP: Logic Programming Extension for SelVeri \\ Syntax and Semantics Document}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This document formalizes \texttt{LogiVeri}, a constraint-driven logic programming extension to the \texttt{SelVeri} language. By blurring the line between executable imperatives and static verification, \texttt{LogiVeri} allows programmers to utilize First-Order Logic (FOL) and Past-Linear-Temporal Logic (pLTL) specifications directly as boolean truth values in control flow, and to dynamically extract satisfying witnesses from the \texttt{Z3} SMT solver directly into the program state.
+This document formalizes \texttt{SelVeri LP}, a constraint-driven logic programming extension to the \texttt{SelVeri} language. By blurring the line between executable imperatives and static verification, \texttt{SelVeri LP} allows programmers to utilize First-Order Logic (FOL) and Past-Linear-Temporal Logic (pLTL) specifications directly as boolean truth values in control flow, and to dynamically extract satisfying witnesses from the \texttt{Z3} SMT solver directly into the program state.
 \end{abstract}
 
 \newpage
 \section{Extended High-Level Syntax}
 
-To support the logic programming capabilities of \texttt{LogiVeri}, we extend the core grammar of \texttt{SelVeri}. We introduce a mechanism to evaluate specifications as standard boolean expressions, and a new arithmetic (logic) expression to query the solver for existential witnesses.
+To support the logic programming capabilities of \texttt{SelVeri LP}, we extend the core grammar of \texttt{SelVeri}. We introduce a mechanism to evaluate specifications as standard boolean expressions, and a new arithmetic (logic) expression to query the solver for existential witnesses.
 
 \subsection{Boolean Expressions}
 We extend the $\langle \mathit{BExp} \rangle$ ruleset. A specification enclosed in curly braces can now be utilized anywhere a boolean expression is expected (e.g., in \texttt{if} guards or \texttt{while} conditions).
@@ -170,13 +170,13 @@ The specification may contain multiple nested quantifiers. When \texttt{obtain} 
 Both $a$ and $b$ are introduced as free integer variables. The solver finds a satisfying assignment (e.g., $a = 3,\, b = 9$) and the value of the \emph{target} variable $b$ is returned as the value of the expression. Note that the choice of witness is non-deterministic when multiple satisfying assignments exist, as established in the determinism analysis below.
 
 \newpage
-\section{Determinism analysis for LogiVeri}
+\section{Determinism analysis for SelVeri LP}
 
-The original \texttt{SelVeri} language was strictly deterministic, meaning its small-step operational semantics transition relation ($\rightarrow$) formed a partial function. Introducing the \texttt{LogiVeri} constraint-driven extensions requires us to re-evaluate this property. We must analyze the two new additions independently: specification-based boolean expressions ($\{ \phi \}$) and witness extraction (\texttt{obtain}).
+The original \texttt{SelVeri} language was strictly deterministic, meaning its small-step operational semantics transition relation ($\rightarrow$) formed a partial function. Introducing the \texttt{SelVeri LP} constraint-driven extensions requires us to re-evaluate this property. We must analyze the two new additions independently: specification-based boolean expressions ($\{ \phi \}$) and witness extraction (\texttt{obtain}).
 
 \subsection{Determinism of Specification-Booleans}
 
-\textbf{Theorem:} A subset of \texttt{LogiVeri} that extends \texttt{SelVeri} \textit{only} with the specification-boolean expression $\{ \phi \}$ remains strictly deterministic.
+\textbf{Theorem:} A subset of \texttt{SelVeri LP} that extends \texttt{SelVeri} \textit{only} with the specification-boolean expression $\{ \phi \}$ remains strictly deterministic.
 
 \begin{proof}
 To prove this, we must show that the extended boolean valuation function $\mathcal{B}$ still maps any valid configuration to exactly one value in $\{0, 1, \bot\}$. 
@@ -188,7 +188,7 @@ Because the evaluation of $\{ \phi \}$remains a partial function, the mutual exc
 
 \subsection{Non-Determinism of Witness Extraction}
 
-\textbf{Theorem:} The introduction of the \texttt{obtain} expression renders the \texttt{LogiVeri} language semantically non-deterministic.
+\textbf{Theorem:} The introduction of the \texttt{obtain} expression renders the \texttt{SelVeri LP} language semantically non-deterministic.
 
 \begin{proof}
 To prove non-determinism, we must show that there exists a configuration $\langle S, \sigma, s \rangle$ that can validly transition to more than one distinct subsequent configuration.
@@ -203,11 +203,11 @@ In this scenario, the constraints are satisfied by multiple distinct models, spe
     \item $\langle \sigma[y \mapsto 4],\, s \rangle$
 \end{itemize}
 
-Because the transition relation ($\rightarrow$) maps a single pre-state to a set of multiple valid post-states, it ceases to be a partial function and becomes a one-to-many relation. While a specific underlying implementation of the $\mathtt{Z3}$ solver may deterministically return the same witness (e.g., always returning $1$) due to internal heuristics, the \textit{formal semantics} of the language place no such restriction. Therefore, \texttt{LogiVeri} is inherently non-deterministic.
+Because the transition relation ($\rightarrow$) maps a single pre-state to a set of multiple valid post-states, it ceases to be a partial function and becomes a one-to-many relation. While a specific underlying implementation of the $\mathtt{Z3}$ solver may deterministically return the same witness (e.g., always returning $1$) due to internal heuristics, the \textit{formal semantics} of the language place no such restriction. Therefore, \texttt{SelVeri LP} is inherently non-deterministic.
 \end{proof}
 
 \newpage
-\section{LogiVerIR: Extended Intermediate Representation}
+\section{SelVerIR LP: Extended Intermediate Representation}
 
 To execute these high-level paradigms on the abstract machine, we introduce two new \texttt{SelVerIR} instructions: \texttt{VERIP} and \texttt{OBT}. 
 
@@ -248,15 +248,15 @@ The instruction set $\langle \mathit{Command} \rangle$ is extended as follows:
 
 \hline\hline
 \end{tabular*}
-\caption{Operational semantics of LogiVerIR instructions}
-\label{tab:logiverir-sos}
+\caption{Operational semantics of SelVerIR LP instructions}
+\label{tab:selverir-lp-sos}
 \end{table}
 
 The \texttt{VERIP} instruction mimics the original \texttt{VERI} instruction, but instead of asserting the specification and halting the program on failure, it safely pushes the boolean truth value ($1$ or $0$) to the stack $e$. This allows the abstract machine to consume the logical result for conditional jumps (e.g., \texttt{JZ}).
 
 The \texttt{OBT} instruction queries the solver for the identifier $x$ under the constraint $\phi$. If a valid witness $v$ is synthesized, it is pushed onto the evaluation stack $e$. This mirrors the semantics of other value-producing IR instructions such as \texttt{PUSH} and \texttt{READ}.
 
-\section{Compilation to LogiVerIR}
+\section{Compilation to SelVerIR LP}
 
 With the operational semantics of the abstract machine defined, we seamlessly extend the compilation function $\mathcal{C}$ and the boolean compilation helper $\mathcal{CB}$. Because \texttt{obtain} is now an arithmetic expression, its compilation rule belongs to the arithmetic compilation function $\mathcal{CA}$.
 
@@ -275,13 +275,13 @@ $\begin{array}{ll}
 \end{array}$%
 }%
 }
-\caption{Compilation rules for LogiVeri extensions}
+\caption{Compilation rules for SelVeri LP extensions}
 \end{table}
 
 \newpage
-\section{Provably Correct Implementation of LogiVeri}
+\section{Provably Correct Implementation of SelVeri LP}
 
-To ensure that the \texttt{LogiVeri} extension preserves the rigorous mathematical guarantees of the original \texttt{SelVeri} language, we must extend the compiler correctness proofs. Specifically, we must demonstrate that the compilation mapping of the new boolean specification expression and the \texttt{obtain} expression maintain strict equivalence between the high-level semantics and the \texttt{LogiVerIR} abstract machine.
+To ensure that the \texttt{SelVeri LP} extension preserves the rigorous mathematical guarantees of the original \texttt{SelVeri} language, we must extend the compiler correctness proofs. Specifically, we must demonstrate that the compilation mapping of the new boolean specification expression and the \texttt{obtain} expression maintain strict equivalence between the high-level semantics and the \texttt{SelVerIR LP} abstract machine.
 
 \subsection{Correctness of Specification as Boolean Expressions}
 
@@ -348,17 +348,17 @@ If $\mathcal{W}$ fails and yields $\bot$, the high-level operational semantic ru
 
 \subsection{Transfinite Correctness of Divergent Programs}
 
-With the base cases for finite-step execution securely established for the \texttt{LogiVeri} logic extensions, we must address the correctness of divergent (infinite looping or non-terminating) programs under this new paradigm. 
+With the base cases for finite-step execution securely established for the \texttt{SelVeri LP} logic extensions, we must address the correctness of divergent (infinite looping or non-terminating) programs under this new paradigm. 
 
-The original mathematical proof for divergent programs in \texttt{SelVeri} relies on the \textit{decomposition lemma} and transfinite induction (limit-ordinal induction) applied over repeating finite execution chunks. Because the \texttt{LogiVeri} extensions (\texttt{\{ $\phi$ \}} and \texttt{obtain}) strictly evaluate in a finite number of discrete execution steps, and compile down to a finite, static sequence of \texttt{LogiVerIR} instructions, they completely satisfy the prerequisite bounds of the decomposition lemma. 
+The original mathematical proof for divergent programs in \texttt{SelVeri} relies on the \textit{decomposition lemma} and transfinite induction (limit-ordinal induction) applied over repeating finite execution chunks. Because the \texttt{SelVeri LP} extensions (\texttt{\{ $\phi$ \}} and \texttt{obtain}) strictly evaluate in a finite number of discrete execution steps, and compile down to a finite, static sequence of \texttt{SelVerIR LP} instructions, they completely satisfy the prerequisite bounds of the decomposition lemma. 
 
-Consequently, the original transfinite induction proof remains fully valid without any modification. The resulting program states and stabilization limits after executing an infinite trace $\omega$ of a divergent \texttt{LogiVeri} program and its compiled \texttt{LogiVerIR} counterpart are guaranteed to be mathematically identical.
+Consequently, the original transfinite induction proof remains fully valid without any modification. The resulting program states and stabilization limits after executing an infinite trace $\omega$ of a divergent \texttt{SelVeri LP} program and its compiled \texttt{SelVerIR LP} counterpart are guaranteed to be mathematically identical.
 
-\subsection{Determinism of LogiVerIR}
+\subsection{Determinism of SelVerIR LP}
 
-Having established the provable correctness of the compilation from \texttt{LogiVeri} to \texttt{LogiVerIR}, we can directly deduce the deterministic properties of the extended abstract machine.
+Having established the provable correctness of the compilation from \texttt{SelVeri LP} to \texttt{SelVerIR LP}, we can directly deduce the deterministic properties of the extended abstract machine.
 
-\textbf{Theorem:} The \texttt{LogiVerIR} abstract machine is semantically non-deterministic, perfectly mirroring the non-determinism of the high-level \texttt{LogiVeri} language.
+\textbf{Theorem:} The \texttt{SelVerIR LP} abstract machine is semantically non-deterministic, perfectly mirroring the non-determinism of the high-level \texttt{SelVeri LP} language.
 
 \begin{proof}
 By the correctness of the compilation function $\mathcal{C}$, the operational semantics of the high-level language are strictly preserved in the intermediate representation. We can evaluate the determinism of the transition relation ($\triangleright$) for the two new abstract machine instructions:
@@ -369,7 +369,7 @@ By the correctness of the compilation function $\mathcal{C}$, the operational se
     \item \textbf{Non-Determinism of \texttt{OBT}:} The \texttt{OBT} instruction directly invokes the high-level witness extraction function $\mathcal{W}(x, \phi, \sigma, s)$ to determine which value $v$ is pushed to the stack $e$. Because $\mathcal{W}$ maps to a set of valid witnesses for a loosely constrained formula $\phi$ (e.g., $\exists\, x \in \textbf{Int}.\; \texttt{\&}x > 0 \land \texttt{\&}x < 5$), the \texttt{OBT} instruction can legally transition a single abstract machine configuration into multiple distinct configurations (e.g., pushing $1$, $2$, $3$, or $4$ to the stack).
 \end{itemize}
 
-Because a single \texttt{LogiVerIR} configuration containing an \texttt{OBT} instruction can branch into multiple mathematically valid subsequent IR-configurations, the intermediate transition relation ($\triangleright$) ceases to be a partial function. Therefore, the abstract machine inherits the exact non-deterministic nature of the high-level language, exactly as the compiler correctness proofs imply.
+Because a single \texttt{SelVerIR LP} configuration containing an \texttt{OBT} instruction can branch into multiple mathematically valid subsequent IR-configurations, the intermediate transition relation ($\triangleright$) ceases to be a partial function. Therefore, the abstract machine inherits the exact non-deterministic nature of the high-level language, exactly as the compiler correctness proofs imply.
 \end{proof}
 
 \end{document}

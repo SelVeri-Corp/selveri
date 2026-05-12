@@ -1,5 +1,5 @@
 // =====================================================
-// LogiVeri: obtain fail test — unsatisfiable constraint
+// SelVeri LP: obtain fail test — unsatisfiable constraint
 // Should raise an error (IRRuntimeError / erroneous state)
 // =====================================================
 

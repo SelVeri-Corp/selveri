@@ -6,8 +6,8 @@ set -uo pipefail
 
 PASS_DIR="examples/verifier_tests/pass_test"
 FAIL_DIR="examples/verifier_tests/fail_tests"
-LOGIVERI_PASS_DIR="examples/logiveri_tests/pass_test"
-LOGIVERI_FAIL_DIR="examples/logiveri_tests/fail_tests"
+SELVERI_LP_PASS_DIR="examples/selveri_lp_tests/pass_test"
+SELVERI_LP_FAIL_DIR="examples/selveri_lp_tests/fail_tests"
 EXAMPLES_DIR="examples"
 
 GREEN='\033[0;32m'
@@ -124,12 +124,12 @@ done
 
 echo
 
-# ── LogiVeri Pass Tests ─────────────────────────
-echo -e "${BOLD}▶ LogiVeri Pass Tests${RESET} (expected: run without error)"
-echo -e "  Directory: ${LOGIVERI_PASS_DIR}"
+# ── SelVeri LP Pass Tests ─────────────────────────
+echo -e "${BOLD}▶ SelVeri LP Pass Tests${RESET} (expected: run without error)"
+echo -e "  Directory: ${SELVERI_LP_PASS_DIR}"
 echo
 
-for f in "$LOGIVERI_PASS_DIR"/*.svi; do
+for f in "$SELVERI_LP_PASS_DIR"/*.svi; do
     [ -f "$f" ] || continue
     name=$(basename "$f")
     total=$((total + 1))
@@ -145,18 +145,18 @@ for f in "$LOGIVERI_PASS_DIR"/*.svi; do
         echo -e "  ${RED}✗${RESET} ${name}"
         echo "$output" | tail -1 | sed 's/^/      /'
         failed=$((failed + 1))
-        failures+=("LOGIVERI_PASS  $name")
+        failures+=("SELVERI_LP_PASS  $name")
     fi
 done
 
 echo
 
-# ── LogiVeri Fail Tests ─────────────────────────
-echo -e "${BOLD}▶ LogiVeri Fail Tests${RESET} (expected: VerificationError or IRRuntimeError)"
-echo -e "  Directory: ${LOGIVERI_FAIL_DIR}"
+# ── SelVeri LP Fail Tests ─────────────────────────
+echo -e "${BOLD}▶ SelVeri LP Fail Tests${RESET} (expected: VerificationError or IRRuntimeError)"
+echo -e "  Directory: ${SELVERI_LP_FAIL_DIR}"
 echo
 
-for f in "$LOGIVERI_FAIL_DIR"/*.svi; do
+for f in "$SELVERI_LP_FAIL_DIR"/*.svi; do
     [ -f "$f" ] || continue
     name=$(basename "$f")
     total=$((total + 1))
@@ -177,13 +177,13 @@ for f in "$LOGIVERI_FAIL_DIR"/*.svi; do
         else
             echo -e "  ${RED}✗${RESET} ${name}  (unexpected pass)"
             failed=$((failed + 1))
-            failures+=("LOGIVERI_FAIL  $name  (should have raised error)")
+            failures+=("SELVERI_LP_FAIL  $name  (should have raised error)")
         fi
     else
         echo -e "  ${RED}✗${RESET} ${name}  (crashed with non-verification error)"
         echo "$output" | tail -1 | sed 's/^/      /'
         failed=$((failed + 1))
-        failures+=("LOGIVERI_FAIL  $name  (unexpected crash)")
+        failures+=("SELVERI_LP_FAIL  $name  (unexpected crash)")
     fi
 done
 
