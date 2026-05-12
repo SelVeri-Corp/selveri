@@ -1,0 +1,8 @@
+// =====================================================
+// SelVeri LP: obtain fail test — unsatisfiable constraint
+// Should raise an error (IRRuntimeError / erroneous state)
+// =====================================================
+
+// No integer satisfies x > 10 AND x < 5 simultaneously
+y : Int;
+y := obtain(&x, {Exists x in Int . &x > 10 && &x < 5});
