@@ -79,7 +79,7 @@ class VerificationEngine:
             self.raise_spec_failure(parsed_spec, "the current execution state does not satisfy the specification")
 
     def handle_plt_start_marker(self, spec_name: str, snapshot: RuntimeConfiguration) -> None:
-        """Strict inclusive domain start for past-LTL (records ``last_step`` at this program point)."""
+        """Strict inclusive domain start for the past half of pLTL or sLTL (records ``last_step`` at this point)."""
         key = (snapshot.scope.scope_id, spec_name)
         if key in self.pltl_start_marker_step:
             raise SpecDomainBoundsError(f"Duplicate `{{ start {spec_name} }}` marker for this scope.")
@@ -87,8 +87,8 @@ class VerificationEngine:
 
     def handle_flt_end_marker(self, spec_name: str, snapshot: RuntimeConfiguration) -> None:
         """
-        Strict end for future-LTL: verify one transition at this snapshot, require an accepting state,
-        then drop the obligation (no further runtime checks for this spec).
+        Strict end for future-LTL or the future half of sLTL: verify one transition at this snapshot,
+        require an accepting state, then drop the obligation (no further runtime checks for this spec).
         """
         obligation = self.fltl_pending.get((snapshot.scope.scope_id, spec_name))
         if obligation is None:

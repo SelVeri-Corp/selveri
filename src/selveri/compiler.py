@@ -265,9 +265,9 @@ class SelVeriCompiler:
             for v in free_vars:
                 if v not in declared_vars:
                     raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ start {name} }}`.")
-            if ast.spec_type != VerifierSpecType.pLTL:
+            if ast.spec_type not in (VerifierSpecType.pLTL, VerifierSpecType.sLTL):
                 raise CompilerError(
-                    f"`{{ start {name} }}` applies only to past temporal (pLTL) specifications."
+                    f"`{{ start {name} }}` applies only to past temporal (pLTL) or separated (sLTL) specifications."
                 )
         else:
             free_vars = self._get_spec_free_vars(ast)
@@ -296,8 +296,10 @@ class SelVeriCompiler:
             ast = parse_spec_formula(formula)
         except ParserError as exc:
             raise CompilerError(f"Cannot validate end marker for '{name}': {exc}") from None
-        if ast.spec_type != VerifierSpecType.fLTL:
-            raise CompilerError(f"`{{ end {name} }}` applies only to future temporal (fLTL) specifications.")
+        if ast.spec_type not in (VerifierSpecType.fLTL, VerifierSpecType.sLTL):
+            raise CompilerError(
+                f"`{{ end {name} }}` applies only to future temporal (fLTL) or separated (sLTL) specifications."
+            )
         return raw
 
     def _list_len_name(self, base: str, dim: int) -> str:
