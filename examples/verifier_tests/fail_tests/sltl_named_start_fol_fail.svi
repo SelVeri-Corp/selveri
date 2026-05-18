@@ -1,0 +1,12 @@
+// =====================================================
+// Named START with a pure FOL spec: expected compile failure
+// START applies only to pLTL or sLTL (not FOL).
+// =====================================================
+
+x : Int;
+x := 0;
+
+if 1 = 1 then
+    { start bad };
+    { bad := x = 0 };
+fi

@@ -1,0 +1,19 @@
+// =====================================================
+// fLTL Basic: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+x : Int;
+x := 0;
+
+phase : Int;
+phase := 0;
+
+{ Next x = 2 };                  // False (next state sets x to 1)
+x := 1;
+
+// { Eventually x = 99 };        // False (x never becomes 99)
+// { Always x > 0 };             // False (x is 0 when the spec is stated)
+
+// { phase < 3 Until phase = 3 }; // False (phase jumps to 4 instead)
+// phase := 4;

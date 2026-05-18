@@ -8,14 +8,26 @@ from typing import Dict, List, Optional, Tuple, Union
 from .parser import (
     parse_selveri,
     Program,
-    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
+    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
     TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
-    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, FuncCall,
-    BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
-    FunctionDecl,
+    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
+    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
+    FunctionDecl, Write, WriteLine,
+)
+from .spec_parser import parse_spec as parse_spec_formula
+from .specs import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
+
+from .errors import (
+    CompilerError,
+    ParserError,
+    duplicate_declaration_error,
+    invalid_list_index_error,
+    invalid_return_type_error,
+    type_mismatch_error,
+    unknown_identifier_error,
 )
 
-from .errors import CompilerError
+RESERVED_NAMES = ["retvar", "read", "write", "len"]
 
 # -----------------------
 # IR instruction model
@@ -25,10 +37,20 @@ class IRInstr:
     label: int # used for the jump indexes
     op: str # operand
     args: Tuple[Union[str, int, float], ...] = () # arguments
+    span: object | None = None
 
     def render(self) -> str:
-        rendered_args = ", ".join(str(arg) for arg in self.args)
+        rendered_args = ", ".join(self._render_arg(index, arg) for index, arg in enumerate(self.args))
         return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
+
+    def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
+        if self.op == "VERI" and isinstance(arg, str):
+            return repr(arg)
+        if self.op == "VERIP" and index == 1 and isinstance(arg, str):
+            return repr(arg)
+        if self.op == "OBT" and index == 2 and isinstance(arg, str):
+            return repr(arg)
+        return str(arg)
 
 
 # Patch reference for jumps
@@ -65,6 +87,7 @@ class _ScopeFrame:
     parent: Optional["_ScopeFrame"] = None
     bindings: Dict[str, Optional[TypeNode]] = field(default_factory=dict)
     lists: Dict[str, _ListInfo] = field(default_factory=dict)
+    decl_spans: Dict[str, object] = field(default_factory=dict)
 
     def find_binding_owner(self, name: str) -> Optional["_ScopeFrame"]:
         cur: Optional[_ScopeFrame] = self
@@ -80,6 +103,12 @@ class _ScopeFrame:
             return None
         return owner.bindings[name]
 
+    def get_decl_span(self, name: str):
+        owner = self.find_binding_owner(name)
+        if owner is None:
+            return None
+        return owner.decl_spans.get(name)
+
     def find_list_owner(self, name: str) -> Optional["_ScopeFrame"]:
         cur: Optional[_ScopeFrame] = self
         while cur is not None:
@@ -93,6 +122,14 @@ class _ScopeFrame:
         if owner is None:
             return None
         return owner.lists[name]
+
+    def get_all_bound_variables(self) -> set[str]:
+        vars = set()
+        cur = self
+        while cur is not None:
+            vars.update(cur.bindings.keys())
+            cur = cur.parent
+        return vars
 
 
 def is_empty_stmt_seq(stmts: Optional[List[Stmt]]) -> bool:
@@ -135,24 +172,49 @@ class SelVeriCompiler:
         self.scope = _ScopeFrame() # parent scope
         self.scope.bindings["retvar"] = None
         self.current_return_type: Optional[TypeNode] = None
+        self.current_function_name: Optional[str] = None
         # functions to be compiled (declaration object, pc)
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
+        self.raw_specs: Dict[str, RawSpec] = {}
+        # None = `{ start name }` seen; awaiting `{ name := ... }`. RawSpec = defined named spec.
+        self.spec_frames: List[Dict[str, Optional[RawSpec]]] = []
+        self._current_span = None
 
     # ---------- utilities ----------
     def pc(self) -> int:
         return len(self.code) # program counter
 
-    def emit(self, op: str, *args: Union[str, int, float]) -> int:
-        self.code.append(IRInstr(self.pc(), op, args))
+    def emit(self, op: str, *args: Union[str, int, float], span=None) -> int:
+        self.code.append(IRInstr(self.pc(), op, args, span if span is not None else self._current_span))
         return len(self.code) - 1 # index (label) of the last emitted instruction
+
+    def _span_of(self, node: object | None):
+        return getattr(node, "span", None)
+
+    def _with_span(self, exc: CompilerError, span):
+        if getattr(exc, "diagnostic", None) is not None and exc.diagnostic.span is not None:
+            return exc
+        return CompilerError(
+            exc.diagnostic.message if getattr(exc, "diagnostic", None) is not None else str(exc),
+            span=span or self._current_span,
+            code=exc.diagnostic.code if getattr(exc, "diagnostic", None) is not None else None,
+            title=exc.diagnostic.title if getattr(exc, "diagnostic", None) is not None else None,
+            notes=exc.diagnostic.notes if getattr(exc, "diagnostic", None) is not None else (),
+            hint=exc.diagnostic.hint if getattr(exc, "diagnostic", None) is not None else None,
+            labels=exc.diagnostic.labels if getattr(exc, "diagnostic", None) is not None else (),
+            counterexample=exc.diagnostic.counterexample if getattr(exc, "diagnostic", None) is not None else None,
+        )
+
+    def _raise(self, message: str, node: object | None = None) -> None:
+        raise CompilerError(message, span=self._span_of(node) or self._current_span)
 
     def patch_jump(self, patch: _PatchRef, target_pc: int) -> None:
         instr = self.code[patch.idx]
         if instr.op not in ("JZ", "GOTO"):
             raise CompilerError(f"Internal: patching non-jump at {patch.idx}: {instr.op}")
-        self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,))
+        self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,), instr.span)
 
     def _create_scope(self, fresh_env: bool = False) -> None:
         parent = None if fresh_env else self.scope
@@ -164,13 +226,127 @@ class SelVeriCompiler:
             raise CompilerError("Internal: cannot leave the root scope.")
         self.scope = self.scope.parent
 
+    def _finalize_spec_frame(self) -> None:
+        frame = self.spec_frames[-1]
+        for name, entry in frame.items():
+            if entry is None:
+                raise CompilerError(
+                    f"`{{ start {name} }}` requires a matching `{{ {name} := ... }}` in this scope."
+                )
+
+    def _emit_plt_start_marker(self, name: str) -> None:
+        frame = self.spec_frames[-1]
+        if name not in frame:
+            frame[name] = self.scope.get_all_bound_variables()
+            self.emit("SPEC_START", name)
+            return
+        if isinstance(frame[name], set) or frame[name] is None:
+            raise CompilerError(f"Duplicate `{{ start {name} }}` in this scope.")
+        raise CompilerError(
+            f"`{{ start {name} }}` must appear before `{{ {name} := ... }}` in this scope."
+        )
+
+    def _get_spec_free_vars(self, spec: Spec) -> set[str]:
+        free = set()
+        from .specs import SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+        from .spec_parser import ABoundVar
+        from .parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
+        from .specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        
+        def walk_aexp(a):
+            if isinstance(a, ABoundVar): pass
+            elif isinstance(a, AVar): free.add(a.name)
+            elif isinstance(a, ALen): free.add(a.name)
+            elif isinstance(a, AIndex): walk_aexp(a.base); walk_aexp(a.index)
+            elif isinstance(a, AUnOp): walk_aexp(a.rhs)
+            elif isinstance(a, ABinOp): walk_aexp(a.left); walk_aexp(a.right)
+            elif isinstance(a, FuncCall):
+                for arg in a.args: walk_aexp(arg)
+            elif isinstance(a, ListLit):
+                for item in a.items: walk_aexp(item)
+
+        def walk_bexp(b):
+            if isinstance(b, BNot): walk_bexp(b.rhs)
+            elif isinstance(b, BBinOp): walk_bexp(b.left); walk_bexp(b.right)
+            elif isinstance(b, BCompare): walk_aexp(b.left); walk_aexp(b.right)
+            elif isinstance(b, BTruthy): walk_aexp(b.aexp)
+
+        def walk_domain(d):
+            if isinstance(d, DomainIdent): free.add(d.name)
+            elif isinstance(d, DomainValues):
+                for item in d.items: walk_aexp(item)
+            elif isinstance(d, DomainRange) or isinstance(d, DomainInterval):
+                walk_aexp(d.lo); walk_aexp(d.hi)
+
+        def walk_spec(s):
+            if isinstance(s, SpecFromBExp): walk_bexp(s.bexp)
+            elif isinstance(s, SpecUnOp): walk_spec(s.rhs)
+            elif isinstance(s, SpecBinOp): walk_spec(s.left); walk_spec(s.right)
+            elif isinstance(s, SpecQuant):
+                walk_domain(s.domain)
+                walk_spec(s.body)
+                
+        walk_spec(spec)
+        return free
+
+    def _register_named_spec_definition(self, name: str, spec: RawSpec, formula: str) -> None:
+        frame = self.spec_frames[-1]
+        pending_plt_start = name in frame and (frame[name] is None or isinstance(frame[name], set))
+        try:
+            ast = parse_spec_formula(formula)
+        except ParserError as exc:
+            raise CompilerError(f"Invalid specification formula for '{name}': {exc}") from None
+
+        if pending_plt_start:
+            declared_vars = frame[name] if isinstance(frame[name], set) else set()
+            free_vars = self._get_spec_free_vars(ast)
+            for v in free_vars:
+                if v not in declared_vars:
+                    raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ start {name} }}`.")
+            if ast.spec_type not in (VerifierSpecType.pLTL, VerifierSpecType.sLTL):
+                raise CompilerError(
+                    f"`{{ start {name} }}` applies only to past temporal (pLTL) or separated (sLTL) specifications."
+                )
+        else:
+            free_vars = self._get_spec_free_vars(ast)
+            declared_vars = self.scope.get_all_bound_variables()
+            for v in free_vars:
+                if v not in declared_vars:
+                    raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ {name} := ... }}`.")
+        if name in frame and frame[name] is not None and not isinstance(frame[name], set):
+            raise CompilerError(f"Duplicate specification name '{name}' in the same scope.")
+        frame[name] = spec
+
+    def _lookup_named_spec_for_flt_end(self, name: str) -> RawSpec:
+        frame = self.spec_frames[-1]
+        if name not in frame:
+            raise CompilerError(
+                f"No specification named '{name}' in this scope (required for `{{ end {name} }}`)."
+            )
+        entry = frame[name]
+        if entry is None:
+            raise CompilerError(
+                f"`{{ end {name} }}` requires `{{ {name} := ... }}` earlier in this scope."
+            )
+        raw = entry
+        formula = raw.formula_text if raw.formula_text is not None else ""
+        try:
+            ast = parse_spec_formula(formula)
+        except ParserError as exc:
+            raise CompilerError(f"Cannot validate end marker for '{name}': {exc}") from None
+        if ast.spec_type not in (VerifierSpecType.fLTL, VerifierSpecType.sLTL):
+            raise CompilerError(
+                f"`{{ end {name} }}` applies only to future temporal (fLTL) or separated (sLTL) specifications."
+            )
+        return raw
+
     def _list_len_name(self, base: str, dim: int) -> str:
         return f"_{base}_len_{dim}"
 
     def _get_declared_type(self, name: str) -> TypeNode:
         owner = self.scope.find_binding_owner(name)
         if owner is None:
-            raise CompilerError(f"Undeclared variable: {name}")
+            raise unknown_identifier_error(name, self._current_span) if self._current_span else CompilerError(f"Undeclared variable: {name}")
         type_node = owner.bindings[name]
         if type_node is None:
             if name == "retvar":
@@ -188,18 +364,23 @@ class SelVeriCompiler:
             return self._list_info_from_type(type_node)
 
         if type_node is None and self.scope.find_binding_owner(name) is None:
-            raise CompilerError(f"Undeclared variable: {name}")
+            raise unknown_identifier_error(name, self._current_span) if self._current_span else CompilerError(f"Undeclared variable: {name}")
         raise CompilerError(f"'{name}' is not a declared list.")
 
-    def _bind_name(self, name: str, type_node: Optional[TypeNode]) -> None:
-        if name == "retvar":
-            raise CompilerError("retvar is reserved and cannot be declared by the user.")
+    def _bind_name(self, name: str, type_node: Optional[TypeNode], span=None) -> None:
+        if name in RESERVED_NAMES:
+            raise CompilerError(f"{name} is reserved and cannot be declared by the user.")
         if name in self.scope.bindings:
+            original_span = self.scope.decl_spans.get(name)
+            if span is not None and original_span is not None:
+                raise duplicate_declaration_error(name, span, original_span, str(self.scope.bindings.get(name)))
             raise CompilerError(f"Duplicate declaration: {name}")
         self.scope.bindings[name] = type_node
+        if span is not None:
+            self.scope.decl_spans[name] = span
 
-    def _declare_basic(self, name: str, type_node: BasicType) -> None:
-        self._bind_name(name, type_node)
+    def _declare_basic(self, name: str, type_node: BasicType, span=None) -> None:
+        self._bind_name(name, type_node, span)
         self.emit("DECL", self._ct_type(type_node), name)
 
     def _declare_list_len_slot(self, list_name: str, dim: int) -> None:
@@ -347,6 +528,8 @@ class SelVeriCompiler:
         return True
 
     def _basic_types_compatible(self, actual: TypeNode, expected: TypeNode) -> bool:
+        if type(actual) is BasicType:
+            return isinstance(expected, (TypeInt, TypeFloat))
         if isinstance(expected, TypeFloat):
             return isinstance(actual, (TypeInt, TypeFloat)) # integers are casted into floats gracefully
         return type(actual) is type(expected)
@@ -479,6 +662,10 @@ class SelVeriCompiler:
     def _resolve_list_access(self, expr: AIndex) -> Tuple[_ListInfo, str, List[AExp]]:
         base_name, indices = self._extract_list_access(expr)
         info = self._get_list_info(base_name)
+        for idx in indices:
+            idx_type = self._type_of_aexp(idx)
+            if not isinstance(idx_type, TypeInt):
+                raise invalid_list_index_error(span=self._span_of(idx) or self._span_of(expr) or self._current_span, actual=str(idx_type))
         if len(indices) > info.dimension:
             raise CompilerError(
                 f"List '{base_name}' of rank {info.dimension} cannot be indexed with {len(indices)} indices."
@@ -514,8 +701,12 @@ class SelVeriCompiler:
         if isinstance(expr, ListLit):
             return self._infer_list_literal_type(expr)
         if isinstance(expr, AVar):
+            if self.scope.find_binding_owner(expr.name) is None:
+                raise unknown_identifier_error(expr.name, self._span_of(expr) or self._current_span)
             return self._get_declared_type(expr.name)
         if isinstance(expr, ALen):
+            if self.scope.find_binding_owner(expr.name) is None:
+                raise unknown_identifier_error(expr.name, self._span_of(expr) or self._current_span)
             self._get_declared_type(expr.name)
             return TypeInt()
         if isinstance(expr, AIndex):
@@ -539,6 +730,10 @@ class SelVeriCompiler:
             if func_info is None:
                 raise CompilerError(f"Undefined function: {expr.name}")
             return func_info[0].return_type
+        if isinstance(expr, ARead):
+            return BasicType()
+        if isinstance(expr, AObtain):
+            return BasicType()  # witness type is unknown at compile time
         raise CompilerError(f"Unknown arithmetic expression node: {type(expr).__name__}")
 
     def _ct_type(self, type_node: BasicType) -> str:
@@ -581,7 +776,7 @@ class SelVeriCompiler:
         for offset in range(flat_size):
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
-            self.emit("LLOAD", base_name)
+            self.emit("LLOAD", base_name, span=self._span_of(indices[-1]) or self._span_of(expr))
         self.emit("PUSH", flat_size)
         return actual_info
 
@@ -617,7 +812,7 @@ class SelVeriCompiler:
             return
         if isinstance(expr, AVar):
             self.emit("PUSH", offset)
-            self.emit("LLOAD", expr.name)
+            self.emit("LLOAD", expr.name, span=self._span_of(expr))
             return
         if isinstance(expr, AIndex):
             info, base_name, indices = self._resolve_list_access(expr)
@@ -627,7 +822,7 @@ class SelVeriCompiler:
             base_index = self._build_flat_index_expr(base_name, info, indices)
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
-            self.emit("LLOAD", base_name)
+            self.emit("LLOAD", base_name, span=self._span_of(indices[-1]) or self._span_of(expr))
             return
         raise CompilerError("Unsupported list expression on the right-hand side of sub-list assignment.")
 
@@ -656,7 +851,7 @@ class SelVeriCompiler:
                     f"Sub-list '{base_name}[..]' cannot appear as a scalar arithmetic expression."
                 )
             self.CA(self._build_flat_index_expr(base_name, info, indices))
-            self.emit("LLOAD", base_name)
+            self.emit("LLOAD", base_name, span=self._span_of(indices[-1]) or self._span_of(expr))
             return
         if isinstance(expr, AUnOp):
             if expr.op != "-":
@@ -681,8 +876,12 @@ class SelVeriCompiler:
                 self.emit("fDIV" if isinstance(self._type_of_aexp(expr), TypeFloat) else "iDIV")
                 return
             raise CompilerError(f"Unsupported binary operator in arithmetic expression: {expr.op}")
-        if isinstance(expr, FuncCall):
-            self._compile_call(expr)
+        if isinstance(expr, ARead):
+            self.emit("READ")
+            return
+        if isinstance(expr, AObtain):
+            self.raw_specs[expr.spec.spec_id] = expr.spec
+            self.emit("OBT", expr.var_name, expr.spec.spec_id, expr.spec.formula_text)
             return
         raise CompilerError(f"Unsupported arithmetic expression: {type(expr).__name__}")
 
@@ -732,48 +931,83 @@ class SelVeriCompiler:
                 self.emit("XOR")
                 return
             raise CompilerError(f"Unsupported boolean operator: {expr.op}")
+        if isinstance(expr, BSpec):
+            self.raw_specs[expr.spec.spec_id] = expr.spec
+            self.emit("VERIP", expr.spec.spec_id, expr.spec.formula_text)
+            return
         raise CompilerError(f"Unsupported boolean expression: {type(expr).__name__}")
 
     def C_stmt(self, stmt: Stmt) -> None:
-        if isinstance(stmt, Decl):
-            self._compile_decl(stmt)
-            return
-        if isinstance(stmt, Assign):
-            self._compile_assign(stmt)
-            return
-        if isinstance(stmt, ListAssign):
-            self._compile_list_assign(stmt)
-            return
-        if isinstance(stmt, Pass):
-            self.emit("NOOP")
-            return
-        if isinstance(stmt, SpecAnnot):
-            self.emit("VERI", stmt.spec)
-            return
-        if isinstance(stmt, If):
-            self._compile_if(stmt)
-            return
-        if isinstance(stmt, While):
-            self._compile_while(stmt)
-            return
-        if isinstance(stmt, Return):
-            self._compile_return(stmt)
-            return
-        if isinstance(stmt, FuncCall):
-            self._compile_call(stmt)
-            return
-        raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
+        old_span = self._current_span
+        self._current_span = self._span_of(stmt) or old_span
+        try:
+            if isinstance(stmt, Decl):
+                self._compile_decl(stmt)
+                self.emit("STEP")
+                return
+            if isinstance(stmt, Assign):
+                self._compile_assign(stmt)
+                self.emit("STEP")
+                return
+            if isinstance(stmt, ListAssign):
+                self._compile_list_assign(stmt)
+                self.emit("STEP")
+                return
+            if isinstance(stmt, Pass):
+                self.emit("NOOP")
+                return
+            if isinstance(stmt, SpecAnnot):
+                spec = stmt.spec
+                if spec.kind == RawSpecKind.SPEC_START:
+                    self._emit_plt_start_marker(spec.spec_id)
+                    return
+                if spec.kind == RawSpecKind.SPEC_END:
+                    target = self._lookup_named_spec_for_flt_end(spec.spec_id)
+                    self.emit("SPEC_END", target.spec_id)
+                    return
+                if spec.kind == RawSpecKind.SPEC_NAMED:
+                    self._register_named_spec_definition(spec.spec_id, spec, spec.formula_text)
+                    self.raw_specs[spec.spec_id] = spec
+                    self.emit("VERI", spec.spec_id, spec.formula_text)
+                    return
+                if spec.kind == RawSpecKind.SPEC:
+                    self.raw_specs[spec.spec_id] = spec
+                    self.emit("VERI", spec.spec_id, spec.formula_text)
+                    return
+            if isinstance(stmt, If):
+                self._compile_if(stmt)
+                return
+            if isinstance(stmt, While):
+                self._compile_while(stmt)
+                return
+            if isinstance(stmt, Return):
+                self._compile_return(stmt)
+                return
+            if isinstance(stmt, FuncCall):
+                self._compile_call(stmt)
+                return
+            if isinstance(stmt, Write):
+                self._compile_write(stmt)
+                return
+            if isinstance(stmt, WriteLine):
+                self._compile_writeline(stmt)
+                return
+            raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
+        except CompilerError as exc:
+            raise self._with_span(exc, self._span_of(stmt)) from None
+        finally:
+            self._current_span = old_span
 
     def _compile_decl(self, decl: Decl) -> None:
         name = decl.name
         type_node = decl.type_node
 
         if isinstance(type_node, (TypeInt, TypeFloat)):
-            self._declare_basic(name, type_node)
+            self._declare_basic(name, type_node, self._span_of(decl))
             return
 
         if isinstance(type_node, TypeList):
-            self._bind_name(name, type_node)
+            self._bind_name(name, type_node, self._span_of(decl))
             self.scope.lists[name] = self._list_info_from_type(type_node)
             # _lst_dim_i generation
             for dim, shape_expr in enumerate(type_node.shape, start=1):
@@ -792,7 +1026,13 @@ class SelVeriCompiler:
         if isinstance(target_type, (TypeInt, TypeFloat)):
             source_type = self._type_of_aexp(stmt.aexp)
             if not self._basic_types_compatible(source_type, target_type):
-                raise CompilerError(f"Type mismatch in assignment to '{stmt.name}'.")
+                raise type_mismatch_error(
+                    expected=str(target_type),
+                    actual=str(source_type),
+                    span=self._span_of(stmt.aexp) or self._span_of(stmt) or self._current_span,
+                    context=f"variable `{stmt.name}`",
+                    declared_span=self.scope.get_decl_span(stmt.name),
+                )
             self.CA(stmt.aexp)
             self.emit("STORE", stmt.name)
             return
@@ -816,7 +1056,7 @@ class SelVeriCompiler:
                 raise CompilerError("Scalar list assignment requires a basic value of the element type.")
             self.CA(stmt.aexp)
             self.CA(self._build_flat_index_expr(base_name, info, indices))
-            self.emit("LSTORE", base_name)
+            self.emit("LSTORE", base_name, span=self._span_of(indices[-1]) or self._span_of(stmt.target))
             return
 
         target_sub_info = self._get_sublist_info(info, indices) # whole list case is impossible by parser (handled by regular assign)
@@ -833,7 +1073,7 @@ class SelVeriCompiler:
             self._compile_rhs_list_element(stmt.aexp, offset)
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
-            self.emit("LSTORE", base_name)
+            self.emit("LSTORE", base_name, span=self._span_of(indices[-1]) or self._span_of(stmt.target))
 
     def _compile_block(self, stmts: List[Stmt]) -> None:
         self.emit("CSCOPE")
@@ -884,7 +1124,12 @@ class SelVeriCompiler:
 
         actual_type = self._type_of_aexp(stmt.value)
         if not self._basic_types_compatible(actual_type, expected_type):
-            raise CompilerError("Returned value does not match the declared function return type.")
+            raise invalid_return_type_error(
+                function_name=self.current_function_name or "<anonymous>",
+                expected=str(expected_type),
+                actual=str(actual_type),
+                span=self._span_of(stmt.value) or self._span_of(stmt) or self._current_span,
+            )
         self.CA(stmt.value)
         self.emit("RET")
 
@@ -915,14 +1160,33 @@ class SelVeriCompiler:
         self.emit("CALL", call.name)
         self._set_retvar_type(func_decl.return_type)
 
+    def _compile_write(self, stmt: Write) -> None:
+        self.CA(stmt.aexp)
+        t = self._type_of_aexp(stmt.aexp)
+        if isinstance(t, (TypeList, TypeDynamicList)):
+            self.emit("LWRITE")
+        else:
+            self.emit("WRITE")
+
+    def _compile_writeline(self, stmt: WriteLine) -> None:
+        self.CA(stmt.aexp)
+        t = self._type_of_aexp(stmt.aexp)
+        if isinstance(t, (TypeList, TypeDynamicList)):
+            self.emit("LWRITELN")
+        else:
+            self.emit("WRITELN")
+
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
+        self.spec_frames.append({})
         for stmt in stmts:
             self.C_stmt(stmt)
+        self._finalize_spec_frame()
+        self.spec_frames.pop()
 
     def _register_functions(self, program: Program) -> None:
         for func in program.func_decls:
             if func.name in self.functions:
-                raise CompilerError(f"Duplicate function declaration: {func.name}")
+                raise CompilerError(f"Duplicate function declaration: {func.name}", span=self._span_of(func))
             self.functions[func.name] = (func, -1)
 
     def _declare_static_list_param(self, name: str, type_node: TypeList) -> None:
@@ -955,6 +1219,9 @@ class SelVeriCompiler:
     def _compile_function_decl(self, func: FunctionDecl) -> None:
         old_scope = self.scope
         old_return_type = self.current_return_type
+        old_function_name = self.current_function_name
+        old_span = self._current_span
+        self._current_span = self._span_of(func) or old_span
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
@@ -962,28 +1229,38 @@ class SelVeriCompiler:
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
         self.current_return_type = func.return_type
+        self.current_function_name = func.name
 
         # Parameters are pushed left-to-right by the caller, so bind them from the
         # top of the stack back toward the first argument.
-        for param in reversed(func.params):
-            if isinstance(param.type_node, (TypeInt, TypeFloat)):
-                self._declare_basic(param.name, param.type_node)
-                self.emit("STORE", param.name) # fetch parameter value from stack
-                continue
-            if isinstance(param.type_node, TypeList):
-                self._declare_static_list_param(param.name, param.type_node)
-                continue
-            if isinstance(param.type_node, TypeDynamicList):
-                self._declare_dynamic_list_param(param.name, param.type_node)
-                continue
-            raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
+        try:
+            for param in reversed(func.params):
+                self._current_span = self._span_of(param) or self._span_of(func) or old_span
+                if isinstance(param.type_node, (TypeInt, TypeFloat)):
+                    self._declare_basic(param.name, param.type_node, self._span_of(param))
+                    self.emit("STORE", param.name) # fetch parameter value from stack
+                    continue
+                if isinstance(param.type_node, TypeList):
+                    self._declare_static_list_param(param.name, param.type_node)
+                    continue
+                if isinstance(param.type_node, TypeDynamicList):
+                    self._declare_dynamic_list_param(param.name, param.type_node)
+                    continue
+                raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
+            self._current_span = self._span_of(func) or old_span
+            self.emit("STEP") # step after initializing parameters
 
-        body = list(func.body) # copy for appending return
-        if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value
-            body.append(Return(self._default_value_expr(func.return_type)))
-        self.C_stmt_seq(body)
-        self.scope = old_scope # restore old scope
-        self.current_return_type = old_return_type
+            body = list(func.body) # copy for appending return
+            if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value
+                body.append(Return(self._default_value_expr(func.return_type)))
+            self.C_stmt_seq(body)
+        except CompilerError as exc:
+            raise self._with_span(exc, self._span_of(func)) from None
+        finally:
+            self.scope = old_scope # restore old scope
+            self.current_return_type = old_return_type
+            self.current_function_name = old_function_name
+            self._current_span = old_span
 
     def compile_program(self, program: Program) -> List[IRInstr]:
         self._register_functions(program)
@@ -1012,8 +1289,8 @@ class SelVeriCompiler:
 # -----------------------
 # Convenience API
 # -----------------------
-def compile_selveri_source_to_ir_text(src: str) -> str:
-    ast = parse_selveri(src)
+def compile_selveri_source_to_ir_text(src: str, source_path: str | Path | None = None) -> str:
+    ast = parse_selveri(src, source_path)
     return SelVeriCompiler().compile_to_text(ast)
 
 
@@ -1026,6 +1303,6 @@ if __name__ == "__main__":
     output = args.output if args.output is not None else args.input.with_suffix(".svir")
     with open(args.input, "r", encoding="utf-8") as f:
         src = f.read()
-    ir_text = compile_selveri_source_to_ir_text(src)
+    ir_text = compile_selveri_source_to_ir_text(src, args.input)
     with open(output, "w", encoding="utf-8") as f:
         f.write(ir_text)

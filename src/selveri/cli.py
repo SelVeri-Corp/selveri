@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+from time import perf_counter
+import traceback
 
-from .compiler import compile_selveri_source_to_ir_text
-from .interpreter import interpret_ir_text
+from .compiler import SelVeriCompiler
+from .diagnostics import render_diagnostic, render_internal_error, should_use_color
+from .errors import SelVeriError
+from .interpreter import interpret_ir_code
+from .parser import parse_selveri
+from .SelVerifier.verifier import VerificationEngine
 
 def run_pipeline(
     input_path: Path,
@@ -12,11 +19,19 @@ def run_pipeline(
     output_ir: Path | None,
     max_steps: int,
     print_ir: bool,
+    debug: bool,
 ) -> int:
     with input_path.open("r", encoding="utf-8") as f:
         source = f.read()
 
-    ir_text = compile_selveri_source_to_ir_text(source)
+    start_time = perf_counter()
+    program = parse_selveri(source, input_path)
+    compiler = SelVeriCompiler()
+    code = compiler.compile_program(program)
+    ir_text = "\n".join(instr.render() for instr in code)
+    end_time = perf_counter()
+    if debug:
+        print(f"Compilation time: {end_time - start_time:.6f} seconds")
 
     if output_ir is not None:
         output_ir.parent.mkdir(parents=True, exist_ok=True)
@@ -27,13 +42,19 @@ def run_pipeline(
         print(ir_text)
         print()
 
-    result = interpret_ir_text(ir_text, max_steps=max_steps)
+    start_time = perf_counter()
+    verifier = VerificationEngine()
+    verifier.register_raw_specs(compiler.raw_specs.values())
+    result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
+    end_time = perf_counter()
+    print(f"\nExecution time: {end_time - start_time:.6f} seconds")
 
-    print("Final state:")
-    print(result.state)
-    print("\nFinal stack:")
-    print(result.stack)
-    print(f"\nSteps: {result.steps}")
+    if debug:
+        print("Final state:")
+        print(result.state)
+        print("\nFinal stack:")
+        print(result.stack)
+    print(f"Steps: {result.steps}")
     return 0
 
 
@@ -65,15 +86,33 @@ def main() -> int:
         action="store_true",
         help="Print generated SelVerIR before interpretation",
     )
+    arg_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print debug information",
+    )
     args = arg_parser.parse_args()
 
     output_ir = None
     if args.emit_ir:
         output_ir = args.output_ir if args.output_ir is not None else args.input.with_suffix(".svir")
 
-    return run_pipeline(
-        args.input,
-        output_ir=output_ir,
-        max_steps=args.max_steps,
-        print_ir=args.print_ir,
-    )
+    try:
+        return run_pipeline(
+            args.input,
+            output_ir=output_ir,
+            max_steps=args.max_steps,
+            print_ir=args.print_ir,
+            debug=args.debug,
+        )
+    except SelVeriError as exc:
+        color = should_use_color(stream=sys.stderr)
+        print(render_diagnostic(exc.diagnostic, color=color), file=sys.stderr)
+        return 1
+    except Exception:
+        color = should_use_color(stream=sys.stderr)
+        if args.debug:
+            traceback.print_exc()
+        else:
+            print(render_internal_error(color=color), file=sys.stderr)
+        return 1

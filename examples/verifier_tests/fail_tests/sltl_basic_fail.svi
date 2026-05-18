@@ -1,0 +1,17 @@
+// =====================================================
+// sLTL Basic Fail: should raise VerificationError
+// Separated LTL: pLTL => fLTL
+// =====================================================
+
+x : Int;
+x := 0;
+
+x := 2;
+
+// At this point (step 1), the past condition is evaluated for step 0.
+// At step 0, x was 0, so Once (x = 0) is True.
+// The future condition Next (x = 5) must hold.
+// However, the next value of x is 10, not 5. This should fail!
+{ (Once x = 0) => (Next x = 5) };
+
+x := 10;

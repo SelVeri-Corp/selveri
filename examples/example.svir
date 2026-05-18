@@ -1,18 +1,22 @@
 0: DECL INT, x
-1: PUSH 1
-2: STORE x
-3: LOAD x
-4: PUSH 1
-5: EQ
-6: JZ 12
-7: CSCOPE
-8: PUSH 2
-9: STORE x
-10: PSCOPE
-11: GOTO 16
-12: CSCOPE
-13: PUSH 3
-14: STORE x
-15: PSCOPE
-16: NOOP
-17: VERI Forall i in [0, 3) . x = 1 && true
+1: STEP
+2: PUSH 1
+3: STORE x
+4: STEP
+5: LOAD x
+6: PUSH 1
+7: EQ
+8: JZ 14
+9: CSCOPE
+10: PUSH 2
+11: STORE x
+12: PSCOPE
+13: GOTO 18
+14: CSCOPE
+15: PUSH 3
+16: STORE x
+17: PSCOPE
+18: NOOP
+19: STEP
+20: VERI 0, 'Forall i in [0, 3) . (x = 1) && true'
+21: STEP

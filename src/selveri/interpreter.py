@@ -6,41 +6,30 @@ import copy
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-from .errors import IRRuntimeError, IRParseError
+from .defs import RuntimeConfiguration
+from .diagnostics import DiagnosticCode
+from .errors import IRRuntimeError, IRParseError, index_out_of_bounds_error
 from .compiler import IRInstr
-
-@dataclass(frozen=True)
-class DeclType:
-    kind: str                  # "INT" | "FLOAT" | "LIST"
-    elem_kind: Optional[str]   # for LIST: "INT" | "FLOAT"
-    size: Optional[int]        # for LIST: fixed size for DECL, None for LDECL
+from .runtime import DeclType, Scope, State, _UNSET
+from .SelVerifier.verifier import VerificationEngine
 
 
 @dataclass
 class ExecutionResult:
-    state: Dict[str, Any]
-    types: Dict[str, DeclType]
+    state: Dict[str, float | int | List[float | int]]
+    scope: Dict[str, DeclType]
     stack: List[Any]
     pc: int
     steps: int
     halted: bool
 
 
-_UNSET = object()
-
-
-@dataclass
-class RuntimeScope:
-    values: Dict[str, Any]
-    types: Dict[str, Optional[DeclType]]
-
-
 @dataclass(frozen=True)
 class CallFrame:
     return_pc: int
-    scopes: Tuple[RuntimeScope, ...]
+    runtime: RuntimeConfiguration
     function_name: Optional[str] = None
     return_type: Optional[DeclType] = None
 
@@ -119,6 +108,8 @@ def _split_top_level_commas(s: str) -> List[str]:
 # parse scalar token: INT | FLOAT
 def _parse_scalar_token(token: str) -> Any:
     t = token.strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in {"'", '"'}:
+        return ast.literal_eval(t)
     if _INT_RE.fullmatch(t):
         return int(t)
     if _FLOAT_RE.fullmatch(t):
@@ -141,11 +132,24 @@ def _parse_label_line(line: str) -> IRInstr:
         if len(args) != 2:
             raise IRParseError(f"Invalid {op} arguments: {line}")
     elif op == "VERI":
-        args = (rest,)
+        args = _split_top_level_commas(rest)
+        if len(args) != 2:
+            raise IRParseError(f"Invalid VERI arguments: {line}")
+        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+    elif op == "VERIP":
+        args = _split_top_level_commas(rest)
+        if len(args) != 2:
+            raise IRParseError(f"Invalid VERIP arguments: {line}")
+        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+    elif op == "OBT":
+        args = _split_top_level_commas(rest)
+        if len(args) != 3:
+            raise IRParseError(f"Invalid OBT arguments: {line}")
+        args = (args[0].strip(), _parse_scalar_token(args[1]), _parse_scalar_token(args[2]))
     else:
         args = [_parse_scalar_token(p) for p in _split_top_level_commas(rest)]
 
-    return IRInstr(label, op, tuple(args))
+    return IRInstr(label, op, tuple(args), None)
 
 
 def parse_ir_text(text: str) -> List[IRInstr]:
@@ -259,10 +263,7 @@ def _type_from_funcenv_arg(obj: Any) -> DeclType:
 
         raise IRParseError(f"Unknown FUNCENV return type: {obj}")
 
-    decl_type = _type_from_object(obj)
-    if decl_type.kind == "LIST":
-        return DeclType("LIST", decl_type.elem_kind, None)
-    return decl_type
+    return _type_from_object(obj)
 
 
 def _funcenv_metadata(args: Tuple[Any, ...]) -> Tuple[Optional[str], Optional[DeclType]]:
@@ -277,10 +278,18 @@ def _funcenv_metadata(args: Tuple[Any, ...]) -> Tuple[Optional[str], Optional[De
 # type casting
 def _coerce_value(value: Any, decl_type: DeclType) -> Any:
     if decl_type.kind == "INT":
-        return int(value)
+        if isinstance(value, float):
+            raise IRRuntimeError(f"Type mismatch: cannot assign float {value} to INT.")
+        try:
+            return int(value)
+        except ValueError:
+            raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to INT.")
 
     if decl_type.kind == "FLOAT":
-        return float(value)
+        try:
+            return float(value)
+        except ValueError:
+            raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to FLOAT.")
 
     if decl_type.kind == "LIST":
         if not isinstance(value, list):
@@ -314,7 +323,7 @@ class SelVerIRInterpreter:
 
     def __init__(
         self,
-        verifier: Optional[Any] = None,
+        verifier: Optional[VerificationEngine] = None,
         max_steps: int = 1_000_000,
     ) -> None:
         self.verifier = verifier
@@ -324,10 +333,8 @@ class SelVerIRInterpreter:
         self.label_to_index: Dict[int, int] = {}
         self.functions: Dict[str, FunctionEntry] = {}
 
-        self.state: Dict[str, Any] = {}
-        self.types: Dict[str, DeclType] = {}
         self.stack: List[Union[int, float]] = []
-        self.scopes: List[RuntimeScope] = []
+        self.runtime: RuntimeConfiguration = self._fresh_runtime()
         self.call_stack: List[CallFrame] = []
 
         self.pc: int = 0
@@ -348,14 +355,15 @@ class SelVerIRInterpreter:
                 raise IRParseError(f"Duplicate function environment: {name}")
             self.functions[name] = FunctionEntry(name=name, pc=instr.label, return_type=return_type)
         self.reset_runtime() # reset the runtime state
+        if self.verifier is not None:
+            self.verifier.handle_program_start()
 
     def reset_runtime(self) -> None:
         self.stack = [] # clear the stack
-        self.scopes = [self._fresh_scope()]
+        self.runtime = self._fresh_runtime()
         self.call_stack = []
         self.pc = 0 # reset the program counter
         self.steps = 0 # reset the steps
-        self._refresh_public_views()
 
     # ---------- stack ----------
     def _push(self, value: Any) -> None:
@@ -372,54 +380,49 @@ class SelVerIRInterpreter:
         return left, right
 
     # ---------- lookup ----------
-    def _fresh_scope(self) -> RuntimeScope:
-        return RuntimeScope(values={"retvar": _UNSET}, types={"retvar": None})
+    def _fresh_scope(self, parent: Optional[Scope] = None) -> Scope:
+        depth = parent.depth + 1 if parent is not None else 0
+        return Scope(types={"retvar": None}, depth=depth, parent=parent)
 
-    def _refresh_public_views(self) -> None:
-        visible_state: Dict[str, Any] = {}
-        visible_types: Dict[str, DeclType] = {}
+    def _fresh_state(self, parent: Optional[State] = None) -> State:
+        depth = parent.depth + 1 if parent is not None else 0
+        return State(values={"retvar": _UNSET}, depth=depth, parent=parent)
 
-        for scope in self.scopes:
-            for name, value in scope.values.items():
-                if value is not _UNSET:
-                    visible_state[name] = value
-            for name, decl_type in scope.types.items():
-                if decl_type is not None:
-                    visible_types[name] = decl_type
+    def _fresh_runtime(
+        self,
+        *,
+        state_parent: Optional[State] = None,
+        scope_parent: Optional[Scope] = None,
+    ) -> RuntimeConfiguration:
+        return RuntimeConfiguration(
+            state=self._fresh_state(parent=state_parent),
+            scope=self._fresh_scope(parent=scope_parent),
+        )
 
-        self.state = visible_state
-        self.types = visible_types
+    def _refresh_public_views(self) -> Tuple[Dict[str, Any], Dict[str, DeclType]]:
+        return self.runtime.state.visible_values(), self.runtime.scope.visible_types()
 
-    def _find_scope_with_type(self, name: str) -> Optional[RuntimeScope]:
-        for scope in reversed(self.scopes):
-            if name in scope.types:
-                return scope
-        return None
+    def _find_scope_with_type(self, name: str) -> Optional[Scope]:
+        return self.runtime.scope.find_owner(name)
 
-    def _find_scope_with_value(self, name: str) -> Optional[RuntimeScope]:
-        for scope in reversed(self.scopes):
-            if name in scope.values:
-                return scope
-        return None
+    def _find_state_with_value(self, name: str) -> Optional[State]:
+        return self.runtime.state.find_owner(name)
 
     def _require_declared(self, name: str) -> None:
-        if self._find_scope_with_type(name) is None:
+        if name not in self.runtime.scope:
             raise IRRuntimeError(f"Undeclared variable: {name}")
 
     def _get_decl_type(self, name: str) -> DeclType:
         self._require_declared(name)
-        scope = self._find_scope_with_type(name)
-        assert scope is not None
-        decl_type = scope.types[name]
+        decl_type = self.runtime.scope[name]
         if decl_type is None:
             raise IRRuntimeError(f"{name} has no runtime type.")
         return decl_type
 
     def _get_value(self, name: str) -> Any:
-        scope = self._find_scope_with_value(name)
-        if scope is None:
+        if name not in self.runtime.state:
             raise IRRuntimeError(f"Undeclared variable: {name}")
-        value = scope.values[name]
+        value = self.runtime.state[name]
         if value is _UNSET:
             raise IRRuntimeError(f"Uninitialized variable: {name}")
         return value
@@ -428,14 +431,17 @@ class SelVerIRInterpreter:
         scope = self._find_scope_with_type(name)
         if scope is None:
             raise IRRuntimeError(f"Undeclared variable: {name}")
-        scope.values[name] = value
+        state = self._find_state_with_value(name)
+        if state is None:
+            raise IRRuntimeError(f"Undeclared variable: {name}")
+        state.values[name] = value
 
     def _declare(self, name: str, decl_type: DeclType, value: Any) -> None:
-        scope = self.scopes[-1]
+        scope = self.runtime.scope
         if name in scope.types and name != "retvar":
             raise IRRuntimeError(f"{name} has already been declared.")
-        scope.types[name] = decl_type
-        scope.values[name] = value
+        scope[name] = decl_type
+        self.runtime.state[name] = value
 
     def _infer_decl_type_from_value(self, value: Any) -> DeclType:
         if isinstance(value, bool):
@@ -452,15 +458,23 @@ class SelVerIRInterpreter:
         raise IRRuntimeError(f"Unsupported runtime value: {value!r}")
 
     def _set_retvar(self, value: Any, decl_type: Optional[DeclType] = None) -> None:
-        scope = self.scopes[-1]
+        scope = self.runtime.scope
+        state = self.runtime.state
         if decl_type is None:
-            scope.values["retvar"] = copy.deepcopy(value)
-            scope.types["retvar"] = self._infer_decl_type_from_value(value)
+            state["retvar"] = copy.deepcopy(value)
+            scope["retvar"] = self._infer_decl_type_from_value(value)
             return
 
         coerced_value = _coerce_value(value, decl_type)
-        scope.values["retvar"] = copy.deepcopy(coerced_value)
-        scope.types["retvar"] = decl_type
+        state["retvar"] = copy.deepcopy(coerced_value)
+        stored_type = decl_type
+        if (
+            decl_type.kind == "LIST"
+            and decl_type.size is None
+            and isinstance(coerced_value, list)
+        ):
+            stored_type = DeclType("LIST", decl_type.elem_kind or "INT", len(coerced_value))
+        scope["retvar"] = stored_type
 
     def _push_list_packet(self, values: List[Any]) -> None:
         for item in values:
@@ -484,6 +498,9 @@ class SelVerIRInterpreter:
             raise IRRuntimeError(f"Unknown jump target label: {label}")
         self.pc = self.label_to_index[label]
 
+    def _snapshot_runtime_configuration(self) -> RuntimeConfiguration:
+        return copy.deepcopy(self.runtime)
+
     # ---------- execution ----------
     def run(
         self,
@@ -491,18 +508,23 @@ class SelVerIRInterpreter:
     ) -> ExecutionResult:
         self.load(program) # load the program into the interpreter
 
+        if self.verifier is not None:
+            self.verifier.handle_program_start()
+
         while 0 <= self.pc < len(self.code):
             if self.steps >= self.max_steps:
                 raise IRRuntimeError("Maximum execution step limit reached.")
 
             instr = self.code[self.pc]
             self._step(instr)
-            self._refresh_public_views()
             self.steps += 1
 
+        self._finish_verifier()
+
+        state, scope = self._refresh_public_views()
         return ExecutionResult(
-            state=copy.deepcopy(self.state),
-            types=copy.deepcopy(self.types),
+            state=state,
+            scope=scope,
             stack=copy.deepcopy(self.stack),
             pc=self.pc,
             steps=self.steps,
@@ -538,12 +560,12 @@ class SelVerIRInterpreter:
             return
 
         if op == "LLOAD":
-            self._exec_lload(instr.args)
+            self._exec_lload(instr.args, getattr(instr, "span", None))
             self.pc += 1
             return
 
         if op == "LSTORE":
-            self._exec_lstore(instr.args)
+            self._exec_lstore(instr.args, getattr(instr, "span", None))
             self.pc += 1
             return
 
@@ -663,14 +685,25 @@ class SelVerIRInterpreter:
             return
 
         if op == "CSCOPE":
-            self.scopes.append(self._fresh_scope())
+            self.runtime = self._fresh_runtime(
+                state_parent=self.runtime.state,
+                scope_parent=self.runtime.scope,
+            )
+            if self.verifier is not None:
+                self.verifier.on_scope_enter(self.runtime.scope.scope_id)
             self.pc += 1
             return
 
         if op == "PSCOPE":
-            if len(self.scopes) == 1:
+            leaving_scope_id = self.runtime.scope.scope_id
+            if self.runtime.state.parent is None or self.runtime.scope.parent is None:
                 raise IRRuntimeError("Cannot leave the root scope.")
-            self.scopes.pop()
+            self.runtime = RuntimeConfiguration(
+                state=self.runtime.state.parent,
+                scope=self.runtime.scope.parent,
+            )
+            if self.verifier is not None:
+                self.verifier.on_scope_exit(leaving_scope_id)
             self.pc += 1
             return
 
@@ -687,11 +720,13 @@ class SelVerIRInterpreter:
                 raise IRRuntimeError(f"FUNCENV return type for '{name}' does not match the function table.")
             self.call_stack[-1] = CallFrame(
                 return_pc=frame.return_pc,
-                scopes=frame.scopes,
+                runtime=frame.runtime,
                 function_name=frame.function_name,
                 return_type=return_type if return_type is not None else frame.return_type,
             )
-            self.scopes = [self._fresh_scope()]
+            self.runtime = self._fresh_runtime()
+            if self.verifier is not None:
+                self.verifier.on_scope_enter(self.runtime.scope.scope_id)
             self.pc += 1
             return
 
@@ -699,10 +734,88 @@ class SelVerIRInterpreter:
             self._exec_ret(instr.args)
             return
 
+        if op == "WRITE":
+            print(self._pop(), end="")
+            self.pc += 1
+            return
+
+        if op == "WRITELN":
+            print(self._pop(), end="\n")
+            self.pc += 1
+            return
+        
+        if op == "LWRITE":
+            items = self._pop_list_packet(expected_size=None)
+            print(items, end="")
+            self.pc += 1
+            return
+
+        if op == "LWRITELN":
+            items = self._pop_list_packet(expected_size=None)
+            print(items, end="\n")
+            self.pc += 1
+            return
+
+        if op == "READ":
+            value = input()
+            self._push(_parse_scalar_token(value))
+            self.pc += 1
+            return
+
         if op == "VERI":
-            spec = instr.args[0] if instr.args else None
+            spec_id = instr.args[0] if instr.args else -1
+            formula_text = instr.args[1] if len(instr.args) > 1 else None
             if self.verifier is not None:
-                self.verifier(spec, copy.deepcopy(self.state))
+                self._dispatch_verifier_spec(spec_id, formula_text)
+            self.pc += 1
+            return
+
+        if op == "SPEC_START":
+            if len(instr.args) != 1:
+                raise IRRuntimeError("SPEC_START expects one name.")
+            name = str(instr.args[0]).strip()
+            if self.verifier is not None:
+                self.verifier.handle_plt_start_marker(name, self._snapshot_runtime_configuration())
+            self.pc += 1
+            return
+
+        if op == "SPEC_END":
+            if len(instr.args) != 1:
+                raise IRRuntimeError("SPEC_END expects one name.")
+            if self.verifier is not None:
+                self.verifier.handle_flt_end_marker(
+                    instr.args[0],
+                    self._snapshot_runtime_configuration(),
+                )
+            self.pc += 1
+            return
+
+        if op == "VERIP":
+            spec_id = instr.args[0] if instr.args else ""
+            formula_text = instr.args[1] if len(instr.args) > 1 else ""
+            if self.verifier is not None:
+                result = self._dispatch_verifier_spec_boolean(spec_id, formula_text)
+                self._push(1 if result else 0)
+            else:
+                self._push(1)  # without verifier, optimistically treat as True
+            self.pc += 1
+            return
+
+        if op == "OBT":
+            var_name = str(instr.args[0]).strip()
+            spec_id = instr.args[1]
+            formula_text = instr.args[2] if len(instr.args) > 2 else ""
+            if self.verifier is not None:
+                witness_value, witness_type = self._dispatch_obtain(var_name, spec_id, formula_text)
+                self._push(witness_value)
+            else:
+                raise IRRuntimeError("OBT requires a verifier to be attached.")
+            self.pc += 1
+            return
+
+        if op == "STEP":
+            if self.verifier is not None:
+                self.verifier.handle_step(self._snapshot_runtime_configuration())
             self.pc += 1
             return
 
@@ -722,10 +835,18 @@ class SelVerIRInterpreter:
         decl_type = _type_from_object(type_obj)
         if decl_type.kind == "INT":
             self._declare(name, decl_type, 0)
+
+            # record the declaration step of the variable
+            if self.verifier is not None:
+                self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
         if decl_type.kind == "FLOAT":
             self._declare(name, decl_type, 0.0)
+
+            # record the declaration step of the variable
+            if self.verifier is not None:
+                self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
         if decl_type.kind == "LIST":
@@ -733,6 +854,10 @@ class SelVerIRInterpreter:
                 raise IRRuntimeError("Static list declaration requires a size.")
             zero = 0 if decl_type.elem_kind == "INT" else 0.0
             self._declare(name, decl_type, [zero for _ in range(decl_type.size)])
+
+            # record the declaration step of the variable
+            if self.verifier is not None:
+                self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
         raise IRRuntimeError(f"Unsupported DECL type: {decl_type}")
@@ -755,6 +880,10 @@ class SelVerIRInterpreter:
         runtime_type = DeclType("LIST", decl_type.elem_kind, size)
         zero = 0 if decl_type.elem_kind == "INT" else 0.0
         self._declare(name, runtime_type, [zero for _ in range(size)])
+
+        # record the declaration step of the variable
+        if self.verifier is not None:
+            self.verifier.register_declaration(name, self.runtime.scope.scope_id)
 
     def _exec_push(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -788,6 +917,11 @@ class SelVerIRInterpreter:
         if decl_type.kind in {"INT", "FLOAT"}:
             value = self._pop()
             self._set_value(name, _coerce_value(value, decl_type))
+
+            # record the initialization step of the variable
+            if self.verifier is not None:
+                self.verifier.register_initial_assignment(name, self.runtime.scope)
+
             return
 
         if decl_type.kind == "LIST":
@@ -796,11 +930,16 @@ class SelVerIRInterpreter:
             items = self._pop_list_packet(expected_size=decl_type.size)
             list_value = _coerce_value(items, decl_type)
             self._set_value(name, list_value)
+
+            # record the initialization step of the variable
+            if self.verifier is not None:
+                self.verifier.register_initial_assignment(name, self.runtime.scope)
+
             return
 
         raise IRRuntimeError(f"Unsupported STORE target type: {decl_type}")
 
-    def _exec_lload(self, args: Tuple[Any, ...]) -> None:
+    def _exec_lload(self, args: Tuple[Any, ...], span=None) -> None:
         if len(args) != 1:
             raise IRRuntimeError("LLOAD expects one target list.")
         name = str(args[0]).strip() # get the name of the list
@@ -811,10 +950,17 @@ class SelVerIRInterpreter:
         idx = int(self._pop()) # index from the stack
         arr = self._get_value(name)
         if idx < 0 or idx >= len(arr):
-            raise IRRuntimeError(f"List index out of bounds: {name}[{idx}]")
+            if span is not None:
+                raise index_out_of_bounds_error(name=name, index=idx, length=len(arr), span=span)
+            raise IRRuntimeError(
+                f"valid index range for `{name}` is 0..{max(len(arr) - 1, 0)}",
+                code=DiagnosticCode.RUNTIME_INDEX_OUT_OF_BOUNDS,
+                title="index out of bounds",
+                notes=(f"`len({name})` evaluated to {len(arr)}",),
+            )
         self._push(arr[idx])
 
-    def _exec_lstore(self, args: Tuple[Any, ...]) -> None:
+    def _exec_lstore(self, args: Tuple[Any, ...], span=None) -> None:
         if len(args) != 1:
             raise IRRuntimeError("LSTORE expects one target list.")
         name = str(args[0]).strip()
@@ -828,10 +974,21 @@ class SelVerIRInterpreter:
 
         arr = self._get_value(name)
         if idx < 0 or idx >= len(arr):
-            raise IRRuntimeError(f"List index out of bounds: {name}[{idx}]")
+            if span is not None:
+                raise index_out_of_bounds_error(name=name, index=idx, length=len(arr), span=span)
+            raise IRRuntimeError(
+                f"valid index range for `{name}` is 0..{max(len(arr) - 1, 0)}",
+                code=DiagnosticCode.RUNTIME_INDEX_OUT_OF_BOUNDS,
+                title="index out of bounds",
+                notes=(f"`len({name})` evaluated to {len(arr)}",),
+            )
 
         elem_type = DeclType(decl_type.elem_kind or "INT", None, None)
         arr[idx] = _coerce_value(value, elem_type)
+
+        # record the initialization step of the variable
+        if self.verifier is not None:
+            self.verifier.register_initial_assignment(name, self.runtime.scope)
 
     def _exec_len(self, args: Tuple[Any, ...]) -> None:
         if len(args) != 1:
@@ -844,8 +1001,7 @@ class SelVerIRInterpreter:
 
         if decl_type.kind == "LIST":
             len_name = f"_{name}_len_1"
-            len_scope = self._find_scope_with_value(len_name)
-            if len_scope is not None:
+            if len_name in self.runtime.state:
                 self._push(int(self._get_value(len_name)))
                 return
             self._push(len(self._get_value(name)))
@@ -858,7 +1014,7 @@ class SelVerIRInterpreter:
             raise IRRuntimeError("CALL expects one function name or label.")
         target = args[0]
         if not isinstance(target, str) or _INT_RE.fullmatch(target.strip()):
-            self.call_stack.append(CallFrame(return_pc=self.pc + 1, scopes=tuple(self.scopes)))
+            self.call_stack.append(CallFrame(return_pc=self.pc + 1, runtime=self.runtime))
             self._jump_to_label(int(target))
             return
 
@@ -869,7 +1025,7 @@ class SelVerIRInterpreter:
         self.call_stack.append(
             CallFrame(
                 return_pc=self.pc + 1,
-                scopes=tuple(self.scopes),
+                runtime=self.runtime,
                 function_name=name,
                 return_type=entry.return_type,
             )
@@ -893,10 +1049,42 @@ class SelVerIRInterpreter:
         else:
             return_value = self._pop()
 
+        leaving_scope_id = self.runtime.scope.scope_id
+        if self.verifier is not None:
+            self.verifier.on_scope_exit(leaving_scope_id)
+
         frame = self.call_stack.pop()
-        self.scopes = list(frame.scopes)
+        self.runtime = frame.runtime
         self._set_retvar(return_value, return_type)
         self.pc = frame.return_pc
+
+    def _finish_verifier(self) -> None:
+        if self.verifier is None:
+            return
+        self.verifier.on_program_end(self._snapshot_runtime_configuration())
+
+    def _dispatch_verifier_spec(self, spec_id: Any, formula_text: str) -> None:
+        assert self.verifier is not None
+        self.verifier.handle_veri(spec_id, formula_text, self._snapshot_runtime_configuration())
+
+    def _dispatch_verifier_spec_boolean(self, spec_id: Any, formula_text: str) -> bool:
+        assert self.verifier is not None
+        return self.verifier.check_spec_boolean(
+            spec_id,
+            formula_text,
+            self._snapshot_runtime_configuration(),
+        )
+
+    def _dispatch_obtain(self, var_name: str, spec_id: Any, formula_text: str) -> Tuple[Any, DeclType]:
+        assert self.verifier is not None
+        return self.verifier.extract_witness(
+            var_name,
+            spec_id,
+            formula_text,
+            self._snapshot_runtime_configuration(),
+        )
+
+
 
 
 # -----------------------
@@ -904,7 +1092,7 @@ class SelVerIRInterpreter:
 # -----------------------
 def interpret_ir_text(
     text: str,
-    verifier: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
+    verifier: Optional[VerificationEngine] = None,
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
     program = parse_ir_text(text)
@@ -916,7 +1104,7 @@ def interpret_ir_text(
 
 def interpret_ir_code(
     code: Iterable[IRInstr],
-    verifier: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
+    verifier: Optional[VerificationEngine] = None,
     max_steps: int = 1_000_000,
 ) -> ExecutionResult:
     return SelVerIRInterpreter(verifier=verifier, max_steps=max_steps).run(program=code)

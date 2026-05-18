@@ -7,7 +7,8 @@
 %ignore /\/\/[^\n]*/
 %ignore /\/\*[\s\S]*?\*\//
 
-IDENT: /[A-Za-z_][A-Za-z0-9_]*/
+SPEC_SLOT: /@[A-Za-z0-9_]+/
+IDENT: /[A-Za-z][A-Za-z0-9_]*/
 FLOAT_LIT: /[0-9]+\.[0-9]+/
 INT_LIT: /[0-9]+/
 
@@ -23,10 +24,9 @@ stmt_seq: stmt*
 
 ?stmt: terminated_stmt
      | unterminated_stmt
-     | spec_annot                                        -> spec_annot
-     | ";"                                               -> empty_stmt
+     | empty_stmt
 
-?spec_annot: "{" spec "}" ";"
+empty_stmt: ";"
 
 // ------------------ STATEMENTS ------------------
 
@@ -35,8 +35,18 @@ stmt_seq: stmt*
 ?semicolon_stmt: decl
                | assign
                | list_assign
-               | "pass"                                               -> pass_stmt
+               | pass_stmt
                | func_call
+               | write_stmt
+               | writeline_stmt
+               | spec_annot
+
+pass_stmt: "pass"
+
+write_stmt: "write" "(" aexp ")"
+writeline_stmt: "writeline" "(" aexp ")"
+
+spec_annot: SPEC_SLOT
 
 // Statements that MUST NOT end with ';'
 ?unterminated_stmt: if_stmt
@@ -44,16 +54,16 @@ stmt_seq: stmt*
 
 // Explicit fi removes dangling-else ambiguity
 if_stmt: "if" bexp "then" stmt_seq "else" stmt_seq "fi"        -> if_else_stmt
-       | "if" bexp "then" stmt_seq "fi"                            -> if_stmt
+       | "if" bexp "then" stmt_seq "fi"
 
-while_stmt: "while" bexp "do" stmt_seq "od"                        -> while_stmt
+while_stmt: "while" bexp "do" stmt_seq "od"
 
 decl: IDENT ":" type                                                      -> decl_stmt
 assign: IDENT ":=" aexp                                                   -> assign_stmt
 list_assign: indexed_value ":=" aexp                                      -> list_assign_stmt
 
-?indexed_value: IDENT "[" aexp "]"                                        -> a_index
-              | indexed_value "[" aexp "]"                                -> a_index
+?indexed_value: IDENT "[" aexp "]"                                        -> a_index_base
+              | indexed_value "[" aexp "]"                                -> a_index_chain
 
 // ------------------ TYPES ------------------
 ?basic_type: "Int"                                                              -> type_int
@@ -61,17 +71,17 @@ list_assign: indexed_value ":=" aexp                                      -> lis
 ?type: basic_type
      | "List" "[" basic_type "," INT_LIT "," aexp_list "]"                  -> type_list
 
-aexp_list: aexp ("," aexp)*                                               -> aexp_list
+aexp_list: aexp ("," aexp)*
 
 // ------------------ IMMEDIATES ------------------
 ?imm: INT_LIT                                                             -> int_lit
     | FLOAT_LIT                                                           -> float_lit
     | list_lit
 
-list_lit: "[" [imm ("," imm)*] "]"                                        -> list_lit
+list_lit: "[" [imm ("," imm)*] "]"
 
 // ------------------ ARITHMETIC EXPRESSIONS ------------------
-aexp: aexp_sum                                                              -> aexp
+aexp: aexp_sum
 
 ?aexp_sum: aexp_sum "+" aexp_term                                         -> add
          | aexp_sum "-" aexp_term                                         -> sub
@@ -89,9 +99,11 @@ aexp: aexp_sum                                                              -> a
          | "len" "(" IDENT ")"                                            -> a_len
          | indexed_value                                                  
          | "(" aexp ")"
+         | "read" "(" ")"                                                 -> a_read
+         | "obtain" "(" "&" IDENT "," SPEC_SLOT ")"                       -> a_obtain
 
 // ------------------ BOOLEAN EXPRESSIONS ------------------
-bexp: b_or                                                                -> bexp
+bexp: b_or
 
 ?b_or: b_or "or" b_xor                                                    -> bor
      | b_xor
@@ -110,52 +122,12 @@ bexp: b_or                                                                -> bex
       | comparison
       | aexp                                                              -> truthy
       | "(" bexp ")"
+      | SPEC_SLOT                                                         -> bspec
 
 comparison: aexp COMP_OP aexp                                             -> compare
 
-// ------------------ SPECIFICATIONS ------------------
-?spec: spec_imp                                                          
-
-?spec_imp: spec_or "=>" spec_imp                                          -> simp
-         | spec_or
-
-?spec_or: spec_or "||" spec_and                                           -> sor
-        | spec_and
-
-?spec_and: spec_and "&&" spec_temp                                        -> sand
-         | spec_temp
-
-?spec_temp: spec_temp "Since" spec_unary                                  -> ssince
-          | spec_temp "Until" spec_unary                                  -> suntil
-          | spec_unary
-
-?spec_unary: "!" spec_unary                                               -> snot
-           | "Previously" spec_unary                                      -> spreviously
-           | "Once" spec_unary                                            -> sonce
-           | "Historically" spec_unary                                    -> shistorically
-           | "Next" spec_unary                                            -> snext
-           | "Eventually" spec_unary                                      -> seventually
-           | "Always" spec_unary                                          -> salways
-           | "Forall" IDENT domain_opt "." spec                           -> sforall
-           | "Exists" IDENT domain_opt "." spec                           -> sexists
-           | bexp                                                         -> sbexp
-           | "(" spec ")"
-
-_domain_in: "in" domain
-domain_opt: _domain_in?                                                   -> domain_opt
-
-?domain: interval
-       | IDENT                                                            -> domain_ident
-       | set_lit
-       | type                                                             -> domain_type
-
-interval: "[" aexp "," aexp ")"                                           -> interval_halfopen
-        | "[" aexp "," aexp "]"                                           -> interval_closed
-
-set_lit: "{" aexp_list "}"                                                -> set_lit
-
 // ------------------ FUNCTIONS ------------------
-func_decl: "function" IDENT "(" param_list? ")" "->" return_type "::" func_stmt_seq "end" -> func_decl
+func_decl: "function" IDENT "(" param_list? ")" "->" return_type "::" func_stmt_seq "end"
 
 ?return_type: type
             | dynamic_list_type
@@ -166,33 +138,33 @@ func_decl: "function" IDENT "(" param_list? ")" "->" return_type "::" func_stmt_
 ?param_type_node: type
                 | dynamic_list_type
 
-dynamic_list_type: "List" "[" basic_type "," INT_LIT "]"                  -> dynamic_list_type
+dynamic_list_type: "List" "[" basic_type "," INT_LIT "]"
 
 func_stmt_seq: func_stmt*
 ?func_stmt:  func_terminated_stmt
            | func_unterminated_stmt
-           | spec_annot                                                 -> spec_annot
-           | ";"                                                          -> empty_stmt
+           | empty_stmt
 
 ?func_terminated_stmt: func_semicolon_stmt ";"
 ?func_semicolon_stmt: decl
                     | assign
                     | list_assign
                     | func_call
-                    | "pass"                                                 -> pass_stmt
+                    | pass_stmt
                     | return_stmt
+                    | spec_annot
 
 ?func_unterminated_stmt: func_if_stmt
                         | func_while_stmt
 
 func_if_stmt: "if" bexp "then" func_stmt_seq "else" func_stmt_seq "fi"        -> func_if_else_stmt
-             | "if" bexp "then" func_stmt_seq "fi"                              -> func_if_stmt
+             | "if" bexp "then" func_stmt_seq "fi"
 
-func_while_stmt: "while" bexp "do" func_stmt_seq "od"                          -> func_while_stmt
+func_while_stmt: "while" bexp "do" func_stmt_seq "od"
 
-return_stmt: "return" aexp                                                    -> return_stmt
+return_stmt: "return" aexp
 
 // Calls
-func_call: "call" IDENT "(" arg_list_opt ")"                                  -> func_call
+func_call: "call" IDENT "(" arg_list_opt ")"
 ?arg_list_opt: arg_list?
-?arg_list: aexp ("," aexp)* -> arg_list
+?arg_list: aexp ("," aexp)*

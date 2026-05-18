@@ -26,6 +26,25 @@ Or install the project in editable mode to enable the `selveri` command:
 pip install -e .
 ```
 
+### Future LTL (fLTL) and MONA
+
+Specs using temporal operators such as **Eventually**, **Always**, and **Until** are verified by compiling an automaton through [MONA](https://www.brics.dk/mona/). The `mona` executable must be on your `PATH`; otherwise SelVeri raises a verification error for those specs.
+
+**Linux (Debian/Ubuntu)** — MONA is packaged as `mona` in the universe repository:
+
+```
+sudo apt update
+sudo apt install mona
+```
+
+**macOS / Windows** — Install from the [official MONA page](https://www.brics.dk/mona/), or use a Linux environment (**WSL** on Windows, then follow the Debian/Ubuntu steps).
+
+To confirm:
+
+```
+mona -h
+```
+
 ## Run Full Pipeline
 
 Run parser -> compiler -> interpreter from the project root:
@@ -51,3 +70,12 @@ Or choose a custom path:
 ```
 selveri examples/example_loop.svi --emit-ir --output-ir out/example_loop.svir
 ```
+
+## Error Diagnostics
+
+SelVeri reports parser, preprocessor, compiler, runtime, and verification
+failures as structured diagnostics with source spans, labels, hints, and
+counterexamples when available.
+
+See [docs/errors.md](docs/errors.md) for diagnostic codes, examples, and
+guidance for adding new errors.

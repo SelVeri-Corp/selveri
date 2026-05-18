@@ -1,0 +1,30 @@
+// =====================================================
+// FOL Quantifiers: expected failures
+// Uncomment one at a time to test each failure.
+// =====================================================
+
+lst : List[Int, 1, 5];
+lst := [2, 4, 6, 8, 10];
+
+// --- Forall: not all > 5 (lst[0]=2, lst[1]=4 fail) ---
+{ Forall i in [0...4] . lst[&i] > 5 };          // False
+
+// --- Exists: no such element ---
+// { Exists i in [0...4] . lst[&i] = 99 };       // False
+
+// --- Forall over ident domain ---
+// { Forall e in lst . &e > 5 };                  // False (2, 4 fail)
+
+// --- Exists over ident domain ---
+// { Exists e in lst . &e = 3 };                  // False
+
+// --- Forall over explicit values: 2 is not > 3 ---
+// { Forall v in [2, 4, 6] . &v > 3 };           // False
+
+// --- Exists over explicit values ---
+// { Exists v in [1, 3, 5] . &v = 4 };           // False
+
+// --- Forall with implication: 5 is not >= 10 ---
+// mixed : List[Int, 1, 6];
+// mixed := [0, 5, 0, 10, 0, 15];
+// { Forall i in [0...5] . (mixed[&i] > 0) => (mixed[&i] >= 10) }; // False

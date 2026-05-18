@@ -1,0 +1,94 @@
+// =====================================================
+// FOL Quantifiers: all specs should PASS (True)
+// =====================================================
+
+lst : List[Int, 1, 5];
+lst := [2, 4, 6, 8, 10];
+
+// ==============================
+// Domain: Range [lo...hi]
+// ==============================
+
+{ Forall i in [0...4] . lst[&i] > 0 };          // True  (all positive)
+{ Forall i in [0...4] . lst[&i] <= 10 };         // True
+{ Exists i in [0...4] . lst[&i] = 6 };          // True  (lst[2] = 6)
+{ Exists i in [0...4] . lst[&i] > 9 };          // True  (lst[4] = 10)
+
+// --- Forall with arithmetic body ---
+{ Forall i in [0...3] . lst[&i] < lst[&i + 1] }; // True  (strictly increasing)
+{ Forall i in [0...3] . lst[&i + 1] - lst[&i] = 2 }; // True (constant step of 2)
+
+// --- Range with computed bounds ---
+{ Forall i in [0...len(lst) - 1] . lst[&i] > 0 }; // True
+
+// ==============================
+// Domain: Identifier (list name)
+// ==============================
+
+{ Forall e in lst . &e > 0 };              // True
+{ Exists e in lst . &e = 10 };             // True
+
+// ==============================
+// Domain: Explicit values
+// ==============================
+
+a : Int;
+a := 2;
+b : Int;
+b := 4;
+c : Int;
+c := 6;
+
+{ Forall v in [a, b, c] . &v > 0 };       // True
+{ Exists v in [a, b, c] . &v = 4 };       // True
+
+// ==============================
+// Nested Quantifiers
+// ==============================
+
+mat : List[Int, 1, 4];
+mat := [1, 2, 3, 4];
+
+{ Forall i in [0...3] . Forall j in [0...3] . (&i <= &j) => (mat[&i] <= mat[&j]) }; // True
+{ Exists i in [0...3] . Exists j in [0...3] . mat[&i] + mat[&j] = 5 };              // True (1+4, 2+3)
+{ Forall i in [0...3] . Exists j in [0...3] . mat[&j] >= mat[&i] };                 // True
+
+// ==============================
+// Quantifier + boolean connectives
+// ==============================
+
+{ (Forall i in [0...4] . lst[&i] > 0) && (len(lst) = 5) }; // True
+{ (Exists i in [0...4] . lst[&i] = 2) || false };           // True
+{ !(Forall i in [0...4] . lst[&i] = 2) };                   // True (not all equal to 2)
+{ !(Exists i in [0...4] . lst[&i] = 99) };                  // True (none equal to 99)
+
+// ==============================
+// Forall with implication in body
+// ==============================
+
+mixed : List[Int, 1, 6];
+mixed := [0, 5, 0, 10, 0, 15];
+
+{ Forall i in [0...5] . (mixed[&i] > 0) => (mixed[&i] >= 5) };  // True
+
+// ==============================
+// Forall with variable domain
+// ==============================
+
+
+{ Forall x in Var[Int]. &x > 0 }; // True
+{ Exists j in Var[Int]. &j = 4 };  // True
+
+neg : Int;
+neg := -7;
+{ Exists x in Var[Int]. &x <= 0 }; // True, with neg
+
+
+p : Float;
+p := 3.14159;
+e : Float;
+e := 2.71828;
+
+{ Forall x in Var[Float]. &x > 0 }; // True, with p, e
+{ Forall x in Var[Float]. &x < 4 }; // True, with p, e
+{ Exists x in Var[Float]. &x = 3.14159 }; // True, with p

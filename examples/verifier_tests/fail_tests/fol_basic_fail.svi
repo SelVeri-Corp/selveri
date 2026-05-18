@@ -1,0 +1,23 @@
+// =====================================================
+// FOL Basic: expected failures
+// Each file should be run individually; each should
+// raise VerificationError.
+// =====================================================
+
+x : Int;
+x := 10;
+y : Int;
+y := 3;
+z : Int;
+z := 10;
+
+// ---- Uncomment one at a time to test each failure ----
+
+// { x = 5 };            // False
+// { x < y };         // False
+ { x < z };         // False (not strict)
+// { x <= y };        // False
+// { y > x };         // False
+// { x > z };         // False
+// { y >= x };        // False
+// { false };         // False

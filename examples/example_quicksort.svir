@@ -1,4 +1,4 @@
-0: GOTO 239
+0: GOTO 278
 1: FUNCENV append, LIST[INT, 1]
 2: DECL INT, element
 3: STORE element
@@ -8,253 +8,300 @@
 7: LDECL LIST[INT], lst
 8: LOAD _lst_len_1
 9: STORE lst
-10: DECL INT, _res_len_1
-11: LEN lst
-12: PUSH 1
-13: ADD
-14: STORE _res_len_1
-15: PUSH 1
-16: LEN lst
-17: PUSH 1
-18: ADD
-19: MUL
-20: LDECL LIST[INT], res
-21: DECL INT, i
-22: PUSH 0
-23: STORE i
-24: LOAD i
-25: LEN lst
-26: LT
-27: JZ 39
-28: CSCOPE
-29: LOAD i
-30: LLOAD lst
-31: LOAD i
-32: LSTORE res
+10: STEP
+11: DECL INT, _res_len_1
+12: LEN lst
+13: PUSH 1
+14: ADD
+15: STORE _res_len_1
+16: PUSH 1
+17: LEN lst
+18: PUSH 1
+19: ADD
+20: MUL
+21: LDECL LIST[INT], res
+22: STEP
+23: DECL INT, i
+24: STEP
+25: PUSH 0
+26: STORE i
+27: STEP
+28: LOAD i
+29: LEN lst
+30: LT
+31: JZ 45
+32: CSCOPE
 33: LOAD i
-34: PUSH 1
-35: ADD
-36: STORE i
-37: PSCOPE
-38: GOTO 24
-39: NOOP
-40: LOAD element
-41: LEN lst
-42: LSTORE res
-43: LOAD res
-44: RET
-45: FUNCENV init, LIST[INT, 1]
-46: DECL INT, _lst_len_1
-47: STORE _lst_len_1
-48: LOAD _lst_len_1
-49: LDECL LIST[INT], lst
-50: LOAD _lst_len_1
-51: STORE lst
-52: DECL INT, _res_len_1
-53: LEN lst
-54: PUSH 1
-55: SUB
-56: STORE _res_len_1
-57: PUSH 1
-58: LEN lst
-59: PUSH 1
-60: SUB
-61: MUL
-62: LDECL LIST[INT], res
-63: DECL INT, i
-64: PUSH 0
-65: STORE i
-66: LOAD i
-67: LEN lst
-68: PUSH 1
-69: SUB
-70: LT
-71: JZ 83
-72: CSCOPE
-73: LOAD i
-74: LLOAD lst
-75: LOAD i
-76: LSTORE res
+34: LLOAD lst
+35: LOAD i
+36: LSTORE res
+37: STEP
+38: LOAD i
+39: PUSH 1
+40: ADD
+41: STORE i
+42: STEP
+43: PSCOPE
+44: GOTO 28
+45: NOOP
+46: LOAD element
+47: LEN lst
+48: LSTORE res
+49: STEP
+50: LOAD res
+51: RET
+52: FUNCENV init, LIST[INT, 1]
+53: DECL INT, _lst_len_1
+54: STORE _lst_len_1
+55: LOAD _lst_len_1
+56: LDECL LIST[INT], lst
+57: LOAD _lst_len_1
+58: STORE lst
+59: STEP
+60: DECL INT, _res_len_1
+61: LEN lst
+62: PUSH 1
+63: SUB
+64: STORE _res_len_1
+65: PUSH 1
+66: LEN lst
+67: PUSH 1
+68: SUB
+69: MUL
+70: LDECL LIST[INT], res
+71: STEP
+72: DECL INT, i
+73: STEP
+74: PUSH 0
+75: STORE i
+76: STEP
 77: LOAD i
-78: PUSH 1
-79: ADD
-80: STORE i
-81: PSCOPE
-82: GOTO 66
-83: NOOP
-84: LOAD res
-85: RET
-86: FUNCENV partition, LIST[INT, 1]
-87: DECL INT, high
-88: STORE high
-89: DECL INT, low
-90: STORE low
-91: DECL INT, _lst_len_1
-92: STORE _lst_len_1
-93: LOAD _lst_len_1
-94: LDECL LIST[INT], lst
-95: LOAD _lst_len_1
-96: STORE lst
-97: DECL INT, pivot
-98: LOAD high
-99: LLOAD lst
-100: STORE pivot
-101: DECL INT, i
-102: LOAD low
-103: PUSH 1
-104: SUB
-105: STORE i
-106: DECL INT, j
-107: LOAD low
-108: STORE j
-109: LOAD j
-110: LOAD high
-111: LT
-112: JZ 143
-113: CSCOPE
-114: LOAD j
-115: LLOAD lst
-116: LOAD pivot
-117: LT
-118: JZ 136
-119: CSCOPE
-120: LOAD i
-121: PUSH 1
-122: ADD
-123: STORE i
-124: DECL INT, temp
-125: LOAD j
-126: LLOAD lst
-127: STORE temp
-128: LOAD i
-129: LLOAD lst
-130: LOAD j
-131: LSTORE lst
-132: LOAD temp
-133: LOAD i
-134: LSTORE lst
-135: PSCOPE
-136: NOOP
-137: LOAD j
-138: PUSH 1
-139: ADD
-140: STORE j
-141: PSCOPE
-142: GOTO 109
-143: NOOP
-144: DECL INT, temp
-145: LOAD high
-146: LLOAD lst
-147: STORE temp
-148: LOAD i
-149: PUSH 1
-150: ADD
-151: LLOAD lst
-152: LOAD high
-153: LSTORE lst
-154: LOAD temp
-155: LOAD i
-156: PUSH 1
-157: ADD
+78: LEN lst
+79: PUSH 1
+80: SUB
+81: LT
+82: JZ 96
+83: CSCOPE
+84: LOAD i
+85: LLOAD lst
+86: LOAD i
+87: LSTORE res
+88: STEP
+89: LOAD i
+90: PUSH 1
+91: ADD
+92: STORE i
+93: STEP
+94: PSCOPE
+95: GOTO 77
+96: NOOP
+97: LOAD res
+98: RET
+99: FUNCENV partition, LIST[INT, 1]
+100: DECL INT, high
+101: STORE high
+102: DECL INT, low
+103: STORE low
+104: DECL INT, _lst_len_1
+105: STORE _lst_len_1
+106: LOAD _lst_len_1
+107: LDECL LIST[INT], lst
+108: LOAD _lst_len_1
+109: STORE lst
+110: STEP
+111: DECL INT, pivot
+112: STEP
+113: LOAD high
+114: LLOAD lst
+115: STORE pivot
+116: STEP
+117: DECL INT, i
+118: STEP
+119: LOAD low
+120: PUSH 1
+121: SUB
+122: STORE i
+123: STEP
+124: DECL INT, j
+125: STEP
+126: LOAD low
+127: STORE j
+128: STEP
+129: LOAD j
+130: LOAD high
+131: LT
+132: JZ 169
+133: CSCOPE
+134: LOAD j
+135: LLOAD lst
+136: LOAD pivot
+137: LT
+138: JZ 161
+139: CSCOPE
+140: LOAD i
+141: PUSH 1
+142: ADD
+143: STORE i
+144: STEP
+145: DECL INT, temp
+146: STEP
+147: LOAD j
+148: LLOAD lst
+149: STORE temp
+150: STEP
+151: LOAD i
+152: LLOAD lst
+153: LOAD j
+154: LSTORE lst
+155: STEP
+156: LOAD temp
+157: LOAD i
 158: LSTORE lst
-159: LOAD lst
-160: LOAD i
-161: PUSH 1
-162: ADD
-163: CALL append
-164: LOAD retvar
-165: RET
-166: FUNCENV quickSort, LIST[INT, 1]
-167: DECL INT, high
-168: STORE high
-169: DECL INT, low
-170: STORE low
-171: DECL INT, _lst_len_1
-172: STORE _lst_len_1
-173: LOAD _lst_len_1
-174: LDECL LIST[INT], lst
-175: LOAD _lst_len_1
-176: STORE lst
-177: LOAD low
-178: LOAD high
-179: LT
-180: JZ 234
-181: CSCOPE
-182: DECL INT, _encoded_len_1
-183: LEN lst
-184: PUSH 1
-185: ADD
-186: STORE _encoded_len_1
-187: PUSH 1
-188: LEN lst
-189: PUSH 1
-190: ADD
-191: MUL
-192: LDECL LIST[INT], encoded
-193: DECL INT, _clean_len_1
-194: LEN lst
-195: STORE _clean_len_1
-196: PUSH 1
-197: LEN lst
-198: MUL
-199: LDECL LIST[INT], clean
-200: DECL INT, pi
-201: LOAD lst
-202: LOAD low
-203: LOAD high
-204: CALL partition
-205: LOAD retvar
-206: STORE encoded
-207: LEN lst
-208: LLOAD encoded
-209: STORE pi
-210: LOAD encoded
-211: CALL init
-212: LOAD retvar
-213: STORE clean
-214: LOAD clean
-215: LOAD low
-216: LOAD pi
-217: PUSH 1
-218: SUB
-219: CALL quickSort
-220: LOAD retvar
-221: STORE clean
-222: LOAD clean
-223: LOAD pi
-224: PUSH 1
-225: ADD
-226: LOAD high
-227: CALL quickSort
-228: LOAD retvar
-229: STORE clean
-230: LOAD clean
-231: RET
-232: PSCOPE
-233: GOTO 238
-234: CSCOPE
+159: STEP
+160: PSCOPE
+161: NOOP
+162: LOAD j
+163: PUSH 1
+164: ADD
+165: STORE j
+166: STEP
+167: PSCOPE
+168: GOTO 129
+169: NOOP
+170: DECL INT, temp
+171: STEP
+172: LOAD high
+173: LLOAD lst
+174: STORE temp
+175: STEP
+176: LOAD i
+177: PUSH 1
+178: ADD
+179: LLOAD lst
+180: LOAD high
+181: LSTORE lst
+182: STEP
+183: LOAD temp
+184: LOAD i
+185: PUSH 1
+186: ADD
+187: LSTORE lst
+188: STEP
+189: LOAD lst
+190: LOAD i
+191: PUSH 1
+192: ADD
+193: CALL append
+194: LOAD retvar
+195: RET
+196: FUNCENV quickSort, LIST[INT, 1]
+197: DECL INT, high
+198: STORE high
+199: DECL INT, low
+200: STORE low
+201: DECL INT, _lst_len_1
+202: STORE _lst_len_1
+203: LOAD _lst_len_1
+204: LDECL LIST[INT], lst
+205: LOAD _lst_len_1
+206: STORE lst
+207: STEP
+208: LOAD low
+209: LOAD high
+210: LT
+211: JZ 273
+212: CSCOPE
+213: DECL INT, _encoded_len_1
+214: LEN lst
+215: PUSH 1
+216: ADD
+217: STORE _encoded_len_1
+218: PUSH 1
+219: LEN lst
+220: PUSH 1
+221: ADD
+222: MUL
+223: LDECL LIST[INT], encoded
+224: STEP
+225: DECL INT, _clean_len_1
+226: LEN lst
+227: STORE _clean_len_1
+228: PUSH 1
+229: LEN lst
+230: MUL
+231: LDECL LIST[INT], clean
+232: STEP
+233: DECL INT, pi
+234: STEP
 235: LOAD lst
-236: RET
-237: PSCOPE
-238: NOOP
-239: DECL INT, _lst_len_1
-240: PUSH 6
-241: STORE _lst_len_1
-242: PUSH 1
-243: PUSH 6
-244: MUL
-245: LDECL LIST[INT], lst
-246: PUSH 10
-247: PUSH 7
-248: PUSH 8
-249: PUSH 9
-250: PUSH 1
-251: PUSH 5
-252: PUSH 6
-253: STORE lst
-254: LOAD lst
-255: PUSH 0
-256: PUSH 5
-257: CALL quickSort
-258: LOAD retvar
-259: STORE lst
+236: LOAD low
+237: LOAD high
+238: CALL partition
+239: LOAD retvar
+240: STORE encoded
+241: STEP
+242: LEN lst
+243: LLOAD encoded
+244: STORE pi
+245: STEP
+246: LOAD encoded
+247: CALL init
+248: LOAD retvar
+249: STORE clean
+250: STEP
+251: LOAD clean
+252: LOAD low
+253: LOAD pi
+254: PUSH 1
+255: SUB
+256: CALL quickSort
+257: LOAD retvar
+258: STORE clean
+259: STEP
+260: LOAD clean
+261: LOAD pi
+262: PUSH 1
+263: ADD
+264: LOAD high
+265: CALL quickSort
+266: LOAD retvar
+267: STORE clean
+268: STEP
+269: LOAD clean
+270: RET
+271: PSCOPE
+272: GOTO 277
+273: CSCOPE
+274: LOAD lst
+275: RET
+276: PSCOPE
+277: NOOP
+278: DECL INT, _lst_len_1
+279: PUSH 7
+280: STORE _lst_len_1
+281: PUSH 1
+282: PUSH 7
+283: MUL
+284: LDECL LIST[INT], lst
+285: STEP
+286: PUSH 10
+287: PUSH 7
+288: PUSH 8
+289: PUSH 9
+290: PUSH 9
+291: PUSH 1
+292: PUSH 5
+293: PUSH 7
+294: STORE lst
+295: STEP
+296: LOAD lst
+297: PUSH 0
+298: PUSH 6
+299: CALL quickSort
+300: LOAD retvar
+301: STORE lst
+302: STEP
+303: VERI 0, 'Forall i in [1...len(lst) - 1] . lst[&i - 1] <= lst[&i]'
+304: VERI 1, 'Exists j in [1...len(lst) - 1] . lst[&j - 1] = lst[&j]'
+305: LOAD lst
+306: LWRITELN
