@@ -37,6 +37,7 @@ class IRInstr:
     label: int # used for the jump indexes
     op: str # operand
     args: Tuple[Union[str, int, float], ...] = () # arguments
+    span: object | None = None
 
     def render(self) -> str:
         rendered_args = ", ".join(self._render_arg(index, arg) for index, arg in enumerate(self.args))
@@ -185,8 +186,8 @@ class SelVeriCompiler:
     def pc(self) -> int:
         return len(self.code) # program counter
 
-    def emit(self, op: str, *args: Union[str, int, float]) -> int:
-        self.code.append(IRInstr(self.pc(), op, args))
+    def emit(self, op: str, *args: Union[str, int, float], span=None) -> int:
+        self.code.append(IRInstr(self.pc(), op, args, span if span is not None else self._current_span))
         return len(self.code) - 1 # index (label) of the last emitted instruction
 
     def _span_of(self, node: object | None):
@@ -213,7 +214,7 @@ class SelVeriCompiler:
         instr = self.code[patch.idx]
         if instr.op not in ("JZ", "GOTO"):
             raise CompilerError(f"Internal: patching non-jump at {patch.idx}: {instr.op}")
-        self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,))
+        self.code[patch.idx] = IRInstr(instr.label, instr.op, (target_pc,), instr.span)
 
     def _create_scope(self, fresh_env: bool = False) -> None:
         parent = None if fresh_env else self.scope
@@ -775,7 +776,7 @@ class SelVeriCompiler:
         for offset in range(flat_size):
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
-            self.emit("LLOAD", base_name)
+            self.emit("LLOAD", base_name, span=self._span_of(indices[-1]) or self._span_of(expr))
         self.emit("PUSH", flat_size)
         return actual_info
 
@@ -811,7 +812,7 @@ class SelVeriCompiler:
             return
         if isinstance(expr, AVar):
             self.emit("PUSH", offset)
-            self.emit("LLOAD", expr.name)
+            self.emit("LLOAD", expr.name, span=self._span_of(expr))
             return
         if isinstance(expr, AIndex):
             info, base_name, indices = self._resolve_list_access(expr)
@@ -821,7 +822,7 @@ class SelVeriCompiler:
             base_index = self._build_flat_index_expr(base_name, info, indices)
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
-            self.emit("LLOAD", base_name)
+            self.emit("LLOAD", base_name, span=self._span_of(indices[-1]) or self._span_of(expr))
             return
         raise CompilerError("Unsupported list expression on the right-hand side of sub-list assignment.")
 
@@ -850,7 +851,7 @@ class SelVeriCompiler:
                     f"Sub-list '{base_name}[..]' cannot appear as a scalar arithmetic expression."
                 )
             self.CA(self._build_flat_index_expr(base_name, info, indices))
-            self.emit("LLOAD", base_name)
+            self.emit("LLOAD", base_name, span=self._span_of(indices[-1]) or self._span_of(expr))
             return
         if isinstance(expr, AUnOp):
             if expr.op != "-":
@@ -1055,7 +1056,7 @@ class SelVeriCompiler:
                 raise CompilerError("Scalar list assignment requires a basic value of the element type.")
             self.CA(stmt.aexp)
             self.CA(self._build_flat_index_expr(base_name, info, indices))
-            self.emit("LSTORE", base_name)
+            self.emit("LSTORE", base_name, span=self._span_of(indices[-1]) or self._span_of(stmt.target))
             return
 
         target_sub_info = self._get_sublist_info(info, indices) # whole list case is impossible by parser (handled by regular assign)
@@ -1072,7 +1073,7 @@ class SelVeriCompiler:
             self._compile_rhs_list_element(stmt.aexp, offset)
             index_expr = base_index if offset == 0 else ABinOp("+", base_index, IntLit(offset))
             self.CA(index_expr)
-            self.emit("LSTORE", base_name)
+            self.emit("LSTORE", base_name, span=self._span_of(indices[-1]) or self._span_of(stmt.target))
 
     def _compile_block(self, stmts: List[Stmt]) -> None:
         self.emit("CSCOPE")

@@ -30,7 +30,8 @@ def run_pipeline(
     code = compiler.compile_program(program)
     ir_text = "\n".join(instr.render() for instr in code)
     end_time = perf_counter()
-    print(f"Compilation time: {end_time - start_time:.6f} seconds")
+    if debug:
+        print(f"Compilation time: {end_time - start_time:.6f} seconds")
 
     if output_ir is not None:
         output_ir.parent.mkdir(parents=True, exist_ok=True)
