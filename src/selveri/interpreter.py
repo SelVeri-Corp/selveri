@@ -135,6 +135,16 @@ def _parse_label_line(line: str) -> IRInstr:
         if len(args) != 2:
             raise IRParseError(f"Invalid VERI arguments: {line}")
         args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+    elif op == "VERIP":
+        args = _split_top_level_commas(rest)
+        if len(args) != 2:
+            raise IRParseError(f"Invalid VERIP arguments: {line}")
+        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+    elif op == "OBT":
+        args = _split_top_level_commas(rest)
+        if len(args) != 3:
+            raise IRParseError(f"Invalid OBT arguments: {line}")
+        args = (args[0].strip(), _parse_scalar_token(args[1]), _parse_scalar_token(args[2]))
     else:
         args = [_parse_scalar_token(p) for p in _split_top_level_commas(rest)]
 
@@ -779,6 +789,29 @@ class SelVerIRInterpreter:
             self.pc += 1
             return
 
+        if op == "VERIP":
+            spec_id = instr.args[0] if instr.args else ""
+            formula_text = instr.args[1] if len(instr.args) > 1 else ""
+            if self.verifier is not None:
+                result = self._dispatch_verifier_spec_boolean(spec_id, formula_text)
+                self._push(1 if result else 0)
+            else:
+                self._push(1)  # without verifier, optimistically treat as True
+            self.pc += 1
+            return
+
+        if op == "OBT":
+            var_name = str(instr.args[0]).strip()
+            spec_id = instr.args[1]
+            formula_text = instr.args[2] if len(instr.args) > 2 else ""
+            if self.verifier is not None:
+                witness_value, witness_type = self._dispatch_obtain(var_name, spec_id, formula_text)
+                self._push(witness_value)
+            else:
+                raise IRRuntimeError("OBT requires a verifier to be attached.")
+            self.pc += 1
+            return
+
         if op == "STEP":
             if self.verifier is not None:
                 self.verifier.handle_step(self._snapshot_runtime_configuration())
@@ -1015,9 +1048,28 @@ class SelVerIRInterpreter:
             return
         self.verifier.on_program_end(self._snapshot_runtime_configuration())
 
-    def _dispatch_verifier_spec(self, spec_id: int, formula_text: str) -> None:
+    def _dispatch_verifier_spec(self, spec_id: Any, formula_text: str) -> None:
         assert self.verifier is not None
         self.verifier.handle_veri(spec_id, formula_text, self._snapshot_runtime_configuration())
+
+    def _dispatch_verifier_spec_boolean(self, spec_id: Any, formula_text: str) -> bool:
+        assert self.verifier is not None
+        return self.verifier.check_spec_boolean(
+            spec_id,
+            formula_text,
+            self._snapshot_runtime_configuration(),
+        )
+
+    def _dispatch_obtain(self, var_name: str, spec_id: Any, formula_text: str) -> Tuple[Any, DeclType]:
+        assert self.verifier is not None
+        return self.verifier.extract_witness(
+            var_name,
+            spec_id,
+            formula_text,
+            self._snapshot_runtime_configuration(),
+        )
+
+
 
 
 # -----------------------

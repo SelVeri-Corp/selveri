@@ -6,6 +6,8 @@ set -uo pipefail
 
 PASS_DIR="examples/verifier_tests/pass_test"
 FAIL_DIR="examples/verifier_tests/fail_tests"
+SELVERI_LP_PASS_DIR="examples/selveri_lp_tests/pass_test"
+SELVERI_LP_FAIL_DIR="examples/selveri_lp_tests/fail_tests"
 EXAMPLES_DIR="examples"
 
 GREEN='\033[0;32m'
@@ -96,9 +98,10 @@ for f in "$FAIL_DIR"/*.svi; do
     output=$(selveri "$f" 2>&1)
     exit_code=$?
 
-    if echo "$output" | grep -q "VerificationError"; then
+    if echo "$output" | grep -qE "VerificationError|IRRuntimeError"; then
         spec=$(echo "$output" | grep -oP 'Specification #\K\d+' || echo "?")
-        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at spec #${spec})"
+        error_type=$(echo "$output" | grep -oP '(VerificationError|IRRuntimeError)' | head -1)
+        echo -e "  ${GREEN}✓${RESET} ${name}  (${error_type}, spec #${spec})"
         passed=$((passed + 1))
     elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "selveri.errors.CompilerError: Compiler error: No specification named"; then
         spec=$(echo "$output" | tail -n 1 | grep -oP "named '\K[^']+" || echo "?")
@@ -132,6 +135,71 @@ for f in "$FAIL_DIR"/*.svi; do
         echo "$output" | tail -1 | sed 's/^/      /'
         failed=$((failed + 1))
         failures+=("FAIL  $name  (unexpected crash)")
+    fi
+done
+
+echo
+
+# ── SelVeri LP Pass Tests ─────────────────────────
+echo -e "${BOLD}▶ SelVeri LP Pass Tests${RESET} (expected: run without error)"
+echo -e "  Directory: ${SELVERI_LP_PASS_DIR}"
+echo
+
+for f in "$SELVERI_LP_PASS_DIR"/*.svi; do
+    [ -f "$f" ] || continue
+    name=$(basename "$f")
+    total=$((total + 1))
+
+    output=$(selveri "$f" 2>&1)
+    exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
+        steps=$(echo "$output" | grep -oP 'Steps:\s*\K\d+' || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (${steps} steps)"
+        passed=$((passed + 1))
+    else
+        echo -e "  ${RED}✗${RESET} ${name}"
+        echo "$output" | tail -1 | sed 's/^/      /'
+        failed=$((failed + 1))
+        failures+=("SELVERI_LP_PASS  $name")
+    fi
+done
+
+echo
+
+# ── SelVeri LP Fail Tests ─────────────────────────
+echo -e "${BOLD}▶ SelVeri LP Fail Tests${RESET} (expected: VerificationError or IRRuntimeError)"
+echo -e "  Directory: ${SELVERI_LP_FAIL_DIR}"
+echo
+
+for f in "$SELVERI_LP_FAIL_DIR"/*.svi; do
+    [ -f "$f" ] || continue
+    name=$(basename "$f")
+    total=$((total + 1))
+
+    output=$(selveri "$f" 2>&1)
+    exit_code=$?
+
+    if echo "$output" | grep -qE "VerificationError|IRRuntimeError"; then
+        spec=$(echo "$output" | grep -oP 'Specification #\K\d+' || echo "?")
+        error_type=$(echo "$output" | grep -oP '(VerificationError|IRRuntimeError)' | head -1)
+        echo -e "  ${GREEN}✓${RESET} ${name}  (${error_type}, spec #${spec})"
+        passed=$((passed + 1))
+    elif [ $exit_code -eq 0 ]; then
+        active_specs=$(grep -cP '^\s*\{' "$f" || true)
+        if [ "$active_specs" -eq 0 ]; then
+            echo -e "  ${YELLOW}⊘${RESET} ${name}  (no active specs — skipped)"
+            skipped=$((skipped + 1))
+        else
+            echo -e "  ${RED}✗${RESET} ${name}  (unexpected pass)"
+            failed=$((failed + 1))
+            failures+=("SELVERI_LP_FAIL  $name  (should have raised error)")
+        fi
+    else
+        echo -e "  ${RED}✗${RESET} ${name}  (crashed with non-verification error)"
+        echo "$output" | tail -1 | sed 's/^/      /'
+        failed=$((failed + 1))
+        failures+=("SELVERI_LP_FAIL  $name  (unexpected crash)")
     fi
 done
 

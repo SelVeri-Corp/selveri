@@ -8,10 +8,10 @@ from typing import Dict, List, Optional, Tuple, Union
 from .parser import (
     parse_selveri,
     Program,
-    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return,
+    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
     TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
     AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
-    BExp, BBool, BNot, BBinOp, BCompare, BTruthy,
+    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
     FunctionDecl, Write, WriteLine,
 )
 from .spec_parser import parse_spec as parse_spec_formula
@@ -36,6 +36,10 @@ class IRInstr:
 
     def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
         if self.op == "VERI" and isinstance(arg, str):
+            return repr(arg)
+        if self.op == "VERIP" and index == 1 and isinstance(arg, str):
+            return repr(arg)
+        if self.op == "OBT" and index == 2 and isinstance(arg, str):
             return repr(arg)
         return str(arg)
 
@@ -287,7 +291,7 @@ class SelVeriCompiler:
                 f"`{{ end {name} }}` requires `{{ {name} := ... }}` earlier in this scope."
             )
         raw = entry
-        formula = raw.formula_text if raw.formula_text is not None else raw.text.strip()
+        formula = raw.formula_text if raw.formula_text is not None else ""
         try:
             ast = parse_spec_formula(formula)
         except ParserError as exc:
@@ -675,6 +679,8 @@ class SelVeriCompiler:
             return func_info[0].return_type
         if isinstance(expr, ARead):
             return BasicType()
+        if isinstance(expr, AObtain):
+            return BasicType()  # witness type is unknown at compile time
         raise CompilerError(f"Unknown arithmetic expression node: {type(expr).__name__}")
 
     def _ct_type(self, type_node: BasicType) -> str:
@@ -820,6 +826,10 @@ class SelVeriCompiler:
         if isinstance(expr, ARead):
             self.emit("READ")
             return
+        if isinstance(expr, AObtain):
+            self.raw_specs[expr.spec.spec_id] = expr.spec
+            self.emit("OBT", expr.var_name, expr.spec.spec_id, expr.spec.formula_text)
+            return
         raise CompilerError(f"Unsupported arithmetic expression: {type(expr).__name__}")
 
     def CB(self, expr: BExp) -> None:
@@ -868,6 +878,10 @@ class SelVeriCompiler:
                 self.emit("XOR")
                 return
             raise CompilerError(f"Unsupported boolean operator: {expr.op}")
+        if isinstance(expr, BSpec):
+            self.raw_specs[expr.spec.spec_id] = expr.spec
+            self.emit("VERIP", expr.spec.spec_id, expr.spec.formula_text)
+            return
         raise CompilerError(f"Unsupported boolean expression: {type(expr).__name__}")
 
     def C_stmt(self, stmt: Stmt) -> None:

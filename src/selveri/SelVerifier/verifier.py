@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from z3 import Not, Solver, simplify, sat, unsat
 from sympy import Basic
 
@@ -36,6 +36,7 @@ class VerificationEngine:
         self.pltl_memo.clear()
         self.fltl_pending.clear()
         self.pltl_start_marker_step.clear()
+        self.spec_ids.clear()
 
     def handle_step(self, snapshot: RuntimeConfiguration) -> None:
         self.history.append(snapshot)
@@ -94,6 +95,150 @@ class VerificationEngine:
                 f"The automaton did not end in an accepting state."
             )
         self.fltl_pending.pop((snapshot.scope.scope_id, spec_name))
+
+    ################# SelVeri LP Extensions #################
+
+    def check_spec_boolean(
+        self,
+        spec_id: str,
+        formula_text: str,
+        snapshot: RuntimeConfiguration,
+    ) -> bool:
+        """Evaluate a specification as a boolean value (VERIP instruction)."""
+        parsed_spec = self.resolve_spec(snapshot.scope.scope_id, spec_id, formula_text)
+        if parsed_spec.spec_type in (SpecType.fLTL, SpecType.sLTL):
+            raise VerificationError(
+                f"Specification-booleans with {parsed_spec.spec_type.name} are not supported."
+            )
+        return self.verify(parsed_spec, snapshot)
+
+    def extract_witness(
+        self,
+        var_name: str,
+        spec_id: str,
+        formula_text: str,
+        snapshot: RuntimeConfiguration,
+    ) -> Tuple[Any, Any]:
+        """Extract a satisfying witness for bound variable ``var_name`` under ``spec_id``."""
+        from ..errors import IRRuntimeError
+
+        parsed_spec = self.resolve_spec(snapshot.scope.scope_id, spec_id, formula_text)
+        spec = parsed_spec.ast
+        lexical_depth = snapshot.scope.depth
+
+        quant_chain: list = []
+        innermost_body = self._collect_quant_chain(spec, var_name, quant_chain)
+        if innermost_body is None:
+            raise IRRuntimeError(
+                f"obtain({var_name}, ...) failed: no existential quantifier binding "
+                f"'{var_name}' found in the specification. Spec: {parsed_spec.formula_text}"
+            )
+
+        solver = Solver()
+        mapper = Z3Mapper(snapshot, solver, lexical_depth)
+
+        for quant_spec in quant_chain:
+            self._register_bound_var_as_free(quant_spec, mapper, solver)
+
+        z3_body = mapper.map_FOL(innermost_body)
+
+        solver.set("timeout", VerificationEngine.SOLVER_TIMEOUT)
+        result = solver.check(z3_body)
+
+        if result != sat:
+            raise IRRuntimeError(
+                f"obtain({var_name}, ...) failed: no satisfying witness exists "
+                f"(solver returned {result}). Spec: {parsed_spec.formula_text}"
+            )
+
+        model = solver.model()
+
+        bound_z3_name = f"&{var_name}"
+        for decl in model.decls():
+            if decl.name() == bound_z3_name:
+                z3_val = model[decl]
+                return self._z3_value_to_python(z3_val)
+
+        raise IRRuntimeError(
+            f"obtain({var_name}, ...) failed: bound variable '&{var_name}' "
+            f"not found in the Z3 model. Spec: {parsed_spec.formula_text}"
+        )
+
+    def _collect_quant_chain(
+        self, spec: Spec, var_name: str, chain: list
+    ) -> Any:
+        if isinstance(spec, SpecQuant):
+            chain.append(spec)
+            if spec.kind == "Exists" and spec.var == var_name:
+                return spec.body
+            result = self._collect_quant_chain(spec.body, var_name, chain)
+            if result is not None:
+                return result
+            chain.pop()
+            return None
+        if isinstance(spec, SpecBinOp):
+            saved = len(chain)
+            result = self._collect_quant_chain(spec.left, var_name, chain)
+            if result is not None:
+                return result
+            del chain[saved:]
+            return self._collect_quant_chain(spec.right, var_name, chain)
+        if isinstance(spec, SpecUnOp):
+            return self._collect_quant_chain(spec.rhs, var_name, chain)
+        return None
+
+    def _register_bound_var_as_free(
+        self, quant_spec: SpecQuant, mapper: Z3Mapper, solver: Any
+    ) -> None:
+        from ..errors import IRRuntimeError
+        from ..specs import DomainType, DomainRange, DomainInterval, DomainValues
+        from z3 import Int, Real, And, Or
+
+        bound_var = quant_spec.var
+        domain = quant_spec.domain
+        bound_z3_name = f"&{bound_var}"
+
+        if isinstance(domain, DomainType):
+            if domain.ty.kind == "INT":
+                bound_var_z3 = Int(bound_z3_name)
+            elif domain.ty.kind == "FLOAT":
+                bound_var_z3 = Real(bound_z3_name)
+            else:
+                raise IRRuntimeError(f"Unsupported domain type for obtain: {domain.ty.kind}")
+        elif isinstance(domain, DomainRange):
+            bound_var_z3 = Int(bound_z3_name)
+            lo = mapper.map_FOL_aexp(domain.lo)
+            hi = mapper.map_FOL_aexp(domain.hi)
+            solver.add(And(lo <= bound_var_z3, bound_var_z3 <= hi))
+        elif isinstance(domain, DomainInterval):
+            bound_var_z3 = Real(bound_z3_name)
+            lo = mapper.map_FOL_aexp(domain.lo)
+            hi = mapper.map_FOL_aexp(domain.hi)
+            lower = (lo <= bound_var_z3) if domain.left_closed else (lo < bound_var_z3)
+            upper = (bound_var_z3 <= hi) if domain.right_closed else (bound_var_z3 < hi)
+            solver.add(And(lower, upper))
+        elif isinstance(domain, DomainValues):
+            bound_var_z3 = Int(bound_z3_name)
+            value_constraints = [bound_var_z3 == mapper.map_FOL_aexp(v) for v in domain.items]
+            if value_constraints:
+                solver.add(Or(value_constraints))
+        else:
+            bound_var_z3 = Int(bound_z3_name)
+
+        mapper.bound_var_map[bound_var] = bound_var_z3
+
+    def _z3_value_to_python(self, z3_val: Any) -> Tuple[Any, Any]:
+        from ..runtime import DeclType
+        from ..errors import IRRuntimeError
+        from z3 import is_int_value, is_rational_value, is_true, is_false
+
+        if is_int_value(z3_val):
+            return (z3_val.as_long(), DeclType("INT", None, None))
+        if is_rational_value(z3_val):
+            return (float(z3_val.as_fraction()), DeclType("FLOAT", None, None))
+        if is_true(z3_val) or is_false(z3_val):
+            return (1 if is_true(z3_val) else 0, DeclType("INT", None, None))
+        raise IRRuntimeError(f"Unsupported Z3 value type in obtain: {z3_val}")
 
     ################# ###########################    
     ################# Verifying #################
