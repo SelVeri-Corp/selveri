@@ -24,15 +24,11 @@ from .specs import RawSpec
 # AST
 # =========================
 @dataclass(frozen=True)
-class Program:
-    func_decls: List["FunctionDecl"]
-    stmt_seq: List["Stmt"]
-    span: SourceSpan | None = None
+class Spanned:
+    span: SourceSpan | None = field(default=None, kw_only=True)
 
 
 class TypeNode:
-    span: SourceSpan | None = None
-
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
 
@@ -41,8 +37,6 @@ class ConcreteType(TypeNode):
         raise NotImplementedError("Subclasses must implement __str__")
 
 class Imm:
-    span: SourceSpan | None = None
-
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
 
@@ -52,9 +46,7 @@ class BasicType(ConcreteType):
         raise NotImplementedError("Subclasses must implement __str__")
 
 @dataclass(frozen=True)
-class TypeInt(BasicType):
-    span: SourceSpan | None = None
-
+class TypeInt(Spanned, BasicType):
     def __str__(self) -> str:
         return "INT"
 
@@ -65,9 +57,7 @@ class TypeInt(BasicType):
         return hash(TypeInt)
 
 @dataclass(frozen=True)
-class TypeFloat(BasicType):
-    span: SourceSpan | None = None
-
+class TypeFloat(Spanned, BasicType):
     def __str__(self) -> str:
         return "FLOAT"
 
@@ -78,11 +68,10 @@ class TypeFloat(BasicType):
         return hash(TypeFloat)
 
 @dataclass(frozen=True)
-class TypeList(ConcreteType):
+class TypeList(Spanned, ConcreteType):
     elem: BasicType
     dimension: "IntLit"
     shape: List[AExp] = field(default_factory=list)
-    span: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         if self.dimension.value != len(self.shape):
@@ -96,11 +85,10 @@ class TypeList(ConcreteType):
         return f"LIST[{self.elem},{self.dimension}{f', {self.shape}' if self.shape else ''}]"
 
 @dataclass(frozen=True)
-class TypeDynamicList(TypeNode):
+class TypeDynamicList(Spanned, TypeNode):
     elem: BasicType
     dimension: "IntLit"
     shape: List[Optional[AExp]] = field(default_factory=list)
-    span: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         if len(self.shape) > self.dimension.value:
@@ -115,224 +103,201 @@ class TypeDynamicList(TypeNode):
 
 # Immediates / Arithmetic
 @dataclass(frozen=True)
-class IntLit(Imm, AExp):
+class IntLit(Spanned, Imm, AExp):
     value: int
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return str(self.value)
 
 @dataclass(frozen=True)
-class FloatLit(Imm, AExp):
+class FloatLit(Spanned, Imm, AExp):
     value: float
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return str(self.value)
 
 @dataclass(frozen=True)
-class ListLit(Imm, AExp):
+class ListLit(Spanned, Imm, AExp):
     items: List[Imm]
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class AVar(AExp):
+class AVar(Spanned, AExp):
     name: str
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return self.name
 
 @dataclass(frozen=True)
-class ALen(AExp):
+class ALen(Spanned, AExp):
     name: str
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"len({self.name})"
 
 @dataclass(frozen=True)
-class AIndex(AExp):
+class AIndex(Spanned, AExp):
     base: AExp
     index: AExp
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.base}[{self.index}]"
 
 @dataclass(frozen=True)
-class ARead(AExp):
-    span: SourceSpan | None = None
-
+class ARead(Spanned, AExp):
     def __str__(self) -> str:
         return "read()"
 
 @dataclass(frozen=True)
-class AUnOp(AExp):
+class AUnOp(Spanned, AExp):
     op: str
     rhs: AExp
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.op}{self.rhs}"
 
 @dataclass(frozen=True)
-class ABinOp(AExp):
+class ABinOp(Spanned, AExp):
     op: str
     left: AExp
     right: AExp
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
 
 # Boolean
 @dataclass(frozen=True)
-class BBool(BExp):
+class BBool(Spanned, BExp):
     value: bool
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return "true" if self.value else "false"
 
 
 @dataclass(frozen=True)
-class BNot(BExp):
+class BNot(Spanned, BExp):
     rhs: BExp
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"!{self.rhs}"
 
 
 @dataclass(frozen=True)
-class BBinOp(BExp):
+class BBinOp(Spanned, BExp):
     op: str
     left: BExp
     right: BExp
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
 
 
 @dataclass(frozen=True)
-class BCompare(BExp):
+class BCompare(Spanned, BExp):
     op: str
     left: AExp
     right: AExp
-    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
 
 
 @dataclass(frozen=True)
-class BTruthy(BExp):
+class BTruthy(Spanned, BExp):
     aexp: AExp
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class BSpec(BExp):
+class BSpec(Spanned, BExp):
     spec: RawSpec
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class Decl(Stmt):
+class Decl(Spanned, Stmt):
     name: str
     type_node: TypeNode
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class Assign(Stmt):
+class Assign(Spanned, Stmt):
     name: str
     aexp: AExp
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class ListAssign(Stmt):
+class ListAssign(Spanned, Stmt):
     target: AIndex
     aexp: AExp
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class Pass(Stmt):
-    span: SourceSpan | None = None
+class Pass(Spanned, Stmt):
+    pass
 
 
 @dataclass(frozen=True)
-class AObtain(AExp):
+class AObtain(Spanned, AExp):
     var_name: str
     spec: RawSpec
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class SpecAnnot(Stmt):
+class SpecAnnot(Spanned, Stmt):
     spec: RawSpec
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class If(Stmt):
+class If(Spanned, Stmt):
     cond: BExp
     then_s: List[Stmt]
     else_s: Optional[List[Stmt]]
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class While(Stmt):
+class While(Spanned, Stmt):
     cond: BExp
     body: List[Stmt]
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class Write(Stmt):
+class Write(Spanned, Stmt):
     aexp: AExp
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class WriteLine(Stmt):
+class WriteLine(Spanned, Stmt):
     aexp: AExp
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class Param:
+class Param(Spanned):
     name: str
     type_node: TypeNode
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class Return(Stmt):
+class Return(Spanned, Stmt):
     value: AExp
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class FuncCall(AExp, Stmt):
+class FuncCall(Spanned, AExp, Stmt):
     name: str
     args: List[AExp]
-    span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
-class FunctionDecl:
+class Program(Spanned):
+    func_decls: List["FunctionDecl"]
+    stmt_seq: List["Stmt"]
+
+
+@dataclass(frozen=True)
+class FunctionDecl(Spanned):
     name: str
     params: List[Param]
     return_type: TypeNode
     body: List[Stmt]
-    span: SourceSpan | None = None
 
 
 @v_args(meta=True, inline=True)
