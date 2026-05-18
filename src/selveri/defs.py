@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict
 
 from sympy.core.basic import Basic
+from .diagnostics import SourceSpan
 from .runtime import Scope, State
 if TYPE_CHECKING: # this runs only during type checking and does not import the specs module
     # defs -> specs -> parser -> defs
@@ -41,6 +42,7 @@ class FutureAutomaton:
 class FutureObligation:
     spec_id: int
     source_spec: str
+    source_span: SourceSpan | None
     created_at_step: int
     scope_id: int
     lexical_depth: int

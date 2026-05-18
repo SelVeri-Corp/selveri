@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from time import perf_counter
+import traceback
 
 from .compiler import SelVeriCompiler
+from .diagnostics import render_diagnostic, render_internal_error, should_use_color
+from .errors import SelVeriError
 from .interpreter import interpret_ir_code
 from .parser import parse_selveri
 from .SelVerifier.verifier import VerificationEngine
@@ -21,7 +25,7 @@ def run_pipeline(
         source = f.read()
 
     start_time = perf_counter()
-    program = parse_selveri(source)
+    program = parse_selveri(source, input_path)
     compiler = SelVeriCompiler()
     code = compiler.compile_program(program)
     ir_text = "\n".join(instr.render() for instr in code)
@@ -39,6 +43,7 @@ def run_pipeline(
 
     start_time = perf_counter()
     verifier = VerificationEngine()
+    verifier.register_raw_specs(compiler.raw_specs.values())
     result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
     end_time = perf_counter()
     print(f"\nExecution time: {end_time - start_time:.6f} seconds")
@@ -91,10 +96,22 @@ def main() -> int:
     if args.emit_ir:
         output_ir = args.output_ir if args.output_ir is not None else args.input.with_suffix(".svir")
 
-    return run_pipeline(
-        args.input,
-        output_ir=output_ir,
-        max_steps=args.max_steps,
-        print_ir=args.print_ir,
-        debug=args.debug,
-    )
+    try:
+        return run_pipeline(
+            args.input,
+            output_ir=output_ir,
+            max_steps=args.max_steps,
+            print_ir=args.print_ir,
+            debug=args.debug,
+        )
+    except SelVeriError as exc:
+        color = should_use_color(stream=sys.stderr)
+        print(render_diagnostic(exc.diagnostic, color=color), file=sys.stderr)
+        return 1
+    except Exception:
+        color = should_use_color(stream=sys.stderr)
+        if args.debug:
+            traceback.print_exc()
+        else:
+            print(render_internal_error(color=color), file=sys.stderr)
+        return 1
