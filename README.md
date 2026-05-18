@@ -70,3 +70,12 @@ Or choose a custom path:
 ```
 selveri examples/example_loop.svi --emit-ir --output-ir out/example_loop.svir
 ```
+
+## Error Diagnostics
+
+SelVeri reports parser, preprocessor, compiler, runtime, and verification
+failures as structured diagnostics with source spans, labels, hints, and
+counterexamples when available.
+
+See [docs/errors.md](docs/errors.md) for diagnostic codes, examples, and
+guidance for adding new errors.
