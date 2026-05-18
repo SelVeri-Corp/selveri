@@ -1,0 +1,10 @@
+
+
+{ start theta };
+
+y : Float;
+
+x : Int;
+x := 1;
+
+{ theta := (Always (x = 1))};

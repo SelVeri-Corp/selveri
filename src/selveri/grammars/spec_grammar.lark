@@ -75,7 +75,7 @@ start: spec
 ?type: basic_type
      | "List" "[" basic_type "," INT_LIT "," aexp_list "]" -> type_list
 
-aexp_list: aexp ("," aexp)*                -> aexp_list
+aexp_list: aexp ("," aexp)*
 
 ?imm: INT_LIT                              -> int_lit
     | FLOAT_LIT                            -> float_lit
@@ -83,7 +83,7 @@ aexp_list: aexp ("," aexp)*                -> aexp_list
 
 list_lit: "[" [aexp ("," aexp)*] "]"
 
-aexp: aexp_sum                             -> aexp
+aexp: aexp_sum
 
 ?aexp_sum: aexp_sum "+" aexp_term          -> add
          | aexp_sum "-" aexp_term          -> sub
@@ -103,10 +103,10 @@ aexp: aexp_sum                             -> aexp
          | indexed_value
          | "(" aexp ")"
 
-?indexed_value: IDENT "[" aexp "]"         -> a_index
-              | indexed_value "[" aexp "]" -> a_index
+?indexed_value: IDENT "[" aexp "]"         -> a_index_base
+              | indexed_value "[" aexp "]" -> a_index_chain
 
-bexp: b_or                                 -> bexp
+bexp: b_or
 
 ?b_or: b_or "or" b_xor                     -> bor
      | b_xor

@@ -14,9 +14,10 @@ from .parser import (
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
     FunctionDecl, Write, WriteLine,
 )
-from .specs import RawSpec
+from .spec_parser import parse_spec as parse_spec_formula
+from .specs import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
 
-from .errors import CompilerError
+from .errors import CompilerError, ParserError
 
 RESERVED_NAMES = ["retvar", "read", "write", "len"]
 
@@ -34,7 +35,7 @@ class IRInstr:
         return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
 
     def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
-        if self.op == "VERI" and index == 1 and isinstance(arg, str):
+        if self.op == "VERI" and isinstance(arg, str):
             return repr(arg)
         if self.op == "VERIP" and index == 1 and isinstance(arg, str):
             return repr(arg)
@@ -106,6 +107,14 @@ class _ScopeFrame:
             return None
         return owner.lists[name]
 
+    def get_all_bound_variables(self) -> set[str]:
+        vars = set()
+        cur = self
+        while cur is not None:
+            vars.update(cur.bindings.keys())
+            cur = cur.parent
+        return vars
+
 
 def is_empty_stmt_seq(stmts: Optional[List[Stmt]]) -> bool:
     if stmts is None:
@@ -151,7 +160,9 @@ class SelVeriCompiler:
         self.functions: Dict[str, Tuple[FunctionDecl, int]] = {}
         # IR program being built
         self.code: List[IRInstr] = []
-        self.raw_specs: Dict[int, RawSpec] = {}
+        self.raw_specs: Dict[str, RawSpec] = {}
+        # None = `{ start name }` seen; awaiting `{ name := ... }`. RawSpec = defined named spec.
+        self.spec_frames: List[Dict[str, Optional[RawSpec]]] = []
 
     # ---------- utilities ----------
     def pc(self) -> int:
@@ -176,6 +187,120 @@ class SelVeriCompiler:
         if self.scope.parent is None:
             raise CompilerError("Internal: cannot leave the root scope.")
         self.scope = self.scope.parent
+
+    def _finalize_spec_frame(self) -> None:
+        frame = self.spec_frames[-1]
+        for name, entry in frame.items():
+            if entry is None:
+                raise CompilerError(
+                    f"`{{ start {name} }}` requires a matching `{{ {name} := ... }}` in this scope."
+                )
+
+    def _emit_plt_start_marker(self, name: str) -> None:
+        frame = self.spec_frames[-1]
+        if name not in frame:
+            frame[name] = self.scope.get_all_bound_variables()
+            self.emit("SPEC_START", name)
+            return
+        if isinstance(frame[name], set) or frame[name] is None:
+            raise CompilerError(f"Duplicate `{{ start {name} }}` in this scope.")
+        raise CompilerError(
+            f"`{{ start {name} }}` must appear before `{{ {name} := ... }}` in this scope."
+        )
+
+    def _get_spec_free_vars(self, spec: Spec) -> set[str]:
+        free = set()
+        from .specs import SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+        from .spec_parser import ABoundVar
+        from .parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
+        from .specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        
+        def walk_aexp(a):
+            if isinstance(a, ABoundVar): pass
+            elif isinstance(a, AVar): free.add(a.name)
+            elif isinstance(a, ALen): free.add(a.name)
+            elif isinstance(a, AIndex): walk_aexp(a.base); walk_aexp(a.index)
+            elif isinstance(a, AUnOp): walk_aexp(a.rhs)
+            elif isinstance(a, ABinOp): walk_aexp(a.left); walk_aexp(a.right)
+            elif isinstance(a, FuncCall):
+                for arg in a.args: walk_aexp(arg)
+            elif isinstance(a, ListLit):
+                for item in a.items: walk_aexp(item)
+
+        def walk_bexp(b):
+            if isinstance(b, BNot): walk_bexp(b.rhs)
+            elif isinstance(b, BBinOp): walk_bexp(b.left); walk_bexp(b.right)
+            elif isinstance(b, BCompare): walk_aexp(b.left); walk_aexp(b.right)
+            elif isinstance(b, BTruthy): walk_aexp(b.aexp)
+
+        def walk_domain(d):
+            if isinstance(d, DomainIdent): free.add(d.name)
+            elif isinstance(d, DomainValues):
+                for item in d.items: walk_aexp(item)
+            elif isinstance(d, DomainRange) or isinstance(d, DomainInterval):
+                walk_aexp(d.lo); walk_aexp(d.hi)
+
+        def walk_spec(s):
+            if isinstance(s, SpecFromBExp): walk_bexp(s.bexp)
+            elif isinstance(s, SpecUnOp): walk_spec(s.rhs)
+            elif isinstance(s, SpecBinOp): walk_spec(s.left); walk_spec(s.right)
+            elif isinstance(s, SpecQuant):
+                walk_domain(s.domain)
+                walk_spec(s.body)
+                
+        walk_spec(spec)
+        return free
+
+    def _register_named_spec_definition(self, name: str, spec: RawSpec, formula: str) -> None:
+        frame = self.spec_frames[-1]
+        pending_plt_start = name in frame and (frame[name] is None or isinstance(frame[name], set))
+        try:
+            ast = parse_spec_formula(formula)
+        except ParserError as exc:
+            raise CompilerError(f"Invalid specification formula for '{name}': {exc}") from None
+
+        if pending_plt_start:
+            declared_vars = frame[name] if isinstance(frame[name], set) else set()
+            free_vars = self._get_spec_free_vars(ast)
+            for v in free_vars:
+                if v not in declared_vars:
+                    raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ start {name} }}`.")
+            if ast.spec_type not in (VerifierSpecType.pLTL, VerifierSpecType.sLTL):
+                raise CompilerError(
+                    f"`{{ start {name} }}` applies only to past temporal (pLTL) or separated (sLTL) specifications."
+                )
+        else:
+            free_vars = self._get_spec_free_vars(ast)
+            declared_vars = self.scope.get_all_bound_variables()
+            for v in free_vars:
+                if v not in declared_vars:
+                    raise CompilerError(f"Variable '{v}' used in specification '{name}' was not declared at the point of `{{ {name} := ... }}`.")
+        if name in frame and frame[name] is not None and not isinstance(frame[name], set):
+            raise CompilerError(f"Duplicate specification name '{name}' in the same scope.")
+        frame[name] = spec
+
+    def _lookup_named_spec_for_flt_end(self, name: str) -> RawSpec:
+        frame = self.spec_frames[-1]
+        if name not in frame:
+            raise CompilerError(
+                f"No specification named '{name}' in this scope (required for `{{ end {name} }}`)."
+            )
+        entry = frame[name]
+        if entry is None:
+            raise CompilerError(
+                f"`{{ end {name} }}` requires `{{ {name} := ... }}` earlier in this scope."
+            )
+        raw = entry
+        formula = raw.formula_text if raw.formula_text is not None else ""
+        try:
+            ast = parse_spec_formula(formula)
+        except ParserError as exc:
+            raise CompilerError(f"Cannot validate end marker for '{name}': {exc}") from None
+        if ast.spec_type not in (VerifierSpecType.fLTL, VerifierSpecType.sLTL):
+            raise CompilerError(
+                f"`{{ end {name} }}` applies only to future temporal (fLTL) or separated (sLTL) specifications."
+            )
+        return raw
 
     def _list_len_name(self, base: str, dim: int) -> str:
         return f"_{base}_len_{dim}"
@@ -705,7 +830,7 @@ class SelVeriCompiler:
             return
         if isinstance(expr, AObtain):
             self.raw_specs[expr.spec.spec_id] = expr.spec
-            self.emit("OBT", expr.var_name, expr.spec.spec_id, expr.spec.text)
+            self.emit("OBT", expr.var_name, expr.spec.spec_id, expr.spec.formula_text)
             return
         raise CompilerError(f"Unsupported arithmetic expression: {type(expr).__name__}")
 
@@ -757,7 +882,7 @@ class SelVeriCompiler:
             raise CompilerError(f"Unsupported boolean operator: {expr.op}")
         if isinstance(expr, BSpec):
             self.raw_specs[expr.spec.spec_id] = expr.spec
-            self.emit("VERIP", expr.spec.spec_id, expr.spec.text)
+            self.emit("VERIP", expr.spec.spec_id, expr.spec.formula_text)
             return
         raise CompilerError(f"Unsupported boolean expression: {type(expr).__name__}")
 
@@ -778,9 +903,23 @@ class SelVeriCompiler:
             self.emit("NOOP")
             return
         if isinstance(stmt, SpecAnnot):
-            self.raw_specs[stmt.spec.spec_id] = stmt.spec
-            self.emit("VERI", stmt.spec.spec_id, stmt.spec.text)
-            return
+            spec = stmt.spec
+            if spec.kind == RawSpecKind.SPEC_START:
+                self._emit_plt_start_marker(spec.spec_id)
+                return
+            if spec.kind == RawSpecKind.SPEC_END:
+                target = self._lookup_named_spec_for_flt_end(spec.spec_id)
+                self.emit("SPEC_END", target.spec_id)
+                return
+            if spec.kind == RawSpecKind.SPEC_NAMED:
+                self._register_named_spec_definition(spec.spec_id, spec, spec.formula_text)
+                self.raw_specs[spec.spec_id] = spec
+                self.emit("VERI", spec.spec_id, spec.formula_text)
+                return
+            if spec.kind == RawSpecKind.SPEC:
+                self.raw_specs[spec.spec_id] = spec
+                self.emit("VERI", spec.spec_id, spec.formula_text)
+                return
         if isinstance(stmt, If):
             self._compile_if(stmt)
             return
@@ -969,8 +1108,11 @@ class SelVeriCompiler:
             self.emit("WRITELN")
 
     def C_stmt_seq(self, stmts: List[Stmt]) -> None:
+        self.spec_frames.append({})
         for stmt in stmts:
             self.C_stmt(stmt)
+        self._finalize_spec_frame()
+        self.spec_frames.pop()
 
     def _register_functions(self, program: Program) -> None:
         for func in program.func_decls:

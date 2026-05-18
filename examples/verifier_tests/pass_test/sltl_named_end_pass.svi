@@ -1,0 +1,17 @@
+// =====================================================
+// Named sLTL with explicit END only (no START): PASS
+// Past is true at the obligation, future is discharged before a later violating state.
+// =====================================================
+
+x : Int;
+x := 1;
+
+if 1 = 1 then
+    { upsilon := (Once x = 1) => (Always x > 0) };
+    x := 2;
+
+    { end upsilon };
+    x := -1;
+fi
+
+{ x = -1 };

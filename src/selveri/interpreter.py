@@ -13,7 +13,6 @@ from .errors import IRRuntimeError, IRParseError
 from .compiler import IRInstr
 from .runtime import DeclType, Scope, State, _UNSET
 from .SelVerifier.verifier import VerificationEngine
-from .SelVerifier.mapper import Z3Mapper
 
 
 @dataclass
@@ -355,7 +354,8 @@ class SelVerIRInterpreter:
                 raise IRParseError(f"Duplicate function environment: {name}")
             self.functions[name] = FunctionEntry(name=name, pc=instr.label, return_type=return_type)
         self.reset_runtime() # reset the runtime state
-        self._prepare_verifier()
+        if self.verifier is not None:
+            self.verifier.handle_program_start()
 
     def reset_runtime(self) -> None:
         self.stack = [] # clear the stack
@@ -506,6 +506,9 @@ class SelVerIRInterpreter:
         program: Iterable[IRInstr],
     ) -> ExecutionResult:
         self.load(program) # load the program into the interpreter
+
+        if self.verifier is not None:
+            self.verifier.handle_program_start()
 
         while 0 <= self.pc < len(self.code):
             if self.steps >= self.max_steps:
@@ -685,6 +688,8 @@ class SelVerIRInterpreter:
                 state_parent=self.runtime.state,
                 scope_parent=self.runtime.scope,
             )
+            if self.verifier is not None:
+                self.verifier.on_scope_enter(self.runtime.scope.scope_id)
             self.pc += 1
             return
 
@@ -719,6 +724,8 @@ class SelVerIRInterpreter:
                 return_type=return_type if return_type is not None else frame.return_type,
             )
             self.runtime = self._fresh_runtime()
+            if self.verifier is not None:
+                self.verifier.on_scope_enter(self.runtime.scope.scope_id)
             self.pc += 1
             return
 
@@ -755,17 +762,38 @@ class SelVerIRInterpreter:
             return
 
         if op == "VERI":
-            spec_id = int(instr.args[0]) if instr.args else -1
-            raw_spec = instr.args[1] if len(instr.args) > 1 else None
+            spec_id = instr.args[0] if instr.args else -1
+            formula_text = instr.args[1] if len(instr.args) > 1 else None
             if self.verifier is not None:
-                self._dispatch_verifier_spec(spec_id, raw_spec)
+                self._dispatch_verifier_spec(spec_id, formula_text)
+            self.pc += 1
+            return
+
+        if op == "SPEC_START":
+            if len(instr.args) != 1:
+                raise IRRuntimeError("SPEC_START expects one name.")
+            name = str(instr.args[0]).strip()
+            if self.verifier is not None:
+                self.verifier.handle_plt_start_marker(name, self._snapshot_runtime_configuration())
+            self.pc += 1
+            return
+
+        if op == "SPEC_END":
+            if len(instr.args) != 1:
+                raise IRRuntimeError("SPEC_END expects one name.")
+            if self.verifier is not None:
+                self.verifier.handle_flt_end_marker(
+                    instr.args[0],
+                    self._snapshot_runtime_configuration(),
+                )
             self.pc += 1
             return
 
         if op == "VERIP":
-            spec_id = int(instr.args[0]) if instr.args else -1
+            spec_id = instr.args[0] if instr.args else ""
+            formula_text = instr.args[1] if len(instr.args) > 1 else ""
             if self.verifier is not None:
-                result = self._dispatch_verifier_spec_boolean(spec_id)
+                result = self._dispatch_verifier_spec_boolean(spec_id, formula_text)
                 self._push(1 if result else 0)
             else:
                 self._push(1)  # without verifier, optimistically treat as True
@@ -774,9 +802,10 @@ class SelVerIRInterpreter:
 
         if op == "OBT":
             var_name = str(instr.args[0]).strip()
-            spec_id = int(instr.args[1])
+            spec_id = instr.args[1]
+            formula_text = instr.args[2] if len(instr.args) > 2 else ""
             if self.verifier is not None:
-                witness_value, witness_type = self._dispatch_obtain(var_name, spec_id)
+                witness_value, witness_type = self._dispatch_obtain(var_name, spec_id, formula_text)
                 self._push(witness_value)
             else:
                 raise IRRuntimeError("OBT requires a verifier to be attached.")
@@ -785,7 +814,7 @@ class SelVerIRInterpreter:
 
         if op == "STEP":
             if self.verifier is not None:
-                self.verifier.on_step(self._snapshot_runtime_configuration())
+                self.verifier.handle_step(self._snapshot_runtime_configuration())
             self.pc += 1
             return
 
@@ -1005,32 +1034,40 @@ class SelVerIRInterpreter:
         else:
             return_value = self._pop()
 
+        leaving_scope_id = self.runtime.scope.scope_id
+        if self.verifier is not None:
+            self.verifier.on_scope_exit(leaving_scope_id)
+
         frame = self.call_stack.pop()
         self.runtime = frame.runtime
         self._set_retvar(return_value, return_type)
         self.pc = frame.return_pc
-
-    def _prepare_verifier(self) -> None:
-        if self.verifier is None:
-            return
-        self.verifier.prepare_program(self.code)
 
     def _finish_verifier(self) -> None:
         if self.verifier is None:
             return
         self.verifier.on_program_end(self._snapshot_runtime_configuration())
 
-    def _dispatch_verifier_spec(self, spec_id: int, raw_spec: Any) -> None:
+    def _dispatch_verifier_spec(self, spec_id: Any, formula_text: str) -> None:
         assert self.verifier is not None
-        self.verifier.handle_veri(spec_id, self._snapshot_runtime_configuration())
+        self.verifier.handle_veri(spec_id, formula_text, self._snapshot_runtime_configuration())
 
-    def _dispatch_verifier_spec_boolean(self, spec_id: int) -> bool:
+    def _dispatch_verifier_spec_boolean(self, spec_id: Any, formula_text: str) -> bool:
         assert self.verifier is not None
-        return self.verifier.check_spec_boolean(spec_id, self._snapshot_runtime_configuration())
+        return self.verifier.check_spec_boolean(
+            spec_id,
+            formula_text,
+            self._snapshot_runtime_configuration(),
+        )
 
-    def _dispatch_obtain(self, var_name: str, spec_id: int) -> Tuple[Any, DeclType]:
+    def _dispatch_obtain(self, var_name: str, spec_id: Any, formula_text: str) -> Tuple[Any, DeclType]:
         assert self.verifier is not None
-        return self.verifier.extract_witness(var_name, spec_id, self._snapshot_runtime_configuration())
+        return self.verifier.extract_witness(
+            var_name,
+            spec_id,
+            formula_text,
+            self._snapshot_runtime_configuration(),
+        )
 
 
 

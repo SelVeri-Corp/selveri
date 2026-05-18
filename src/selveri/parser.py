@@ -318,10 +318,14 @@ class AstBuilder(Transformer):
         return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
     def a_len(self, name): return ALen(str(name))
-    def a_index(self, base, idx):
+    def _mk_a_index(self, base, idx):
         if not isinstance(base, AExp):
             base = AVar(str(base))
         return AIndex(base, idx)
+    def a_index_base(self, base, idx):
+        return self._mk_a_index(base, idx)
+    def a_index_chain(self, base, idx):
+        return self._mk_a_index(base, idx)
     def a_read(self): return ARead()
     def neg(self, rhs): return AUnOp("-", rhs)
     def add(self, l, r): return ABinOp("+", l, r)
@@ -375,11 +379,22 @@ class AstBuilder(Transformer):
     def return_stmt(self, expr):
         return Return(expr)
 
-    def func_call(self, name, args):
-        return FuncCall(str(name), args or [])
+    def func_call(self, name, args=None):
+        # With inlined arg_list (grammar.lark), one argument is passed as a bare aexp;
+        # zero arguments go through arg_list_opt -> []; two or more use arg_list -> list.
+        if args is None:
+            normalized: List[AExp] = []
+        elif isinstance(args, list):
+            normalized = args
+        else:
+            normalized = [args]
+        return FuncCall(str(name), normalized)
 
     def arg_list_opt(self, args=None):
-        return args or []
+        if args is None:
+            return []
+        # Single-arg calls pass one AExp here (arg_list is inlined in grammar.lark).
+        return args if isinstance(args, list) else [args]
 
     def arg_list(self, *args):
         return list(args)

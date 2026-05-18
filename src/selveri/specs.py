@@ -13,6 +13,13 @@ class SpecType(Enum):
     fLTL = 2
     sLTL = 3 # separated LTL formulae in the form of 'pLTL => fLTL'
 
+class RawSpecKind(Enum):
+    """Classification of `{ ... }` annotation bodies after preprocessing."""
+
+    SPEC = "spec"
+    SPEC_NAMED = "spec_named"
+    SPEC_START = "spec_start"
+    SPEC_END = "spec_end"
 
 @dataclass(frozen=True)
 class SourceLocation:
@@ -26,8 +33,9 @@ class SourceSpan:
 
 @dataclass(frozen=True)
 class RawSpec:
-    spec_id: int
-    text: str
+    spec_id: str # spec id is the name of the spec or the sequential id given by the compiler
+    formula_text: Optional[str] = None
+    kind: RawSpecKind = RawSpecKind.SPEC
     location: Optional[SourceSpan] = None
 
 class Domain:
@@ -90,7 +98,7 @@ class DomainVar(Domain):
 @dataclass(frozen=True)
 class Spec:
     uid: int
-    type : SpecType
+    spec_type : SpecType
 
     def __hash__(self) -> int:
         return self.uid
@@ -133,5 +141,7 @@ class SpecQuant(Spec):
 
 @dataclass(frozen=True)
 class ParsedSpec:
-    raw_spec: RawSpec
+    spec_id: str
+    formula_text: str
+    spec_type: SpecType
     ast: Spec

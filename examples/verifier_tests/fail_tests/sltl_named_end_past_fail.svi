@@ -1,0 +1,12 @@
+// =====================================================
+// Named END with a pure pLTL spec: expected compile failure
+// END applies only to fLTL or sLTL (not pLTL).
+// =====================================================
+
+x : Int;
+x := 0;
+
+if 1 = 1 then
+    { bad := Once x = 0 };
+    { end bad };
+fi

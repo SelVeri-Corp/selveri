@@ -1,0 +1,20 @@
+// =====================================================
+// Named fLTL END before spec definition: expected compile failure
+// =====================================================
+// Rule: named spec must be defined before END, and END only applies to fLTL.
+
+if 1 = 1 then
+    { end psi };
+    { psi := Eventually 1 = 1 };
+fi
+
+
+if 2 = 3 then
+  pass;  
+fi
+
+if 2 = 2 then
+    pass;
+    { phi := Eventually 1 = 1 };
+fi
+{ end phi };

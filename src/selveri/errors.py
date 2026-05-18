@@ -14,6 +14,10 @@ class VerificationError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__("Verification error: " + message)
 
+class SpecDomainBoundsError(VerificationError):
+    def __init__(self, message: str) -> None:
+        super().__init__("Spec domain bounds: " + message)
+
 class IRRuntimeError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__("IR runtime error: " + message)

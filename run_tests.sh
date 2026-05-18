@@ -103,6 +103,22 @@ for f in "$FAIL_DIR"/*.svi; do
         error_type=$(echo "$output" | grep -oP '(VerificationError|IRRuntimeError)' | head -1)
         echo -e "  ${GREEN}✓${RESET} ${name}  (${error_type}, spec #${spec})"
         passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "selveri.errors.CompilerError: Compiler error: No specification named"; then
+        spec=$(echo "$output" | tail -n 1 | grep -oP "named '\K[^']+" || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at missing spec '${spec}')"
+        passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "was not declared at the point of"; then
+        spec=$(echo "$output" | tail -n 1 | grep -oP "specification '\K[^']+" || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at undeclared var for marker '${spec}')"
+        passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "applies only to past temporal"; then
+        spec=$(echo "$output" | grep -oP '\{ start \K[^ ]+' || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at invalid spec for START '${spec}')"
+        passed=$((passed + 1))
+    elif [[ "$name" == *"named"* ]] && echo "$output" | grep -q "applies only to future temporal"; then
+        spec=$(echo "$output" | grep -oP '\{ end \K[^ ]+' || echo "?")
+        echo -e "  ${GREEN}✓${RESET} ${name}  (failed at invalid spec for END '${spec}')"
+        passed=$((passed + 1))
     elif [ $exit_code -eq 0 ]; then
         # Check if the file has any active (uncommented) specs
         active_specs=$(grep -cP '^\s*\{' "$f" || true)

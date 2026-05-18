@@ -1,0 +1,19 @@
+// =====================================================
+// Named pLTL with explicit strict START: should PASS
+// =====================================================
+
+x : Int;
+x := 0;
+
+if 1 = 1 then
+    x := 1;
+
+    // START is strict and inclusive for this named pLTL spec.
+    { start phi };
+    x := 2;
+
+    // Named spec comes after START (required).
+    { phi := Historically (x = 2) };
+fi
+
+{ x = 2 };

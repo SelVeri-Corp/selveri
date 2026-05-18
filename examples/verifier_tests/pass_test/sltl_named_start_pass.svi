@@ -1,0 +1,18 @@
+// =====================================================
+// Named sLTL with explicit START only (no END): PASS
+// Mirrors pltl_named_start_pass: start narrows the past half of sLTL.
+// =====================================================
+
+x : Int;
+x := 0;
+
+if 1 = 1 then
+    x := 1;
+
+    { start tau };
+    x := 2;
+
+    { tau := (Historically x = 2) => (Eventually x = 2) };
+fi
+
+{ x = 2 };

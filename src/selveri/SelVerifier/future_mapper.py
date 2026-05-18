@@ -22,7 +22,7 @@ class FutureLTLMapper:
         return MappedFutureFormula(formula_text=formula_text, atom_table=dict(self.atom_table))
 
     def map_spec(self, spec: Spec) -> str:
-        if spec.type == SpecType.FOL:
+        if spec.spec_type == SpecType.FOL:
             return self.intern_atom(spec)
 
         if not isinstance(spec, (SpecUnOp, SpecBinOp)):

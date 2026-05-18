@@ -1,0 +1,24 @@
+// =====================================================
+// Named sLTL with explicit START (past window) and END (future horizon): PASS
+// Verifier: past half uses pltl_start_marker_step; future uses same spec_id as fLTL obligation.
+// =====================================================
+
+x : Int;
+x := 0;
+
+if 1 = 1 then
+    x := 1;
+
+    { start sigma };
+    x := 2;
+
+    // Past window begins after x := 1; at check time only x = 2 is visible, so Historically (x = 2).
+    // Future: Next (x = 3); explicit end closes the obligation at x = 3 before later assignments.
+    { sigma := (Historically x = 2) => (Next x = 3) };
+
+    x := 3;
+    { end sigma };
+    x := 99;
+fi
+
+{ x = 99 };
