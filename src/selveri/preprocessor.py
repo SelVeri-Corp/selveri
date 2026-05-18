@@ -5,8 +5,9 @@ Preprocessor takes high level source code and extracts raw specs. Replaces spec 
 from typing import Dict, List, Tuple, Optional
 import re
 
+from .diagnostics import SourceFile, SourceSpan
 from .errors import PreprocessorError
-from .specs import RawSpec, SourceLocation, SourceSpan, RawSpecKind
+from .specs import RawSpec, RawSpecKind
 
 
 def _advance_position(ch: str, line: int, column: int) -> Tuple[int, int]:
@@ -76,7 +77,20 @@ def _scan_spec_block(
 
     raise PreprocessorError("Unterminated specification annotation.")
 
-def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
+def _layout_preserving_placeholder(consumed: str, placeholder: str) -> str:
+    """
+    Preserve the layout of the original source code by adding spaces to the placeholder.
+    """
+    if "\n" not in consumed:
+        if len(placeholder) <= len(consumed):
+            return placeholder + (" " * (len(consumed) - len(placeholder)))
+        return placeholder
+
+    tail_width = len(consumed.rsplit("\n", 1)[-1])
+    return placeholder + ("\n" * consumed.count("\n")) + (" " * tail_width)
+
+
+def extract_raw_specs(src: str, source_file: SourceFile | None = None) -> Tuple[str, Dict[str, RawSpec]]:
     # Keep the high-level parser independent from spec syntax by replacing
     # annotation bodies with opaque placeholders before the grammar runs.
     rewritten: List[str] = []
@@ -122,23 +136,30 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
                 next_spec_id += 1
 
 
+            source = source_file or SourceFile("", src)
             if kind == RawSpecKind.SPEC_START:
-                placeholder = f"_SELVERI_SPEC_START_{identifier}"
+                placeholder = f"@S_{identifier}"
             elif kind == RawSpecKind.SPEC_END:
-                placeholder = f"_SELVERI_SPEC_END_{identifier}"
+                placeholder = f"@E_{identifier}"
+            elif kind == RawSpecKind.SPEC_NAMED:
+                placeholder = f"@N_{identifier}"
             else:
-                placeholder = f"_SELVERI_SPEC_{identifier}"
-
+                placeholder = f"@{identifier}"
             raw_specs[placeholder] = RawSpec(
                 spec_id=identifier,
                 formula_text=formula_text,
                 location=SourceSpan(
-                    start=SourceLocation(line=start_line, column=start_column),
-                    end=SourceLocation(line=end_line, column=end_column),
+                    source=source,
+                    start_line=start_line,
+                    start_column=start_column,
+                    end_line=end_line,
+                    end_column=end_column + 1,
+                    start_pos=index,
+                    end_pos=close_index + 1,
                 ),
                 kind=kind
             )
-            rewritten.append(placeholder)
+            rewritten.append(_layout_preserving_placeholder(src[index : close_index + 1], placeholder))
             index = close_index + 1
             continue
 

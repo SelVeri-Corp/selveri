@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import List, Optional
-from .parser import AExp, BExp
+from enum import Enum
+from typing import TYPE_CHECKING, List, Optional
+
+from .diagnostics import SourceSpan
 from .runtime import DeclType
+
+if TYPE_CHECKING:
+    from .parser import AExp, BExp
 
 
 class SpecType(Enum):
@@ -20,16 +24,6 @@ class RawSpecKind(Enum):
     SPEC_NAMED = "spec_named"
     SPEC_START = "spec_start"
     SPEC_END = "spec_end"
-
-@dataclass(frozen=True)
-class SourceLocation:
-    line: int
-    column: int
-
-@dataclass(frozen=True)
-class SourceSpan:
-    start: SourceLocation
-    end: SourceLocation
 
 @dataclass(frozen=True)
 class RawSpec:

@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
 
-from lark import Lark, LarkError, Transformer, v_args
+from lark import Lark, LarkError, Transformer, UnexpectedInput, v_args
 
-from .errors import ParserError, VerifierRuntimeError
+from .diagnostics import format_found_token, render_expected_tokens
+from .errors import ParserError, VerifierRuntimeError, parse_error
 from .runtime import DeclType
 from .parser import (
     ABinOp,
@@ -184,6 +185,7 @@ SPEC_PARSER = Lark.open(
     parser="lalr",
     lexer="contextual",
     maybe_placeholders=False,
+    propagate_positions=True,
 )
 
 
@@ -191,6 +193,11 @@ def parse_spec(src: str) -> Spec:
     try:
         tree = SPEC_PARSER.parse(src)
     except LarkError as e:
+        if isinstance(e, UnexpectedInput):
+            token = getattr(e, "token", None)
+            raise parse_error(
+                f"Unexpected {format_found_token(token)}; {render_expected_tokens(getattr(e, 'expected', ()))}.",
+                title="invalid SelVeri specification",
+            ) from None
         raise ParserError("Failed to parse SelVeri specification. " + str(e)) from None
     return SpecAstBuilder().transform(tree)
-    
