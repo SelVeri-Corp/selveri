@@ -163,6 +163,7 @@ class SelVeriCompiler:
         self.raw_specs: Dict[str, RawSpec] = {}
         # None = `{ start name }` seen; awaiting `{ name := ... }`. RawSpec = defined named spec.
         self.spec_frames: List[Dict[str, Optional[RawSpec]]] = []
+        self._current_span = None
 
     # ---------- utilities ----------
     def pc(self) -> int:
@@ -171,6 +172,23 @@ class SelVeriCompiler:
     def emit(self, op: str, *args: Union[str, int, float]) -> int:
         self.code.append(IRInstr(self.pc(), op, args))
         return len(self.code) - 1 # index (label) of the last emitted instruction
+
+    def _span_of(self, node: object | None):
+        return getattr(node, "span", None)
+
+    def _with_span(self, exc: CompilerError, span):
+        if getattr(exc, "diagnostic", None) is not None and exc.diagnostic.span is not None:
+            return exc
+        return CompilerError(
+            exc.diagnostic.message if getattr(exc, "diagnostic", None) is not None else str(exc),
+            span=span or self._current_span,
+            title=exc.diagnostic.title if getattr(exc, "diagnostic", None) is not None else None,
+            notes=exc.diagnostic.notes if getattr(exc, "diagnostic", None) is not None else (),
+            hint=exc.diagnostic.hint if getattr(exc, "diagnostic", None) is not None else None,
+        )
+
+    def _raise(self, message: str, node: object | None = None) -> None:
+        raise CompilerError(message, span=self._span_of(node) or self._current_span)
 
     def patch_jump(self, patch: _PatchRef, target_pc: int) -> None:
         instr = self.code[patch.idx]
@@ -887,58 +905,65 @@ class SelVeriCompiler:
         raise CompilerError(f"Unsupported boolean expression: {type(expr).__name__}")
 
     def C_stmt(self, stmt: Stmt) -> None:
-        if isinstance(stmt, Decl):
-            self._compile_decl(stmt)
-            self.emit("STEP")
-            return
-        if isinstance(stmt, Assign):
-            self._compile_assign(stmt)
-            self.emit("STEP")
-            return
-        if isinstance(stmt, ListAssign):
-            self._compile_list_assign(stmt)
-            self.emit("STEP")
-            return
-        if isinstance(stmt, Pass):
-            self.emit("NOOP")
-            return
-        if isinstance(stmt, SpecAnnot):
-            spec = stmt.spec
-            if spec.kind == RawSpecKind.SPEC_START:
-                self._emit_plt_start_marker(spec.spec_id)
+        old_span = self._current_span
+        self._current_span = self._span_of(stmt) or old_span
+        try:
+            if isinstance(stmt, Decl):
+                self._compile_decl(stmt)
+                self.emit("STEP")
                 return
-            if spec.kind == RawSpecKind.SPEC_END:
-                target = self._lookup_named_spec_for_flt_end(spec.spec_id)
-                self.emit("SPEC_END", target.spec_id)
+            if isinstance(stmt, Assign):
+                self._compile_assign(stmt)
+                self.emit("STEP")
                 return
-            if spec.kind == RawSpecKind.SPEC_NAMED:
-                self._register_named_spec_definition(spec.spec_id, spec, spec.formula_text)
-                self.raw_specs[spec.spec_id] = spec
-                self.emit("VERI", spec.spec_id, spec.formula_text)
+            if isinstance(stmt, ListAssign):
+                self._compile_list_assign(stmt)
+                self.emit("STEP")
                 return
-            if spec.kind == RawSpecKind.SPEC:
-                self.raw_specs[spec.spec_id] = spec
-                self.emit("VERI", spec.spec_id, spec.formula_text)
+            if isinstance(stmt, Pass):
+                self.emit("NOOP")
                 return
-        if isinstance(stmt, If):
-            self._compile_if(stmt)
-            return
-        if isinstance(stmt, While):
-            self._compile_while(stmt)
-            return
-        if isinstance(stmt, Return):
-            self._compile_return(stmt)
-            return
-        if isinstance(stmt, FuncCall):
-            self._compile_call(stmt)
-            return
-        if isinstance(stmt, Write):
-            self._compile_write(stmt)
-            return
-        if isinstance(stmt, WriteLine):
-            self._compile_writeline(stmt)
-            return
-        raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
+            if isinstance(stmt, SpecAnnot):
+                spec = stmt.spec
+                if spec.kind == RawSpecKind.SPEC_START:
+                    self._emit_plt_start_marker(spec.spec_id)
+                    return
+                if spec.kind == RawSpecKind.SPEC_END:
+                    target = self._lookup_named_spec_for_flt_end(spec.spec_id)
+                    self.emit("SPEC_END", target.spec_id)
+                    return
+                if spec.kind == RawSpecKind.SPEC_NAMED:
+                    self._register_named_spec_definition(spec.spec_id, spec, spec.formula_text)
+                    self.raw_specs[spec.spec_id] = spec
+                    self.emit("VERI", spec.spec_id, spec.formula_text)
+                    return
+                if spec.kind == RawSpecKind.SPEC:
+                    self.raw_specs[spec.spec_id] = spec
+                    self.emit("VERI", spec.spec_id, spec.formula_text)
+                    return
+            if isinstance(stmt, If):
+                self._compile_if(stmt)
+                return
+            if isinstance(stmt, While):
+                self._compile_while(stmt)
+                return
+            if isinstance(stmt, Return):
+                self._compile_return(stmt)
+                return
+            if isinstance(stmt, FuncCall):
+                self._compile_call(stmt)
+                return
+            if isinstance(stmt, Write):
+                self._compile_write(stmt)
+                return
+            if isinstance(stmt, WriteLine):
+                self._compile_writeline(stmt)
+                return
+            raise CompilerError(f"Unsupported statement: {type(stmt).__name__}")
+        except CompilerError as exc:
+            raise self._with_span(exc, self._span_of(stmt)) from None
+        finally:
+            self._current_span = old_span
 
     def _compile_decl(self, decl: Decl) -> None:
         name = decl.name
@@ -1117,7 +1142,7 @@ class SelVeriCompiler:
     def _register_functions(self, program: Program) -> None:
         for func in program.func_decls:
             if func.name in self.functions:
-                raise CompilerError(f"Duplicate function declaration: {func.name}")
+                raise CompilerError(f"Duplicate function declaration: {func.name}", span=self._span_of(func))
             self.functions[func.name] = (func, -1)
 
     def _declare_static_list_param(self, name: str, type_node: TypeList) -> None:
@@ -1150,6 +1175,8 @@ class SelVeriCompiler:
     def _compile_function_decl(self, func: FunctionDecl) -> None:
         old_scope = self.scope
         old_return_type = self.current_return_type
+        old_span = self._current_span
+        self._current_span = self._span_of(func) or old_span
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
@@ -1160,26 +1187,33 @@ class SelVeriCompiler:
 
         # Parameters are pushed left-to-right by the caller, so bind them from the
         # top of the stack back toward the first argument.
-        for param in reversed(func.params):
-            if isinstance(param.type_node, (TypeInt, TypeFloat)):
-                self._declare_basic(param.name, param.type_node)
-                self.emit("STORE", param.name) # fetch parameter value from stack
-                continue
-            if isinstance(param.type_node, TypeList):
-                self._declare_static_list_param(param.name, param.type_node)
-                continue
-            if isinstance(param.type_node, TypeDynamicList):
-                self._declare_dynamic_list_param(param.name, param.type_node)
-                continue
-            raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
-        self.emit("STEP") # step after initializing parameters
+        try:
+            for param in reversed(func.params):
+                self._current_span = self._span_of(param) or self._span_of(func) or old_span
+                if isinstance(param.type_node, (TypeInt, TypeFloat)):
+                    self._declare_basic(param.name, param.type_node)
+                    self.emit("STORE", param.name) # fetch parameter value from stack
+                    continue
+                if isinstance(param.type_node, TypeList):
+                    self._declare_static_list_param(param.name, param.type_node)
+                    continue
+                if isinstance(param.type_node, TypeDynamicList):
+                    self._declare_dynamic_list_param(param.name, param.type_node)
+                    continue
+                raise CompilerError(f"Unsupported parameter type: {type(param.type_node).__name__}")
+            self._current_span = self._span_of(func) or old_span
+            self.emit("STEP") # step after initializing parameters
 
-        body = list(func.body) # copy for appending return
-        if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value
-            body.append(Return(self._default_value_expr(func.return_type)))
-        self.C_stmt_seq(body)
-        self.scope = old_scope # restore old scope
-        self.current_return_type = old_return_type
+            body = list(func.body) # copy for appending return
+            if not stmt_seq_guarantees_return(body): # if the function does not return a value, add a default return value
+                body.append(Return(self._default_value_expr(func.return_type)))
+            self.C_stmt_seq(body)
+        except CompilerError as exc:
+            raise self._with_span(exc, self._span_of(func)) from None
+        finally:
+            self.scope = old_scope # restore old scope
+            self.current_return_type = old_return_type
+            self._current_span = old_span
 
     def compile_program(self, program: Program) -> List[IRInstr]:
         self._register_functions(program)
@@ -1208,8 +1242,8 @@ class SelVeriCompiler:
 # -----------------------
 # Convenience API
 # -----------------------
-def compile_selveri_source_to_ir_text(src: str) -> str:
-    ast = parse_selveri(src)
+def compile_selveri_source_to_ir_text(src: str, source_path: str | Path | None = None) -> str:
+    ast = parse_selveri(src, source_path)
     return SelVeriCompiler().compile_to_text(ast)
 
 
@@ -1222,6 +1256,6 @@ if __name__ == "__main__":
     output = args.output if args.output is not None else args.input.with_suffix(".svir")
     with open(args.input, "r", encoding="utf-8") as f:
         src = f.read()
-    ir_text = compile_selveri_source_to_ir_text(src)
+    ir_text = compile_selveri_source_to_ir_text(src, args.input)
     with open(output, "w", encoding="utf-8") as f:
         f.write(ir_text)

@@ -5,12 +5,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
-from lark import Lark, LarkError, Token, Transformer, v_args
+from lark import Lark, LarkError, Token, Transformer, UnexpectedInput, v_args
+from lark.exceptions import VisitError
 
-from .errors import ParserError
 from .defs import AExp, BExp, Stmt
-from .specs import RawSpec
+from .diagnostics import (
+    SourceFile,
+    SourceSpan,
+    format_found_token,
+    render_expected_tokens,
+)
+from .errors import ParserError, parse_error
 from .preprocessor import extract_raw_specs
+from .specs import RawSpec
+
 
 # =========================
 # AST
@@ -19,16 +27,22 @@ from .preprocessor import extract_raw_specs
 class Program:
     func_decls: List["FunctionDecl"]
     stmt_seq: List["Stmt"]
+    span: SourceSpan | None = None
 
 
+class TypeNode:
+    span: SourceSpan | None = None
 
-class TypeNode: 
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
+
 class ConcreteType(TypeNode):
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
+
 class Imm:
+    span: SourceSpan | None = None
+
     def __str__(self) -> str:
         raise NotImplementedError("Subclasses must implement __str__")
 
@@ -39,25 +53,43 @@ class BasicType(ConcreteType):
 
 @dataclass(frozen=True)
 class TypeInt(BasicType):
+    span: SourceSpan | None = None
+
     def __str__(self) -> str:
         return "INT"
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, TypeInt)
+
+    def __hash__(self) -> int:
+        return hash(TypeInt)
+
 @dataclass(frozen=True)
 class TypeFloat(BasicType):
+    span: SourceSpan | None = None
+
     def __str__(self) -> str:
         return "FLOAT"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, TypeFloat)
+
+    def __hash__(self) -> int:
+        return hash(TypeFloat)
 
 @dataclass(frozen=True)
 class TypeList(ConcreteType):
     elem: BasicType
     dimension: "IntLit"
     shape: List[AExp] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         if self.dimension.value != len(self.shape):
             raise ParserError(
                 f"List type dimension ({self.dimension.value}) does not match "
-                f"declared shape count ({len(self.shape)})."
+                f"declared shape count ({len(self.shape)}).",
+                span=self.span,
             )
 
     def __str__(self) -> str:
@@ -68,12 +100,14 @@ class TypeDynamicList(TypeNode):
     elem: BasicType
     dimension: "IntLit"
     shape: List[Optional[AExp]] = field(default_factory=list)
+    span: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         if len(self.shape) > self.dimension.value:
             raise ParserError(
                 f"Dynamic list type dimension ({self.dimension.value}) cannot be smaller "
-                f"than declared shape count ({len(self.shape)})."
+                f"than declared shape count ({len(self.shape)}).",
+                span=self.span,
             )
 
     def __str__(self) -> str:
@@ -83,6 +117,7 @@ class TypeDynamicList(TypeNode):
 @dataclass(frozen=True)
 class IntLit(Imm, AExp):
     value: int
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return str(self.value)
@@ -90,16 +125,21 @@ class IntLit(Imm, AExp):
 @dataclass(frozen=True)
 class FloatLit(Imm, AExp):
     value: float
+    span: SourceSpan | None = None
+
     def __str__(self) -> str:
         return str(self.value)
 
 @dataclass(frozen=True)
 class ListLit(Imm, AExp):
     items: List[Imm]
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class AVar(AExp):
     name: str
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return self.name
@@ -107,6 +147,7 @@ class AVar(AExp):
 @dataclass(frozen=True)
 class ALen(AExp):
     name: str
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"len({self.name})"
@@ -115,12 +156,15 @@ class ALen(AExp):
 class AIndex(AExp):
     base: AExp
     index: AExp
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.base}[{self.index}]"
 
 @dataclass(frozen=True)
 class ARead(AExp):
+    span: SourceSpan | None = None
+
     def __str__(self) -> str:
         return "read()"
 
@@ -128,6 +172,7 @@ class ARead(AExp):
 class AUnOp(AExp):
     op: str
     rhs: AExp
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.op}{self.rhs}"
@@ -137,6 +182,7 @@ class ABinOp(AExp):
     op: str
     left: AExp
     right: AExp
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
@@ -145,107 +191,140 @@ class ABinOp(AExp):
 @dataclass(frozen=True)
 class BBool(BExp):
     value: bool
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return "true" if self.value else "false"
 
+
 @dataclass(frozen=True)
 class BNot(BExp):
     rhs: BExp
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"!{self.rhs}"
+
 
 @dataclass(frozen=True)
 class BBinOp(BExp):
     op: str
     left: BExp
     right: BExp
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
+
 
 @dataclass(frozen=True)
 class BCompare(BExp):
     op: str
     left: AExp
     right: AExp
+    span: SourceSpan | None = None
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"
 
+
 @dataclass(frozen=True)
 class BTruthy(BExp):
     aexp: AExp
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class BSpec(BExp):
-    """A specification used as a boolean expression: {φ}"""
     spec: RawSpec
+    span: SourceSpan | None = None
 
 
-# Statements
 @dataclass(frozen=True)
 class Decl(Stmt):
     name: str
     type_node: TypeNode
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class Assign(Stmt):
     name: str
     aexp: AExp
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class ListAssign(Stmt):
     target: AIndex
     aexp: AExp
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
-class Pass(Stmt): pass
+class Pass(Stmt):
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class AObtain(AExp):
-    """obtain(&x, φ) — arithmetic expression yielding the witness value"""
     var_name: str
     spec: RawSpec
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class SpecAnnot(Stmt):
     spec: RawSpec
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class If(Stmt):
     cond: BExp
     then_s: List[Stmt]
     else_s: Optional[List[Stmt]]
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class While(Stmt):
     cond: BExp
     body: List[Stmt]
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class Write(Stmt):
     aexp: AExp
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class WriteLine(Stmt):
     aexp: AExp
+    span: SourceSpan | None = None
 
-# Functions
+
 @dataclass(frozen=True)
 class Param:
     name: str
     type_node: TypeNode
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class Return(Stmt):
     value: AExp
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class FuncCall(AExp, Stmt):
     name: str
     args: List[AExp]
+    span: SourceSpan | None = None
+
 
 @dataclass(frozen=True)
 class FunctionDecl:
@@ -253,106 +332,118 @@ class FunctionDecl:
     params: List[Param]
     return_type: TypeNode
     body: List[Stmt]
+    span: SourceSpan | None = None
 
-@v_args(inline=True)
+
+@v_args(meta=True, inline=True)
 class AstBuilder(Transformer):
-    def __init__(self, spec_slots: Dict[str, RawSpec]) -> None:
+    def __init__(self, spec_slots: Dict[str, RawSpec], source_file: SourceFile) -> None:
         super().__init__()
         self.spec_slots = spec_slots
+        self.source_file = source_file
 
-    def start(self, program):
+    def _span(self, meta: object) -> SourceSpan:
+        return SourceSpan.from_lark_meta(self.source_file, meta)
+
+    def _token_span(self, token: Token) -> SourceSpan:
+        return SourceSpan.from_token(self.source_file, token)
+
+    def _pass(self, meta: object) -> Pass:
+        return Pass(span=self._span(meta))
+
+    def start(self, _meta, program):
         return program
 
-    def program(self, *children):
+    def program(self, meta, *children):
         if not children:
-            return Program(func_decls=[], stmt_seq=[Pass()])
+            return Program(func_decls=[], stmt_seq=[self._pass(meta)], span=self._span(meta))
         *funcs, stmt_seq = children
-        return Program(func_decls=list(funcs), stmt_seq=stmt_seq or [Pass()])
+        return Program(func_decls=list(funcs), stmt_seq=stmt_seq or [self._pass(meta)], span=self._span(meta))
 
-    def stmt_seq(self, *stmts):
+    def stmt_seq(self, _meta, *stmts):
         return list(stmts) or []
 
-    def spec_annot(self, slot: Token):
-        return SpecAnnot(self.spec_slots[str(slot)])
+    def spec_annot(self, meta, slot: Token):
+        spec = self.spec_slots[str(slot)]
+        return SpecAnnot(spec, span=spec.location or self._span(meta))
 
     # statements
-    def decl_stmt(self, name, type_node): return Decl(str(name), type_node)
-    def assign_stmt(self, name, expr): return Assign(str(name), expr)
-    def list_assign_stmt(self, target, expr): return ListAssign(target, expr)
-    def write_stmt(self, aexp): return Write(aexp)
-    def writeline_stmt(self, aexp): return WriteLine(aexp)
-    def pass_stmt(self): return Pass()
-    def empty_stmt(self): return Pass()
-    def while_stmt(self, cond, body_seq): return While(cond=cond, body=body_seq or [Pass()])
+    def decl_stmt(self, meta, name, type_node): return Decl(str(name), type_node, span=self._span(meta))
+    def assign_stmt(self, meta, name, expr): return Assign(str(name), expr, span=self._span(meta))
+    def list_assign_stmt(self, meta, target, expr): return ListAssign(target, expr, span=self._span(meta))
+    def write_stmt(self, meta, aexp): return Write(aexp, span=self._span(meta))
+    def writeline_stmt(self, meta, aexp): return WriteLine(aexp, span=self._span(meta))
+    def pass_stmt(self, meta): return self._pass(meta)
+    def empty_stmt(self, meta): return self._pass(meta)
+    def while_stmt(self, meta, cond, body_seq): return While(cond=cond, body=body_seq or [self._pass(meta)], span=self._span(meta))
 
-    def bspec(self, slot: Token):
-        return BSpec(self.spec_slots[str(slot)])
+    def bspec(self, meta, slot: Token):
+        spec = self.spec_slots[str(slot)]
+        return BSpec(spec, span=spec.location or self._span(meta))
 
-    def a_obtain(self, name: Token, slot: Token):
-        return AObtain(str(name), self.spec_slots[str(slot)])
+    def a_obtain(self, meta, name: Token, slot: Token):
+        return AObtain(str(name), self.spec_slots[str(slot)], span=self._span(meta))
 
-    def if_stmt(self, cond, then_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
-    def if_else_stmt(self, cond, then_seq, else_seq): return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+    def if_stmt(self, meta, cond, then_seq):
+        return If(cond=cond, then_s=then_seq or [self._pass(meta)], else_s=None, span=self._span(meta))
+
+    def if_else_stmt(self, meta, cond, then_seq, else_seq):
+        return If(cond=cond, then_s=then_seq or [self._pass(meta)], else_s=else_seq or [self._pass(meta)], span=self._span(meta))
 
     # types
-    def type_int(self): return TypeInt()
-    def type_float(self): return TypeFloat()
-    def type_list(self, elem, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
-    def dynamic_list_type(self, elem, dimension): return TypeDynamicList(elem, IntLit(int(dimension)))
+    def type_int(self, meta): return TypeInt(span=self._span(meta))
+    def type_float(self, meta): return TypeFloat(span=self._span(meta))
+    def type_list(self, meta, elem, dimension, shape):
+        return TypeList(elem, IntLit(int(dimension), span=self._token_span(dimension)), shape, span=self._span(meta))
+    def dynamic_list_type(self, meta, elem, dimension):
+        return TypeDynamicList(elem, IntLit(int(dimension), span=self._token_span(dimension)), span=self._span(meta))
 
-    def aexp_list(self, *items):
-        return list(items)
-
+    def aexp_list(self, _meta, *items): return list(items)
     # function parameters
-    def param_type(self, name, type_node):
-        return Param(str(name), type_node)
-
-    def param_list(self, *params):
-        return list(params)
-
+    def param_type(self, meta, name, type_node): return Param(str(name), type_node, span=self._span(meta))
+    def param_list(self, _meta, *params): return list(params)
     # imm/aexp
-    def aexp(self, expr): return expr
-    def int_lit(self, tok): return IntLit(int(tok))
-    def float_lit(self, tok): return FloatLit(float(tok))
-    def list_lit(self, *args):
-        return ListLit(list(args))
-    def a_var(self, name): return AVar(str(name))
-    def a_len(self, name): return ALen(str(name))
-    def _mk_a_index(self, base, idx):
+    def aexp(self, _meta, expr): return expr
+    def int_lit(self, _meta, tok): return IntLit(int(tok), span=self._token_span(tok))
+    def float_lit(self, _meta, tok): return FloatLit(float(tok), span=self._token_span(tok))
+    def list_lit(self, meta, *args): return ListLit(list(args), span=self._span(meta))
+    def a_var(self, _meta, name): return AVar(str(name), span=self._token_span(name))
+    def a_len(self, meta, name): return ALen(str(name), span=self._span(meta))
+    def _mk_a_index(self, meta, base, idx):
         if not isinstance(base, AExp):
-            base = AVar(str(base))
-        return AIndex(base, idx)
-    def a_index_base(self, base, idx):
-        return self._mk_a_index(base, idx)
-    def a_index_chain(self, base, idx):
-        return self._mk_a_index(base, idx)
-    def a_read(self): return ARead()
-    def neg(self, rhs): return AUnOp("-", rhs)
-    def add(self, l, r): return ABinOp("+", l, r)
-    def sub(self, l, r): return ABinOp("-", l, r)
-    def mul(self, l, r): return ABinOp("*", l, r)
-    def div(self, l, r): return ABinOp("/", l, r)
+            base = AVar(str(base), span=self._token_span(base))
+        return AIndex(base, idx, span=self._span(meta))
+    def a_index_base(self, meta, base, idx):
+        return self._mk_a_index(meta, base, idx)
+    def a_index_chain(self, meta, base, idx):
+        return self._mk_a_index(meta, base, idx)
+    def a_read(self, meta): return ARead(span=self._span(meta))
+    def neg(self, meta, rhs): return AUnOp("-", rhs, span=self._span(meta))
+    def add(self, meta, l, r): return ABinOp("+", l, r, span=self._span(meta))
+    def sub(self, meta, l, r): return ABinOp("-", l, r, span=self._span(meta))
+    def mul(self, meta, l, r): return ABinOp("*", l, r, span=self._span(meta))
+    def div(self, meta, l, r): return ABinOp("/", l, r, span=self._span(meta))
 
     # bexp
-    def bexp(self, expr): return expr
-    def btrue(self): return BBool(True)
-    def bfalse(self): return BBool(False)
-    def bnot(self, rhs): return BNot(rhs)
-    def band(self, l, r): return BBinOp("and", l, r)
-    def bxor(self, l, r): return BBinOp("xor", l, r)
-    def bor(self, l, r): return BBinOp("or", l, r)
-    def compare(self, l, op, r): return BCompare(str(op), l, r)
-    def truthy(self, aexp): return BTruthy(aexp)
+    def bexp(self, _meta, expr): return expr
+    def btrue(self, meta): return BBool(True, span=self._span(meta))
+    def bfalse(self, meta): return BBool(False, span=self._span(meta))
+    def bnot(self, meta, rhs): return BNot(rhs, span=self._span(meta))
+    def band(self, meta, l, r): return BBinOp("and", l, r, span=self._span(meta))
+    def bxor(self, meta, l, r): return BBinOp("xor", l, r, span=self._span(meta))
+    def bor(self, meta, l, r): return BBinOp("or", l, r, span=self._span(meta))
+    def compare(self, meta, l, op, r): return BCompare(str(op), l, r, span=self._span(meta))
+    def truthy(self, meta, aexp): return BTruthy(aexp, span=self._span(meta))
 
     # functions
-    def func_decl(self, name, *rest):
+    def func_decl(self, meta, name, *rest):
         if len(rest) == 2:
             params = None
             ret_type, body = rest
         elif len(rest) == 3:
             params, ret_type, body = rest
         else:
-            raise ParserError("Invalid function declaration.")
+            raise ParserError("Invalid function declaration.", span=self._span(meta))
 
         if params is None:
             normalized_params = []
@@ -360,26 +451,23 @@ class AstBuilder(Transformer):
             normalized_params = [params]
         else:
             normalized_params = list(params)
-        return FunctionDecl(str(name), normalized_params, ret_type, body or [])
+        return FunctionDecl(str(name), normalized_params, ret_type, body or [], span=self._span(meta))
 
-    def func_stmt_seq(self, *stmts):
-        return list(stmts) or []
+    def func_stmt_seq(self, _meta, *stmts): return list(stmts) or []
 
-    def func_if_stmt(self, cond, then_seq, else_seq=None):
+    def func_if_stmt(self, meta, cond, then_seq, else_seq=None):
         if else_seq is None:
-            return If(cond=cond, then_s=then_seq or [Pass()], else_s=None)
-        return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+            return If(cond=cond, then_s=then_seq or [self._pass(meta)], else_s=None, span=self._span(meta))
+        return If(cond=cond, then_s=then_seq or [self._pass(meta)], else_s=else_seq or [self._pass(meta)], span=self._span(meta))
 
-    def func_if_else_stmt(self, cond, then_seq, else_seq):
-        return If(cond=cond, then_s=then_seq or [Pass()], else_s=else_seq or [Pass()])
+    def func_if_else_stmt(self, meta, cond, then_seq, else_seq):
+        return If(cond=cond, then_s=then_seq or [self._pass(meta)], else_s=else_seq or [self._pass(meta)], span=self._span(meta))
 
-    def func_while_stmt(self, cond, body_seq):
-        return While(cond=cond, body=body_seq or [Pass()])
+    def func_while_stmt(self, meta, cond, body_seq):
+        return While(cond=cond, body=body_seq or [self._pass(meta)], span=self._span(meta))
 
-    def return_stmt(self, expr):
-        return Return(expr)
-
-    def func_call(self, name, args=None):
+    def return_stmt(self, meta, expr): return Return(expr, span=self._span(meta))
+    def func_call(self, meta, name, args=None):
         # With inlined arg_list (grammar.lark), one argument is passed as a bare aexp;
         # zero arguments go through arg_list_opt -> []; two or more use arg_list -> list.
         if args is None:
@@ -388,15 +476,14 @@ class AstBuilder(Transformer):
             normalized = args
         else:
             normalized = [args]
-        return FuncCall(str(name), normalized)
+        return FuncCall(str(name), normalized, span=self._span(meta))
 
-    def arg_list_opt(self, args=None):
+    def arg_list_opt(self, _meta, args=None):
         if args is None:
             return []
-        # Single-arg calls pass one AExp here (arg_list is inlined in grammar.lark).
         return args if isinstance(args, list) else [args]
 
-    def arg_list(self, *args):
+    def arg_list(self, _meta, *args):
         return list(args)
 
 
@@ -405,16 +492,47 @@ SELVERI_PARSER = Lark.open(
     parser="lalr",
     lexer="contextual",
     maybe_placeholders=False,
+    propagate_positions=True,
 )
 
-def parse_selveri(src: str) -> Program:
-    """Parse SelVeri source code into an executable AST with raw spec payloads."""
-    rewritten_src, raw_specs = extract_raw_specs(src) # preprocess the source code to extract raw specs
+
+def _parser_error_from_lark(exc: LarkError, source_file: SourceFile) -> ParserError:
+    if isinstance(exc, UnexpectedInput):
+        token = getattr(exc, "token", None)
+        if token is not None:
+            span = SourceSpan.from_token(source_file, token)
+        else:
+            pos = getattr(exc, "pos_in_stream", 0) or 0
+            span = SourceSpan(
+                source=source_file,
+                start_line=getattr(exc, "line", 1),
+                start_column=getattr(exc, "column", 1),
+                end_line=getattr(exc, "line", 1),
+                end_column=getattr(exc, "column", 1) + 1,
+                start_pos=pos,
+                end_pos=pos + 1,
+            )
+        return parse_error(
+            f"Unexpected {format_found_token(token)}; {render_expected_tokens(getattr(exc, 'expected', ()))}.",
+            span=span,
+            title="invalid SelVeri syntax",
+        )
+    return parse_error(f"Failed to parse SelVeri source code. {exc}")
+
+
+def parse_selveri(src: str, source_path: str | Path | None = None) -> Program:
+    source_file = SourceFile(str(source_path or ""), src)
+    rewritten_src, raw_specs = extract_raw_specs(src, source_file)
     try:
         tree = SELVERI_PARSER.parse(rewritten_src)
-    except LarkError as e:
-        raise ParserError("Failed to parse SelVeri source code. " + str(e)) from None
-    return AstBuilder(raw_specs).transform(tree)
+    except LarkError as exc:
+        raise _parser_error_from_lark(exc, source_file) from None
+    try:
+        return AstBuilder(raw_specs, source_file).transform(tree)
+    except VisitError as exc:
+        if isinstance(exc.orig_exc, ParserError):
+            raise exc.orig_exc from None
+        raise
 
 
 def _iter_aexp_specs(aexp: AExp) -> Iterator[RawSpec]:
@@ -486,5 +604,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.input_file, "r", encoding="utf-8") as f:
         src = f.read()
-    ast = parse_selveri(src)
+    ast = parse_selveri(src, args.input_file)
     print(ast)

@@ -25,6 +25,7 @@ class VerificationEngine:
         self.fltl_pending: Dict[tuple[int, str], FutureObligation] = dict() # for future LTL verification pending obligations
         # (scope_id, spec_id) -> parsed spec; same id may resolve many times (e.g. loop conditions) if formula matches
         self.resolved_specs: Dict[tuple[int, Any], ParsedSpec] = dict()
+        self.raw_specs: Dict[Any, RawSpec] = dict()
 
         # for past-LTL start markers
         self.pltl_start_marker_step: Dict[tuple[int, str], int] = dict()
@@ -38,6 +39,10 @@ class VerificationEngine:
         self.fltl_pending.clear()
         self.pltl_start_marker_step.clear()
         self.resolved_specs.clear()
+
+    def register_raw_specs(self, raw_specs: Iterable[RawSpec]) -> None:
+        for raw_spec in raw_specs:
+            self.raw_specs[raw_spec.spec_id] = raw_spec
 
     def handle_step(self, snapshot: RuntimeConfiguration) -> None:
         self.history.append(snapshot)
@@ -56,16 +61,14 @@ class VerificationEngine:
                 )
             return existing
 
-        raw_spec = RawSpec(spec_id=spec_id, formula_text=formula_text)
+        raw_spec = self.raw_specs.get(spec_id, RawSpec(spec_id=spec_id, formula_text=formula_text))
         try:
             spec_ast = parse_spec(formula_text)
         except ParserError as exc:
-            if raw_spec.location is None:
-                raise VerificationError(f"Failed to parse specification #{spec_id}: {exc}") from None
-            raise VerifierRuntimeError(
-                "Failed to parse specification "
-                f"#{spec_id} at "
-                f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
+            raise VerificationError(
+                f"Failed to parse specification {raw_spec.spec_id!r}: {exc.diagnostic.message}",
+                span=raw_spec.location,
+                notes=(f"specification text: {formula_text}",),
             ) from None
         parsed = ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.spec_type, ast=spec_ast)
         self.resolved_specs[key] = parsed
@@ -504,6 +507,7 @@ class VerificationEngine:
         obligation = FutureObligation(
             spec_id=spec.spec_id,
             source_spec=spec.formula_text,
+            source_span=self.raw_specs.get(spec.spec_id).location if spec.spec_id in self.raw_specs else None,
             created_at_step=self.last_step,
             scope_id=snapshot.scope.scope_id,
             lexical_depth=lexical_depth,
@@ -633,11 +637,16 @@ class VerificationEngine:
                 )
 
     def raise_spec_failure(self, parsed_spec: ParsedSpec, detail: str) -> None:
+        raw_spec = self.raw_specs.get(parsed_spec.spec_id)
         raise VerificationError(
-            f"Specification {parsed_spec.spec_id} failed: {detail}: {parsed_spec.formula_text}"
+            f"Specification {parsed_spec.spec_id} failed: {detail}.",
+            span=raw_spec.location if raw_spec is not None else None,
+            notes=(f"specification text: {parsed_spec.formula_text}",),
         )
 
     def raise_future_failure(self, obligation: FutureObligation, detail: str) -> None:
         raise VerificationError(
-            f"Future specification {obligation.spec_id} failed: {detail}: {obligation.source_spec}"
+            f"Future specification {obligation.spec_id} failed: {detail}.",
+            span=obligation.source_span,
+            notes=(f"specification text: {obligation.source_spec}",),
         )
