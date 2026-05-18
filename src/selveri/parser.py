@@ -10,6 +10,8 @@ from lark.exceptions import VisitError
 
 from .defs import AExp, BExp, Stmt
 from .diagnostics import (
+    DiagnosticCode,
+    DiagnosticLabel,
     SourceFile,
     SourceSpan,
     format_found_token,
@@ -477,10 +479,51 @@ def _parser_error_from_lark(exc: LarkError, source_file: SourceFile) -> ParserEr
                 start_pos=pos,
                 end_pos=pos + 1,
             )
+        expected = set(getattr(exc, "expected", ()) or ())
+        found = format_found_token(token)
+        label = f"found {found}"
+        title = "unexpected token"
+        code = DiagnosticCode.PARSE_UNEXPECTED_TOKEN
+        hint = None
+        message = render_expected_tokens(expected)
+        if token is None or getattr(token, "type", None) == "$END":
+            title = "unexpected end of input"
+            label = "input ended here"
+            if "FI" in expected:
+                title = "missing block terminator"
+                code = DiagnosticCode.PARSE_MISSING_BLOCK_TERMINATOR
+                message = "expected `fi` before end of input"
+                hint = "close the conditional block with `fi`"
+                for line_no in range(span.start_line, 0, -1):
+                    text = source_file.get_line(line_no)
+                    column = len(text) - len(text.lstrip()) + 1
+                    if text.lstrip().startswith("if "):
+                        start = SourceSpan(source_file, line_no, column, line_no, column + 2, 0, 0)
+                        span = start
+                        label = "`if` block starts here"
+                        break
+            elif "OD" in expected:
+                title = "missing block terminator"
+                code = DiagnosticCode.PARSE_MISSING_BLOCK_TERMINATOR
+                message = "expected `od` before end of input"
+                hint = "close the loop block with `od`"
+                for line_no in range(span.start_line, 0, -1):
+                    text = source_file.get_line(line_no)
+                    column = len(text) - len(text.lstrip()) + 1
+                    if text.lstrip().startswith("while "):
+                        start = SourceSpan(source_file, line_no, column, line_no, column + 5, 0, 0)
+                        span = start
+                        label = "`while` block starts here"
+                        break
+        elif getattr(token, "value", None) == ";" and {"IDENT", "INT_LIT", "FLOAT_LIT", "LPAR", "LEN"} & expected:
+            hint = "write an expression after `:=`"
         return parse_error(
-            f"Unexpected {format_found_token(token)}; {render_expected_tokens(getattr(exc, 'expected', ()))}.",
+            message,
             span=span,
-            title="invalid SelVeri syntax",
+            title=title,
+            code=code,
+            labels=(DiagnosticLabel(span, label, "primary"),),
+            hint=hint,
         )
     return parse_error(f"Failed to parse SelVeri source code. {exc}")
 

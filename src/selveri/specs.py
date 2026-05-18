@@ -139,3 +139,4 @@ class ParsedSpec:
     formula_text: str
     spec_type: SpecType
     ast: Spec
+    location: Optional[SourceSpan] = None

@@ -54,6 +54,69 @@ class SourceSpan:
     def location(self) -> str:
         return f"{self.file_path}:{self.start_line}:{self.start_column}"
 
+    def is_multiline(self) -> bool:
+        return self.start_line != self.end_line
+
+    def with_source(self, source: SourceFile) -> "SourceSpan":
+        return SourceSpan(
+            source=source,
+            start_line=self.start_line,
+            start_column=self.start_column,
+            end_line=self.end_line,
+            end_column=self.end_column,
+            start_pos=self.start_pos,
+            end_pos=self.end_pos,
+        )
+
+    def merge(self, other: "SourceSpan") -> "SourceSpan":
+        if self.source is not other.source and self.source != other.source:
+            raise ValueError("Cannot merge spans from different source files.")
+        first = self if self.start_pos <= other.start_pos else other
+        last = self if self.end_pos >= other.end_pos else other
+        return SourceSpan(
+            source=first.source,
+            start_line=first.start_line,
+            start_column=first.start_column,
+            end_line=last.end_line,
+            end_column=last.end_column,
+            start_pos=min(self.start_pos, other.start_pos),
+            end_pos=max(self.end_pos, other.end_pos),
+        )
+
+    def contains(self, other: "SourceSpan") -> bool:
+        return (
+            self.source == other.source
+            and self.start_pos <= other.start_pos
+            and self.end_pos >= other.end_pos
+        )
+
+    @classmethod
+    def from_positions(
+        cls,
+        source: SourceFile,
+        *,
+        start_pos: int,
+        end_pos: int | None = None,
+    ) -> "SourceSpan":
+        end_pos = start_pos + 1 if end_pos is None else max(end_pos, start_pos + 1)
+        line = column = 1
+        start_line = start_column = end_line = end_column = 1
+        for index, ch in enumerate(source.text):
+            if index == start_pos:
+                start_line, start_column = line, column
+            if index == end_pos:
+                end_line, end_column = line, column
+                break
+            if ch == "\n":
+                line, column = line + 1, 1
+            else:
+                column += 1
+        else:
+            if start_pos >= len(source.text):
+                start_line, start_column = line, column
+            end_line, end_column = line, column
+        return cls(source, start_line, start_column, end_line, end_column, start_pos, end_pos)
+
     @classmethod
     def from_lark_meta(cls, source: SourceFile, meta: object) -> "SourceSpan":
         return cls(
@@ -94,6 +157,74 @@ class DiagnosticSeverity(Enum):
 
 
 @dataclass(frozen=True)
+class DiagnosticLabel:
+    span: SourceSpan
+    message: str | None = None
+    style: str = "primary"
+
+
+@dataclass(frozen=True)
+class DiagnosticNote:
+    message: str
+    kind: str = "note"
+
+
+@dataclass(frozen=True)
+class DiagnosticFix:
+    message: str
+    replacement: str | None = None
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True)
+class TraceEntry:
+    step: int
+    span: SourceSpan | None
+    description: str
+    values: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Counterexample:
+    values: Mapping[str, object]
+    before_values: Mapping[str, object] = field(default_factory=dict)
+    after_values: Mapping[str, object] = field(default_factory=dict)
+    step: int | None = None
+    trace: tuple[TraceEntry, ...] = ()
+
+
+class DiagnosticCode:
+    PARSE_ERROR = "SV-P000"
+    PARSE_UNEXPECTED_TOKEN = "SV-P001"
+    PARSE_MISSING_BLOCK_TERMINATOR = "SV-P002"
+    PREPROCESSOR_ERROR = "SV-PP000"
+    PREPROCESSOR_UNCLOSED_SPEC = "SV-PP001"
+    PREPROCESSOR_EMPTY_SPEC = "SV-PP002"
+    PREPROCESSOR_NESTED_SPEC = "SV-PP003"
+    COMPILE_ERROR = "SV-C000"
+    COMPILE_DUPLICATE_DECLARATION = "SV-C001"
+    COMPILE_TYPE_MISMATCH = "SV-C002"
+    COMPILE_UNKNOWN_IDENTIFIER = "SV-C003"
+    COMPILE_INVALID_LIST_INDEX = "SV-C004"
+    COMPILE_INVALID_RETURN_TYPE = "SV-C005"
+    RUNTIME_ERROR = "SV-R000"
+    RUNTIME_DIVISION_BY_ZERO = "SV-R001"
+    RUNTIME_INDEX_OUT_OF_BOUNDS = "SV-R002"
+    RUNTIME_INVALID_INPUT_VALUE = "SV-R003"
+    RUNTIME_OBTAIN_FAILED = "SV-R004"
+    IR_PARSE_ERROR = "SV-IR000"
+    VERIFIER_RUNTIME_ERROR = "SV-VR000"
+    VERIFICATION_ERROR = "SV-V000"
+    VERIFICATION_ASSERTION_FAILED = "SV-V001"
+    VERIFICATION_SOLVER_UNKNOWN = "SV-V002"
+    VERIFICATION_TEMPORAL_VIOLATED = "SV-V003"
+    VERIFICATION_TEMPORAL_NOT_SATISFIED = "SV-V004"
+    VERIFICATION_INVALID_START_BOUND = "SV-V005"
+    VERIFICATION_INVALID_END_BOUND = "SV-V006"
+    VERIFICATION_INVALID_SPECIFICATION = "SV-V007"
+
+
+@dataclass(frozen=True)
 class Diagnostic:
     code: str | None
     severity: DiagnosticSeverity
@@ -101,8 +232,12 @@ class Diagnostic:
     title: str
     message: str
     span: SourceSpan | None
-    notes: tuple[str, ...] = field(default_factory=tuple)
+    notes: tuple[DiagnosticNote | str, ...] = field(default_factory=tuple)
     hint: str | None = None
+    labels: tuple[DiagnosticLabel, ...] = field(default_factory=tuple)
+    fixes: tuple[DiagnosticFix, ...] = field(default_factory=tuple)
+    context: Mapping[str, object] = field(default_factory=dict)
+    counterexample: Counterexample | None = None
 
 
 def make_diagnostic(
@@ -113,9 +248,18 @@ def make_diagnostic(
     span: SourceSpan | None = None,
     code: str | None = None,
     severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
-    notes: Sequence[str] = (),
+    notes: Sequence[DiagnosticNote | str] = (),
     hint: str | None = None,
+    labels: Sequence[DiagnosticLabel] = (),
+    fixes: Sequence[DiagnosticFix] = (),
+    context: Mapping[str, object] | None = None,
+    counterexample: Counterexample | Mapping[str, object] | None = None,
 ) -> Diagnostic:
+    resolved_counterexample = (
+        Counterexample(counterexample)
+        if counterexample is not None and not isinstance(counterexample, Counterexample)
+        else counterexample
+    )
     return Diagnostic(
         code=code,
         severity=severity,
@@ -125,6 +269,10 @@ def make_diagnostic(
         span=span,
         notes=tuple(notes),
         hint=hint,
+        labels=tuple(labels),
+        fixes=tuple(fixes),
+        context={} if context is None else dict(context),
+        counterexample=resolved_counterexample,
     )
 
 
@@ -192,7 +340,7 @@ def _format_header(diag: Diagnostic, *, color: bool) -> str:
     return _style(header, _ANSI_BOLD, header_color, color=color)
 
 
-def _format_pointer(span: SourceSpan) -> tuple[str, str, str | None]:
+def _format_pointer(span: SourceSpan, message: str | None = None) -> tuple[str, str, str | None]:
     raw_line = span.source.get_line(span.start_line)
     display_line = raw_line.expandtabs(4)
 
@@ -206,6 +354,8 @@ def _format_pointer(span: SourceSpan) -> tuple[str, str, str | None]:
         focus = raw_line[start_index:]
     focus_width = max(1, len(focus.expandtabs(4)))
     pointer = " " * len(raw_line[:start_index].expandtabs(4)) + "^" * focus_width
+    if message:
+        pointer += f" {message}"
 
     continuation = None
     if span.start_line != span.end_line:
@@ -215,40 +365,159 @@ def _format_pointer(span: SourceSpan) -> tuple[str, str, str | None]:
     return display_line, pointer, continuation
 
 
-def render_diagnostic(diag: Diagnostic, *, color: bool = False) -> str:
-    lines = [_format_header(diag, color=color)]
+def _primary_label_for(diag: Diagnostic) -> DiagnosticLabel | None:
+    for label in diag.labels:
+        if label.style == "primary":
+            return label
     if diag.span is not None:
-        span = diag.span
-        lines.append(
-            _style(" --> ", _ANSI_CYAN, color=color) + _style(span.location, _ANSI_BOLD, color=color)
-        )
-        lines.append(_style("  |", _ANSI_DIM, color=color))
-        line_number = str(span.start_line)
-        gutter = " " * len(line_number)
-        source_line, pointer, continuation = _format_pointer(span)
-        lines.append(
-            _style(line_number, _ANSI_CYAN, color=color)
+        return DiagnosticLabel(diag.span)
+    return None
+
+
+def _secondary_labels(diag: Diagnostic) -> list[DiagnosticLabel]:
+    primary = _primary_label_for(diag)
+    labels: list[DiagnosticLabel] = []
+    for label in diag.labels:
+        if primary is not None and label is primary:
+            continue
+        if label.style != "primary":
+            labels.append(label)
+    return labels
+
+
+def _render_labeled_span(
+    label: DiagnosticLabel,
+    *,
+    color: bool,
+    prefix: str | None = None,
+) -> list[str]:
+    span = label.span
+    out: list[str] = []
+    if prefix:
+        out.append(prefix)
+    out.append(
+        _style(" --> ", _ANSI_CYAN, color=color) + _style(span.location, _ANSI_BOLD, color=color)
+    )
+    out.append(_style("  |", _ANSI_DIM, color=color))
+    first = max(1, span.start_line - 1)
+    last = min(len(span.source._lines), span.start_line + 1)
+    width = len(str(last))
+    for line_no in range(first, last + 1):
+        raw_line = span.source.get_line(line_no)
+        out.append(
+            _style(str(line_no).rjust(width), _ANSI_CYAN, color=color)
             + _style(" | ", _ANSI_DIM, color=color)
-            + source_line
+            + raw_line.expandtabs(4)
         )
-        lines.append(
-            gutter
+        if line_no < span.start_line or line_no > span.end_line:
+            continue
+        line_span = span
+        if line_no != span.start_line:
+            line_span = SourceSpan(
+                span.source,
+                line_no,
+                1,
+                line_no,
+                span.end_column if line_no == span.end_line else max(len(raw_line), 1) + 1,
+                span.start_pos,
+                span.end_pos,
+            )
+        _, pointer, continuation = _format_pointer(
+            line_span,
+            label.message if line_no == span.start_line else None,
+        )
+        color_code = _ANSI_RED if label.style == "primary" else _ANSI_BLUE
+        out.append(
+            " " * width
             + _style(" | ", _ANSI_DIM, color=color)
-            + _style(pointer, _ANSI_RED, _ANSI_BOLD, color=color)
+            + _style(pointer, color_code, _ANSI_BOLD, color=color)
         )
-        if continuation is not None:
-            lines.append(
-                gutter
+        if continuation is not None and line_no == span.start_line:
+            out.append(
+                " " * width
                 + _style(" | ", _ANSI_DIM, color=color)
                 + _style(continuation, _ANSI_DIM, color=color)
             )
+    return out
+
+
+def _note_parts(note: DiagnosticNote | str) -> tuple[str, str]:
+    if isinstance(note, DiagnosticNote):
+        return note.kind, note.message
+    return "note", note
+
+
+def _format_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return value if value.startswith(("'", '"', "`")) else repr(value)
+    if isinstance(value, Mapping):
+        return "{" + ", ".join(f"{k}: {_format_value(v)}" for k, v in value.items()) + "}"
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_format_value(v) for v in value) + "]"
+    return str(value)
+
+
+def _render_counterexample(counterexample: Counterexample, *, color: bool) -> list[str]:
+    lines: list[str] = []
+    if counterexample.trace:
+        lines.append(_style("= ", _ANSI_BOLD, color=color) + "counterexample trace:")
+        for entry in counterexample.trace:
+            lines.append(f"  step {entry.step}:")
+            if entry.description:
+                lines.append(f"    {entry.description}")
+            for name, value in entry.values.items():
+                lines.append(f"    {name} = {_format_value(value)}")
+        return lines
+    if counterexample.before_values:
+        lines.append(_style("= ", _ANSI_BOLD, color=color) + "counterexample before iteration:")
+        for name, value in counterexample.before_values.items():
+            lines.append(f"  {name} = {_format_value(value)}")
+    if counterexample.after_values:
+        lines.append(_style("= ", _ANSI_BOLD, color=color) + "counterexample after iteration:")
+        for name, value in counterexample.after_values.items():
+            lines.append(f"  {name} = {_format_value(value)}")
+    if counterexample.values:
+        heading = "counterexample"
+        if counterexample.step is not None:
+            heading += f" at step {counterexample.step}"
+        lines.append(_style("= ", _ANSI_BOLD, color=color) + f"{heading}:")
+        for name, value in counterexample.values.items():
+            lines.append(f"  {name} = {_format_value(value)}")
+    return lines
+
+
+def render_diagnostic(diag: Diagnostic, *, color: bool = False) -> str:
+    lines = [_format_header(diag, color=color)]
+    primary = _primary_label_for(diag)
+    if primary is not None:
+        lines.extend(_render_labeled_span(primary, color=color))
+    for secondary in _secondary_labels(diag):
+        lines.append(_style("  |", _ANSI_DIM, color=color))
+        lines.extend(
+            _render_labeled_span(
+                secondary,
+                color=color,
+                prefix=f"{secondary.style if secondary.style != 'secondary' else 'note'}:",
+            )
+        )
     lines.append("")
     lines.append(_style("= ", _ANSI_BOLD, color=color) + diag.message)
     for note in diag.notes:
+        kind, message = _note_parts(note)
         lines.append(
             _style("= ", _ANSI_BOLD, color=color)
-            + _style("note:", _ANSI_BLUE, _ANSI_BOLD, color=color)
-            + f" {note}"
+            + _style(f"{kind}:", _ANSI_BLUE, _ANSI_BOLD, color=color)
+            + f" {message}"
+        )
+    if diag.counterexample is not None:
+        lines.extend(_render_counterexample(diag.counterexample, color=color))
+    for fix in diag.fixes:
+        lines.append(
+            _style("= ", _ANSI_BOLD, color=color)
+            + _style("fix:", _ANSI_GREEN, _ANSI_BOLD, color=color)
+            + f" {fix.message}"
         )
     if diag.hint:
         lines.append(
