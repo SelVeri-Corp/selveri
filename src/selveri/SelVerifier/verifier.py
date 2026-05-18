@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
-from z3 import Not, Solver, simplify, sat, unsat
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+from z3 import Not, Solver, simplify, sat, unsat, unknown
 from sympy import Basic
 
 from ..defs import RuntimeConfiguration, FutureObligation
@@ -23,7 +23,8 @@ class VerificationEngine:
         self.history: list[RuntimeConfiguration] = list()
         self.pltl_memo: Dict[int, Dict[Spec, bool]] = dict() # for pLTL verification memoization
         self.fltl_pending: Dict[tuple[int, str], FutureObligation] = dict() # for future LTL verification pending obligations
-        self.spec_ids: set[tuple[int, str]] = set()
+        # (scope_id, spec_id) -> parsed spec; same id may resolve many times (e.g. loop conditions) if formula matches
+        self.resolved_specs: Dict[tuple[int, Any], ParsedSpec] = dict()
 
         # for past-LTL start markers
         self.pltl_start_marker_step: Dict[tuple[int, str], int] = dict()
@@ -36,7 +37,7 @@ class VerificationEngine:
         self.pltl_memo.clear()
         self.fltl_pending.clear()
         self.pltl_start_marker_step.clear()
-        self.spec_ids.clear()
+        self.resolved_specs.clear()
 
     def handle_step(self, snapshot: RuntimeConfiguration) -> None:
         self.history.append(snapshot)
@@ -44,10 +45,17 @@ class VerificationEngine:
         self.last_step += 1
         self.advance_future_obligations(snapshot)
 
-    def resolve_spec(self, scope_id: int, spec_id: str, formula_text: str) -> ParsedSpec: # resolve a spec
-        if (scope_id, spec_id) in self.spec_ids:
-            raise VerificationError(f"Duplicate specification id: {spec_id}")
-        
+    def resolve_spec(self, scope_id: int, spec_id: Any, formula_text: str) -> ParsedSpec: # resolve a spec
+        key = (scope_id, spec_id)
+        if key in self.resolved_specs:
+            existing = self.resolved_specs[key]
+            if existing.formula_text != formula_text:
+                raise VerificationError(
+                    f"Duplicate specification id {spec_id!r} in this scope with a different formula "
+                    f"(was {existing.formula_text!r}, now {formula_text!r})."
+                )
+            return existing
+
         raw_spec = RawSpec(spec_id=spec_id, formula_text=formula_text)
         try:
             spec_ast = parse_spec(formula_text)
@@ -59,8 +67,9 @@ class VerificationEngine:
                 f"#{spec_id} at "
                 f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
             ) from None
-        self.spec_ids.add((scope_id, spec_id))
-        return ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.spec_type, ast=spec_ast)
+        parsed = ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.spec_type, ast=spec_ast)
+        self.resolved_specs[key] = parsed
+        return parsed
 
     # TODO: consider optimizations: updating the mapper at each IR assignment and declaration, then use push/pop instead of reset
     def handle_veri(self, spec_id: str, formula_text: str, snapshot: RuntimeConfiguration) -> None:
@@ -104,7 +113,10 @@ class VerificationEngine:
         formula_text: str,
         snapshot: RuntimeConfiguration,
     ) -> bool:
-        """Evaluate a specification as a boolean value (VERIP instruction)."""
+        """Evaluate a specification as a boolean value (VERIP instruction).
+        Returns True if the spec is satisfied, False if not.
+        Raises VerificationError only on Z3 'unknown' / timeout.
+        """
         parsed_spec = self.resolve_spec(snapshot.scope.scope_id, spec_id, formula_text)
         if parsed_spec.spec_type in (SpecType.fLTL, SpecType.sLTL):
             raise VerificationError(
@@ -119,13 +131,23 @@ class VerificationEngine:
         formula_text: str,
         snapshot: RuntimeConfiguration,
     ) -> Tuple[Any, Any]:
-        """Extract a satisfying witness for bound variable ``var_name`` under ``spec_id``."""
+        """Extract a satisfying witness for bound variable 'var_name' under spec 'spec_id'.
+        Returns (value, DeclType) on success.
+        Raises IRRuntimeError on unsat/unknown (erroneous state per the formal semantics).
+
+        Key insight: instead of mapping the full spec (which uses Z3 Exists and quantifies
+        away the bound variable), we collect ALL quantifiers on the path to the target
+        existential, register all their bound variables as free Z3 variables, and map the
+        innermost body. This allows nested quantifiers like:
+            Exists a in [1...10] . Exists b in [5,6,7,9] . &a * &a = &b
+        """
         from ..errors import IRRuntimeError
 
         parsed_spec = self.resolve_spec(snapshot.scope.scope_id, spec_id, formula_text)
         spec = parsed_spec.ast
         lexical_depth = snapshot.scope.depth
 
+        # Collect all quantifiers on the path to the target existential
         quant_chain: list = []
         innermost_body = self._collect_quant_chain(spec, var_name, quant_chain)
         if innermost_body is None:
@@ -137,9 +159,11 @@ class VerificationEngine:
         solver = Solver()
         mapper = Z3Mapper(snapshot, solver, lexical_depth)
 
+        # Register ALL bound variables in the chain as free Z3 variables
         for quant_spec in quant_chain:
             self._register_bound_var_as_free(quant_spec, mapper, solver)
 
+        # Map the innermost body (with all bound vars accessible)
         z3_body = mapper.map_FOL(innermost_body)
 
         solver.set("timeout", VerificationEngine.SOLVER_TIMEOUT)
@@ -153,6 +177,7 @@ class VerificationEngine:
 
         model = solver.model()
 
+        # Extract the target bound variable's value from the model
         bound_z3_name = f"&{var_name}"
         for decl in model.decls():
             if decl.name() == bound_z3_name:
@@ -167,6 +192,10 @@ class VerificationEngine:
     def _collect_quant_chain(
         self, spec: Spec, var_name: str, chain: list
     ) -> Any:
+        """Walk the spec tree looking for Exists(var_name).
+        Collect every SpecQuant encountered on the path into 'chain'.
+        Returns the innermost body (the body of the target Exists), or None if not found.
+        """
         if isinstance(spec, SpecQuant):
             chain.append(spec)
             if spec.kind == "Exists" and spec.var == var_name:
@@ -174,14 +203,14 @@ class VerificationEngine:
             result = self._collect_quant_chain(spec.body, var_name, chain)
             if result is not None:
                 return result
-            chain.pop()
+            chain.pop()   # backtrack if target not found in this branch
             return None
         if isinstance(spec, SpecBinOp):
             saved = len(chain)
             result = self._collect_quant_chain(spec.left, var_name, chain)
             if result is not None:
                 return result
-            del chain[saved:]
+            del chain[saved:] # backtrack
             return self._collect_quant_chain(spec.right, var_name, chain)
         if isinstance(spec, SpecUnOp):
             return self._collect_quant_chain(spec.rhs, var_name, chain)
@@ -190,6 +219,8 @@ class VerificationEngine:
     def _register_bound_var_as_free(
         self, quant_spec: SpecQuant, mapper: Z3Mapper, solver: Any
     ) -> None:
+        """Register a quantifier's bound variable as a free Z3 variable in the mapper,
+        and add its domain constraints to the solver."""
         from ..errors import IRRuntimeError
         from ..specs import DomainType, DomainRange, DomainInterval, DomainValues
         from z3 import Int, Real, And, Or
@@ -223,11 +254,13 @@ class VerificationEngine:
             if value_constraints:
                 solver.add(Or(value_constraints))
         else:
+            # Fallback for other domains (DomainIdent, DomainVar)
             bound_var_z3 = Int(bound_z3_name)
 
         mapper.bound_var_map[bound_var] = bound_var_z3
 
     def _z3_value_to_python(self, z3_val: Any) -> Tuple[Any, Any]:
+        """Convert a Z3 model value to a Python (value, DeclType) pair."""
         from ..runtime import DeclType
         from ..errors import IRRuntimeError
         from z3 import is_int_value, is_rational_value, is_true, is_false
