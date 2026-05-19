@@ -1,4 +1,4 @@
-0: GOTO 278
+0: GOTO 280
 1: FUNCENV append, LIST[INT, 1]
 2: DECL INT, element
 3: STORE element
@@ -209,7 +209,7 @@
 208: LOAD low
 209: LOAD high
 210: LT
-211: JZ 273
+211: JZ 274
 212: CSCOPE
 213: DECL INT, _encoded_len_1
 214: LEN lst
@@ -267,41 +267,43 @@
 266: LOAD retvar
 267: STORE clean
 268: STEP
-269: LOAD clean
-270: RET
-271: PSCOPE
-272: GOTO 277
-273: CSCOPE
-274: LOAD lst
-275: RET
-276: PSCOPE
-277: NOOP
-278: DECL INT, _lst_len_1
-279: PUSH 7
-280: STORE _lst_len_1
-281: PUSH 1
-282: PUSH 7
-283: MUL
-284: LDECL LIST[INT], lst
-285: STEP
-286: PUSH 10
-287: PUSH 7
-288: PUSH 8
-289: PUSH 9
-290: PUSH 9
-291: PUSH 1
-292: PUSH 5
-293: PUSH 7
-294: STORE lst
-295: STEP
-296: LOAD lst
-297: PUSH 0
-298: PUSH 6
-299: CALL quickSort
-300: LOAD retvar
-301: STORE lst
-302: STEP
-303: VERI 0, 'Forall i in [1...len(lst) - 1] . lst[&i - 1] <= lst[&i]'
-304: VERI 1, 'Exists j in [1...len(lst) - 1] . lst[&j - 1] = lst[&j]'
-305: LOAD lst
-306: LWRITELN
+269: VERI 0, 'Forall i in [1...len(clean) - 1] . clean[&i - 1] <= clean[&i]'
+270: LOAD clean
+271: RET
+272: PSCOPE
+273: GOTO 279
+274: CSCOPE
+275: NOOP
+276: LOAD lst
+277: RET
+278: PSCOPE
+279: NOOP
+280: DECL INT, _lst_len_1
+281: PUSH 7
+282: STORE _lst_len_1
+283: PUSH 1
+284: PUSH 7
+285: MUL
+286: LDECL LIST[INT], lst
+287: STEP
+288: PUSH 10
+289: PUSH 7
+290: PUSH 8
+291: PUSH 9
+292: PUSH 9
+293: PUSH 1
+294: PUSH 5
+295: PUSH 7
+296: STORE lst
+297: STEP
+298: LOAD lst
+299: PUSH 0
+300: PUSH 6
+301: CALL quickSort
+302: LOAD retvar
+303: STORE lst
+304: STEP
+305: VERI 1, 'Forall i in [1...len(lst) - 1] . lst[&i - 1] <= lst[&i]'
+306: VERI 2, 'Exists j in [1...len(lst) - 1] . lst[&j - 1] = lst[&j]'
+307: LOAD lst
+308: LWRITELN

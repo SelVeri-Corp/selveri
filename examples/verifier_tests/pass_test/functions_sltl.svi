@@ -1,0 +1,53 @@
+// =====================================================
+// Function-local separated LTL verification: should PASS
+// =====================================================
+
+function stagedValue(seed: Int) -> Int ::
+    x : Int;
+    x := seed;
+
+    { start stage };
+    x := x + 1;
+
+    { stage := (Historically x = seed + 1) => (Next x = seed + 2) };
+
+    x := x + 1;
+    { end stage };
+
+    x := x + 10;
+    return x;
+end
+
+function guardedListUpdate(base: Int) -> List[Int, 1, 3] ::
+    lst : List[Int, 1, 3];
+    lst[0] := base;
+    lst[1] := base;
+    lst[2] := base;
+
+    idx : Int;
+    idx := 0;
+
+    { start mutate };
+    lst[0] := base + 1;
+    lst[1] := base + 2;
+
+    { mutate := (Once lst[0] = base + 1) => (Eventually lst[2] = base + 3) };
+
+    lst[2] := base + 3;
+    { end mutate };
+
+    { Forall i in [0...2] . lst[&i] > base };
+    return lst;
+end
+
+call stagedValue(4);
+v : Int;
+v := retvar;
+{ v = 16 };
+
+call guardedListUpdate(10);
+lst : List[Int, 1, 3];
+lst := retvar;
+{ lst[0] = 11 };
+{ lst[1] = 12 };
+{ lst[2] = 13 };

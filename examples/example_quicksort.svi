@@ -73,8 +73,9 @@ function quickSort(lst: List[Int, 1], low: Int, high: Int) -> List[Int, 1] ::
         call quickSort(clean, pi + 1, high);
         clean := retvar;
 
+        { Forall i in [1...len(clean) - 1] . clean[&i - 1] <= clean[&i] };
         return clean;
-    else
+    else;
         return lst;
     fi
 end

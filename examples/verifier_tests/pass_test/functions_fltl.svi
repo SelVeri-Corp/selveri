@@ -1,0 +1,50 @@
+// =====================================================
+// Function-local fLTL verification: should PASS
+// =====================================================
+
+function driveCounter(start: Int, target: Int) -> Int ::
+    x : Int;
+    x := start;
+
+    { reach := Eventually x = target };
+    { nonnegative := Always x >= 0 };
+
+    while x < target do
+        { x < target };
+        x := x + 1;
+    od
+
+    { x = target };
+    { end reach };
+    { end nonnegative };
+    return x;
+end
+
+function fillPositive(seed: Int) -> List[Int, 1, 4] ::
+    out : List[Int, 1, 4];
+    out := [0, 0, 0, 0];
+
+    i : Int;
+    i := 0;
+
+    { filled := Eventually (Forall idx in [0...3] . out[&idx] > 0) };
+
+    while i < len(out) do
+        out[i] := seed + i;
+        i := i + 1;
+    od
+
+    { Forall idx in [0...3] . out[&idx] > 0 };
+    { end filled };
+    return out;
+end
+
+call driveCounter(1, 5);
+result : Int;
+result := retvar;
+{ result = 5 };
+
+call fillPositive(3);
+lst : List[Int, 1, 4];
+lst := retvar;
+{ Forall idx in [0...3] . lst[&idx] > 0 };

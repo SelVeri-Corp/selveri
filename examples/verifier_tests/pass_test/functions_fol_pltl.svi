@@ -1,0 +1,63 @@
+// =====================================================
+// Function-local FOL and pLTL verification: should PASS
+// =====================================================
+
+function boundedPrefixSum(lst: List[Int, 1], limit: Int) -> Int ::
+    total : Int;
+    total := 0;
+
+    i : Int;
+    i := 0;
+
+    { total = 0 };
+    { Historically total = 0 };
+
+    while i < limit do
+        { i >= 0 };
+        { i < len(lst) };
+        { lst[i] > 0 };
+
+        total := total + lst[i];
+        i := i + 1;
+
+        { total > 0 };
+        { i > 0 };
+        { Once total = 0 };
+        { Historically total >= 0 };
+        { (i = 1) => (total = 2) };
+        { (i = 2) => (total = 6) };
+        { (i = 3) => (total = 12) };
+    od
+
+    { i = limit };
+    { total = 12 };
+    { Forall idx in [0...limit - 1] . lst[&idx] > 0 };
+    return total;
+end
+
+function bumpTwice(x: Int) -> Int ::
+    { x >= 0 };
+    { Historically x >= 0 };
+
+    x := x + 1;
+    { x > 0 };
+    { Once x = 3 };
+
+    x := x + 1;
+    { x = 5 };
+    { Historically x >= 0 };
+    return x;
+end
+
+lst : List[Int, 1, 5];
+lst := [2, 4, 6, 8, 10];
+
+call boundedPrefixSum(lst, 3);
+sum : Int;
+sum := retvar;
+{ sum = 12 };
+
+call bumpTwice(3);
+answer : Int;
+answer := retvar;
+{ answer = 5 };
