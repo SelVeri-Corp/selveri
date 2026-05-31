@@ -7,8 +7,7 @@ from urllib.parse import unquote, urlparse
 
 from lsprotocol import types
 
-from selveri.compiler import compile_selveri_source_to_ir_text
-from selveri.diagnostics import (
+from selveri.common.diagnostics import (
     Diagnostic,
     DiagnosticFix,
     DiagnosticLabel,
@@ -17,10 +16,11 @@ from selveri.diagnostics import (
     SourceSpan,
     make_diagnostic,
 )
-from selveri.errors import SelVeriError
-from selveri.parser import collect_raw_specs, parse_selveri
-from selveri.spec_parser import parse_spec
-from selveri.specs import RawSpecKind
+from selveri.common.errors import SelVeriError
+from selveri.compiler import compile_selveri_source_to_ir_text
+from selveri.high_level.parser import collect_raw_specs, parse_selveri
+from selveri.spec.models import RawSpecKind
+from selveri.spec.parser import parse_spec
 
 
 def _path_from_uri(uri_or_path: str | None) -> str | None:

@@ -3,18 +3,18 @@ from __future__ import annotations
 
 from lsprotocol import types
 
-from selveri.parser import (
+from selveri.high_level.ast import (
     Decl,
     FunctionDecl,
     If,
     Program,
     TypeDynamicList,
-    TypeFloat,
     TypeInt,
     TypeList,
+    TypeReal,
     While,
-    parse_selveri,
 )
+from selveri.high_level.parser import parse_selveri
 
 
 KEYWORD_DOCS: dict[str, str] = {
@@ -35,7 +35,7 @@ KEYWORD_DOCS: dict[str, str] = {
     "writeline": "```selveri\nwriteline(expr);\n```\n\nWrites an expression to stdout followed by a newline.",
     "obtain": "```selveri\nx := obtain(&w, { Exists w in Int . &w > 0 });\n```\n\nFinds a witness for an existential specification and returns it as an arithmetic expression.",
     "Int": "Integer type.",
-    "Float": "Floating-point type.",
+    "Real": "Real (floating-point) type.",
     "List": "```selveri\nitems: List[Int, 1, len];\nfunction f(xs: List[Int, 1]) -> Int ::\n```\n\nStatic lists include a shape after the dimension. Rank-1 function parameters can omit the shape for variable-length lists.",
     "true": "Boolean literal `true`.",
     "false": "Boolean literal `false`.",
@@ -46,7 +46,7 @@ KEYWORD_DOCS: dict[str, str] = {
     "retvar": "Special variable holding the return value of the most recent `call` statement.",
     "len": "```selveri\nlen(listName)\n```\n\nReturns the first-dimension length of a list.",
     "in": "Introduces a quantifier domain in `Forall` and `Exists` specifications.",
-    "Forall": "```selveri\n{ Forall i in [0...len(xs) - 1] . xs[&i] >= 0 };\n```\n\nUniversal quantifier. Domains include ranges, intervals, lists, identifiers, `Int`, `Float`, `Var[Int]`, and `Var[Float]`.",
+    "Forall": "```selveri\n{ Forall i in [0...len(xs) - 1] . xs[&i] >= 0 };\n```\n\nUniversal quantifier. Domains include ranges, intervals, lists, identifiers, `Int`, `Real`, `Var[Int]`, and `Var[Real]`.",
     "Exists": "```selveri\n{ Exists x in [1...10] . &x * &x = 9 };\n```\n\nExistential quantifier.",
     "Always": "Future temporal operator: the formula holds at all future states.",
     "Eventually": "Future temporal operator: the formula holds at some future state.",
@@ -87,8 +87,8 @@ def _word_at(source: str, position: types.Position) -> str:
 def _type_str(type_node: object) -> str:
     if isinstance(type_node, TypeInt):
         return "Int"
-    if isinstance(type_node, TypeFloat):
-        return "Float"
+    if isinstance(type_node, TypeReal):
+        return "Real"
     if isinstance(type_node, TypeList):
         shape = ", ".join(str(part) for part in type_node.shape)
         suffix = f", {shape}" if shape else ""

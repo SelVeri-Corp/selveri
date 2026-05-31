@@ -5,17 +5,17 @@ import re
 
 from lsprotocol import types
 
-from selveri.parser import (
+from selveri.high_level.ast import (
     Decl,
     If,
     Program,
     TypeDynamicList,
-    TypeFloat,
     TypeInt,
     TypeList,
+    TypeReal,
     While,
-    parse_selveri,
 )
+from selveri.high_level.parser import parse_selveri
 
 
 KEYWORDS = [
@@ -32,7 +32,7 @@ KEYWORDS = [
     "call",
     "pass",
     "Int",
-    "Float",
+    "Real",
     "List",
     "true",
     "false",
@@ -204,8 +204,8 @@ _IR_FUNCENV_RE = re.compile(r"^\s*\d+\s*:\s*FUNCENV\s+([^,\s]+)", re.MULTILINE)
 def _type_str(type_node: object) -> str:
     if isinstance(type_node, TypeInt):
         return "Int"
-    if isinstance(type_node, TypeFloat):
-        return "Float"
+    if isinstance(type_node, TypeReal):
+        return "Real"
     if isinstance(type_node, TypeList):
         shape = ", ".join(str(part) for part in type_node.shape)
         suffix = f", {shape}" if shape else ""
