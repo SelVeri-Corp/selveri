@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import copy
 import re
 from dataclasses import dataclass
@@ -14,7 +13,7 @@ from selveri.common.errors import IRRuntimeError, IRParseError, index_out_of_bou
 from selveri.common.runtime import DeclType, Scope, State, _UNSET
 from selveri.common.types import real
 from selveri.ir.instr import IRInstr
-from selveri.ir.text import parse_ir_text
+from selveri.ir.text import coerce_ir_int, parse_ir_text, parse_scalar_token, resolve_label_target
 from selveri.verifier.engine import VerificationEngine
 
 
@@ -105,22 +104,11 @@ def _type_from_object(obj: Any) -> DeclType:
         size: Optional[int] = None
         shape_obj = getattr(obj, "shape", None)
         if shape_obj:
-            first_dim = shape_obj[0]
-            if isinstance(first_dim, int):
-                size = first_dim
-            elif hasattr(first_dim, "value"):
-                size = int(getattr(first_dim, "value"))
-            elif isinstance(first_dim, str) and _INT_RE.fullmatch(first_dim.strip()):
-                size = int(first_dim.strip())
+            size = coerce_ir_int(shape_obj[0])
         else:
             size_obj = getattr(obj, "size", None)
             if size_obj is not None:
-                if isinstance(size_obj, int):
-                    size = size_obj
-                elif hasattr(size_obj, "value"):
-                    size = int(getattr(size_obj, "value"))
-                elif isinstance(size_obj, str) and _INT_RE.fullmatch(size_obj.strip()):
-                    size = int(size_obj.strip())
+                size = coerce_ir_int(size_obj)
 
         return DeclType("LIST", elem_type.kind, size)
 
@@ -639,7 +627,7 @@ class SelVerIRInterpreter:
 
         if op == "READ":
             value = input()
-            self._push(_parse_scalar_token(value))
+            self._push(parse_scalar_token(value))
             self.pc += 1
             return
 
@@ -894,9 +882,10 @@ class SelVerIRInterpreter:
         if len(args) != 1:
             raise IRRuntimeError("CALL expects one function name or label.")
         target = args[0]
-        if not isinstance(target, str) or _INT_RE.fullmatch(target.strip()):
+        label = resolve_label_target(target)
+        if label is not None:
             self.call_stack.append(CallFrame(return_pc=self.pc + 1, runtime=self.runtime))
-            self._jump_to_label(int(target))
+            self._jump_to_label(label)
             return
 
         name = target.strip()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Any, List
+from typing import Any, List, Optional
 
 from selveri.common.errors import IRParseError
 from selveri.common.types import real
@@ -62,7 +62,7 @@ def _split_top_level_commas(s: str) -> List[str]:
     return parts
 
 
-def _parse_scalar_token(token: str) -> Any:
+def parse_scalar_token(token: str) -> Any:
     t = token.strip()
     if len(t) >= 2 and t[0] == t[-1] and t[0] in {"'", '"'}:
         return ast.literal_eval(t)
@@ -71,6 +71,37 @@ def _parse_scalar_token(token: str) -> Any:
     if _REAL_RE.fullmatch(t):
         return real(t)
     return t
+
+
+def parse_int_literal(token: str) -> Optional[int]:
+    """Parse a token as an integer literal, or return None if it is not one."""
+    parsed = parse_scalar_token(token)
+    return parsed if isinstance(parsed, int) else None
+
+
+def resolve_label_target(target: Any) -> Optional[int]:
+    """Return a jump label if *target* is an IR label (int or int literal text)."""
+    if isinstance(target, int):
+        return target
+    if isinstance(target, str):
+        return parse_int_literal(target)
+    return None
+
+
+def coerce_ir_int(value: Any) -> Optional[int]:
+    """Coerce IR/compiler metadata (int, IntLit, or int literal string) to int."""
+    if isinstance(value, int):
+        return value
+    if hasattr(value, "value"):
+        inner = getattr(value, "value")
+        if isinstance(inner, int):
+            return inner
+        if isinstance(inner, str):
+            return parse_int_literal(inner)
+        return None
+    if isinstance(value, str):
+        return parse_int_literal(value)
+    return None
 
 
 def _parse_label_line(line: str) -> IRInstr:
@@ -90,19 +121,19 @@ def _parse_label_line(line: str) -> IRInstr:
         args = _split_top_level_commas(rest)
         if len(args) != 2:
             raise IRParseError(f"Invalid VERI arguments: {line}")
-        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+        args = (parse_scalar_token(args[0]), parse_scalar_token(args[1]))
     elif op == "VERIP":
         args = _split_top_level_commas(rest)
         if len(args) != 2:
             raise IRParseError(f"Invalid VERIP arguments: {line}")
-        args = (_parse_scalar_token(args[0]), _parse_scalar_token(args[1]))
+        args = (parse_scalar_token(args[0]), parse_scalar_token(args[1]))
     elif op == "OBT":
         args = _split_top_level_commas(rest)
         if len(args) != 3:
             raise IRParseError(f"Invalid OBT arguments: {line}")
-        args = (args[0].strip(), _parse_scalar_token(args[1]), _parse_scalar_token(args[2]))
+        args = (args[0].strip(), parse_scalar_token(args[1]), parse_scalar_token(args[2]))
     else:
-        args = [_parse_scalar_token(p) for p in _split_top_level_commas(rest)]
+        args = [parse_scalar_token(p) for p in _split_top_level_commas(rest)]
 
     return IRInstr(label, op, tuple(args), None)
 
