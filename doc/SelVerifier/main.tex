@@ -101,13 +101,13 @@ Let $\mathtt{Spec}_{\mathtt{SV}}$ be the infinite set of all allowed specificati
 &::=&
 \mathtt{[}\; \langle \mathit{IntLit} \rangle \; \mathtt{...}\; \langle \mathit{IntLit} \rangle \; \mathtt{)}
 \;\mid\;
-\mathtt{[}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{]}
+\mathtt{[}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{]}
 \;\mid\;
-\mathtt{(}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{)} \\[2pt]
+\mathtt{(}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{)} \\[2pt]
 &&
-\mathtt{[}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{)}
+\mathtt{[}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{)}
 \;\mid\;
-\mathtt{(}\; \langle \mathit{FloatLit} \rangle \; \mathtt{,}\; \langle \mathit{FloatLit} \rangle \; \mathtt{]} \\[2pt]
+\mathtt{(}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{]} \\[2pt]
 &&
 \mid\;
 \langle \mathit{Ident} \rangle
@@ -154,9 +154,9 @@ Let $\mathcal{ZS}$ be the mapping function from \texttt{SelVeri} types to \textt
 \fbox{%
 $\begin{array}{ll}
 \mathcal{ZS}(\texttt{INT}) &= \texttt{IntSort()} \\[1ex]
-\mathcal{ZS}(\texttt{FLOAT}) &= \texttt{RealSort()} \\[1ex]
+\mathcal{ZS}(\texttt{REAL}) &= \texttt{RealSort()} \\[1ex]
 \mathcal{ZS}(\texttt{LIST[INT]}) &= \texttt{Array}(\texttt{IntSort()}, \texttt{IntSort()}) \\[1ex]
-\mathcal{ZS}(\texttt{LIST[FLOAT]}) &= \texttt{Array}(\texttt{IntSort()}, \texttt{RealSort()}) \\[1ex]
+\mathcal{ZS}(\texttt{LIST[REAL]}) &= \texttt{Array}(\texttt{IntSort()}, \texttt{RealSort()}) \\[1ex]
 \end{array}$%
 }%
 }
@@ -164,7 +164,7 @@ $\begin{array}{ll}
 
 \subsubsection{State Mapping}
 For a given state mapping variable $v$ to value $val$, assertions are added to the \texttt{Z3} solver to constrain the free variables. 
-If $v$ is of a basic type (\texttt{INT} or \texttt{FLOAT}):
+If $v$ is of a basic type (\texttt{INT} or \texttt{REAL}):
 \[
 \texttt{solver.add}( \mathcal{ZN}(v, id) == val )
 \]
@@ -189,7 +189,7 @@ The mapper recursively translates Abstract Syntax Tree (AST) nodes of the specif
 $\begin{array}{ll}
 \mathcal{ZA}(\texttt{IntLit}(v)) &= \texttt{IntVal}(v) \\[1ex]
 
-\mathcal{ZA}(\texttt{FloatLit}(v)) &= \texttt{RealVal}(v) \\[1ex]
+\mathcal{ZA}(\texttt{RealLit}(v)) &= \texttt{RealVal}(v) \\[1ex]
 
 \mathcal{ZA}(\texttt{ListLit}(v_0, \dots, v_n)) &= 
 \begin{cases}
@@ -284,7 +284,7 @@ The \texttt{SpecQuant} mapping dictates how $\forall$ (\texttt{Forall}) and $\ex
     \[
     \begin{aligned}
     \mathcal{ZF}(\forall x \in \texttt{INT} \cdot \phi) \quad &\implies \quad \texttt{ForAll}(x_{z3}, \mathcal{ZF}(\phi)) \\
-    \mathcal{ZF}(\exists x \in \texttt{FLOAT} \cdot \phi) \quad &\implies \quad \texttt{Exists}(x_{z3}, \mathcal{ZF}(\phi))
+    \mathcal{ZF}(\exists x \in \texttt{REAL} \cdot \phi) \quad &\implies \quad \texttt{Exists}(x_{z3}, \mathcal{ZF}(\phi))
     \end{aligned}
     \]
     
@@ -323,7 +323,7 @@ Let $\mathcal{M}_{\mathtt{Z3}}$ be the function outputting the corresponding sol
 \centering
 \renewcommand{\arraystretch}{2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\quad \triangleright \quad} >{\(}l<{\)} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\quad \triangleright \quad\)} >{\(}l<{\)} @{}}
 \hline\hline
 
 \langle \texttt{VERI}\;\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 

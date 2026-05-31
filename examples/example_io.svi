@@ -17,6 +17,6 @@ writeline(y);
 z : Int;
 z := read();
 writeline(z);
-w : Float;
+w : Real;
 w := read();
 writeline(w);

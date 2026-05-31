@@ -21,6 +21,8 @@ from .errors import ParserError, parse_error
 from .preprocessor import extract_raw_specs
 from .specs import RawSpec
 
+real = type(0.0)
+
 
 # =========================
 # AST
@@ -59,15 +61,15 @@ class TypeInt(Spanned, BasicType):
         return hash(TypeInt)
 
 @dataclass(frozen=True)
-class TypeFloat(Spanned, BasicType):
+class TypeReal(Spanned, BasicType):
     def __str__(self) -> str:
-        return "FLOAT"
+        return "REAL"
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, TypeFloat)
+        return isinstance(other, TypeReal)
 
     def __hash__(self) -> int:
-        return hash(TypeFloat)
+        return hash(TypeReal)
 
 @dataclass(frozen=True)
 class TypeList(Spanned, ConcreteType):
@@ -112,8 +114,8 @@ class IntLit(Spanned, Imm, AExp):
         return str(self.value)
 
 @dataclass(frozen=True)
-class FloatLit(Spanned, Imm, AExp):
-    value: float
+class RealLit(Spanned, Imm, AExp):
+    value: real
 
     def __str__(self) -> str:
         return str(self.value)
@@ -359,7 +361,7 @@ class AstBuilder(Transformer):
 
     # types
     def type_int(self, meta): return TypeInt(span=self._span(meta))
-    def type_float(self, meta): return TypeFloat(span=self._span(meta))
+    def type_real(self, meta): return TypeReal(span=self._span(meta))
     def type_list(self, meta, elem, dimension, shape):
         return TypeList(elem, IntLit(int(dimension), span=self._token_span(dimension)), shape, span=self._span(meta))
     def dynamic_list_type(self, meta, elem, dimension):
@@ -372,7 +374,7 @@ class AstBuilder(Transformer):
     # imm/aexp
     def aexp(self, _meta, expr): return expr
     def int_lit(self, _meta, tok): return IntLit(int(tok), span=self._token_span(tok))
-    def float_lit(self, _meta, tok): return FloatLit(float(tok), span=self._token_span(tok))
+    def real_lit(self, _meta, tok): return RealLit(real(tok), span=self._token_span(tok))
     def list_lit(self, meta, *args): return ListLit(list(args), span=self._span(meta))
     def a_var(self, _meta, name): return AVar(str(name), span=self._token_span(name))
     def a_len(self, meta, name): return ALen(str(name), span=self._span(meta))
@@ -515,7 +517,7 @@ def _parser_error_from_lark(exc: LarkError, source_file: SourceFile) -> ParserEr
                         span = start
                         label = "`while` block starts here"
                         break
-        elif getattr(token, "value", None) == ";" and {"IDENT", "INT_LIT", "FLOAT_LIT", "LPAR", "LEN"} & expected:
+        elif getattr(token, "value", None) == ";" and {"IDENT", "INT_LIT", "REAL_LIT", "LPAR", "LEN"} & expected:
             hint = "write an expression after `:=`"
         return parse_error(
             message,

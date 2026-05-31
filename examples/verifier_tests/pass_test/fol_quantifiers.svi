@@ -84,11 +84,11 @@ neg := -7;
 { Exists x in Var[Int]. &x <= 0 }; // True, with neg
 
 
-p : Float;
+p : Real;
 p := 3.14159;
-e : Float;
+e : Real;
 e := 2.71828;
 
-{ Forall x in Var[Float]. &x > 0 }; // True, with p, e
-{ Forall x in Var[Float]. &x < 4 }; // True, with p, e
-{ Exists x in Var[Float]. &x = 3.14159 }; // True, with p
+{ Forall x in Var[Real]. &x > 0 }; // True, with p, e
+{ Forall x in Var[Real]. &x < 4 }; // True, with p, e
+{ Exists x in Var[Real]. &x = 3.14159 }; // True, with p

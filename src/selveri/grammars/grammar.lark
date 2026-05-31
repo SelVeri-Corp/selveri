@@ -9,7 +9,7 @@
 
 SPEC_SLOT: /@[A-Za-z0-9_]+/
 IDENT: /[A-Za-z][A-Za-z0-9_]*/
-FLOAT_LIT: /[0-9]+\.[0-9]+/
+REAL_LIT: /[0-9]+\.[0-9]+/
 INT_LIT: /[0-9]+/
 
 COMP_OP: "=" | "<=" | "<" | ">=" | ">"
@@ -67,7 +67,7 @@ list_assign: indexed_value ":=" aexp                                      -> lis
 
 // ------------------ TYPES ------------------
 ?basic_type: "Int"                                                              -> type_int
-           | "Float"                                                            -> type_float
+           | "Real"                                                            -> type_real
 ?type: basic_type
      | "List" "[" basic_type "," INT_LIT "," aexp_list "]"                  -> type_list
 
@@ -75,7 +75,7 @@ aexp_list: aexp ("," aexp)*
 
 // ------------------ IMMEDIATES ------------------
 ?imm: INT_LIT                                                             -> int_lit
-    | FLOAT_LIT                                                           -> float_lit
+    | REAL_LIT                                                           -> real_lit
     | list_lit
 
 list_lit: "[" [imm ("," imm)*] "]"

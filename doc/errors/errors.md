@@ -139,7 +139,7 @@ Duplicate declaration:
 CompileError: duplicate declaration [SV-C001]
  --> example.svi:2:1
   |
-2 | x : Float;
+2 | x : Real;
   | ^^^^^^^^^ declared again here
   |
 note:

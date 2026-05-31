@@ -151,7 +151,7 @@ The domain $D$ of the existential quantifier determines both the Z3 sort of the 
 \textbf{Domain form} & \textbf{Z3 sort} & \textbf{Constraint added} \\
 \hline
 \texttt{Int} & $\mathbb{Z}$ (unbounded) & none \\
-\texttt{Float} & $\mathbb{R}$ (unbounded) & none \\
+\texttt{Real} & $\mathbb{R}$ (unbounded) & none \\
 \texttt{[$l$...$h$]} (range) & $\mathbb{Z}$ & $l \leq x \leq h$ \\
 \texttt{[$l$;$h$]}, \texttt{($l$;$h$)}, etc. (interval) & $\mathbb{R}$ & corresponding endpoint inclusion \\
 \texttt{[$v_1, v_2, \ldots, v_n$]} (value list) & $\mathbb{Z}$ & $x = v_1 \lor x = v_2 \lor \cdots \lor x = v_n$ \\
@@ -230,7 +230,7 @@ The instruction set $\langle \mathit{Command} \rangle$ is extended as follows:
 \centering
 \renewcommand{\arraystretch}{2.2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{$}l<{$} @{\quad \triangleright \quad} >{$}l<{$} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{$}l<{$} @{\(\quad \triangleright \quad\)} >{$}l<{$} @{}}
 \hline\hline
 
 \langle \texttt{VERIP}\; id,\,\phi : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
@@ -263,7 +263,7 @@ With the operational semantics of the abstract machine defined, we seamlessly ex
 \begin{table}[h!]
 \centering
 \renewcommand{\arraystretch}{1.8} 
-\resizebox{300}{!}{%
+\resizebox{\textwidth}{!}{%
 \fbox{%
 $\begin{array}{ll}
 

@@ -23,19 +23,22 @@ from .parser import (
     BNot,
     BTruthy,
     BasicType,
-    FloatLit,
+    RealLit,
     IntLit,
     ListLit,
-    TypeFloat,
+    TypeReal,
     TypeInt,
     TypeList,
 )
+
+real = type(0.0)
+
 def _basic_type_to_decl_type(bt):
-    """Convert a parser-level BasicType (TypeInt/TypeFloat) to a runtime DeclType."""
+    """Convert a parser-level BasicType (TypeInt/TypeReal) to a runtime DeclType."""
     if isinstance(bt, TypeInt):
         return DeclType("INT", None, None)
-    elif isinstance(bt, TypeFloat):
-        return DeclType("FLOAT", None, None)
+    elif isinstance(bt, TypeReal):
+        return DeclType("REAL", None, None)
     else:
         raise ParserError(f"Unsupported type for quantifier domain: {bt}")
 
@@ -75,14 +78,14 @@ class SpecAstBuilder(Transformer):
     # types
     def type_int(self) -> TypeInt: return TypeInt()
 
-    def type_float(self) -> TypeFloat: return TypeFloat()
+    def type_real(self) -> TypeReal: return TypeReal()
 
     def type_list(self, elem: BasicType, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
 
     def aexp_list(self, *items): return list(items)
     def aexp(self, expr): return expr
     def int_lit(self, tok): return IntLit(int(tok))
-    def float_lit(self, tok): return FloatLit(float(tok))
+    def real_lit(self, tok): return RealLit(real(tok))
     def list_lit(self, *args): return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
     def a_bound_var(self, name): return ABoundVar(str(name))

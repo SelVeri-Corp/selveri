@@ -1,6 +1,6 @@
 { phi := (Always (x = 1)) };
 
-y : Float;
+y : Real;
 
 x : Int;
 x := 1;

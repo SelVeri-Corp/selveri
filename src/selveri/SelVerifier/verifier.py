@@ -13,6 +13,8 @@ from .future_automaton import compile_future_automaton
 from .future_mapper import FutureLTLMapper
 from .mapper import Z3Mapper
 
+real = type(0.0)
+
 class VerificationEngine:
 
     SOLVER_TIMEOUT = 60000 # 1 minute timeout for each solver check.
@@ -274,7 +276,7 @@ class VerificationEngine:
         if isinstance(domain, DomainType):
             if domain.ty.kind == "INT":
                 bound_var_z3 = Int(bound_z3_name)
-            elif domain.ty.kind == "FLOAT":
+            elif domain.ty.kind == "REAL":
                 bound_var_z3 = Real(bound_z3_name)
             else:
                 raise IRRuntimeError(f"Unsupported domain type for obtain: {domain.ty.kind}")
@@ -310,7 +312,7 @@ class VerificationEngine:
         if is_int_value(z3_val):
             return (z3_val.as_long(), DeclType("INT", None, None))
         if is_rational_value(z3_val):
-            return (float(z3_val.as_fraction()), DeclType("FLOAT", None, None))
+            return (real(z3_val.as_fraction()), DeclType("REAL", None, None))
         if is_true(z3_val) or is_false(z3_val):
             return (1 if is_true(z3_val) else 0, DeclType("INT", None, None))
         raise IRRuntimeError(f"Unsupported Z3 value type in obtain: {z3_val}")
@@ -485,7 +487,7 @@ class VerificationEngine:
             self._aexp_get_free_variables(bexp.aexp, variables)
 
     def _aexp_get_free_variables(self, aexp: Any, variables: set[str]) -> None:
-        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, FloatLit, FuncCall, ListLit
+        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, RealLit, FuncCall, ListLit
         from ..spec_parser import ABoundVar
         if isinstance(aexp, ABoundVar):
             pass  # bound variables are not free; handled by _spec_get_free_variables via SpecQuant.discard
@@ -507,7 +509,7 @@ class VerificationEngine:
         elif isinstance(aexp, ListLit):
             for item in aexp.items:
                 self._aexp_get_free_variables(item, variables)
-        # IntLit, FloatLit — no variables
+        # IntLit, RealLit — no variables
 
     def _domain_get_free_variables(self, domain: Any, variables: set[str]) -> None:
         from ..specs import DomainIdent, DomainValues, DomainRange, DomainInterval

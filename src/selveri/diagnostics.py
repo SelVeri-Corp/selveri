@@ -547,7 +547,7 @@ def render_internal_error(*, color: bool = False) -> str:
 _FRIENDLY_TERMINALS = {
     "IDENT": "identifier",
     "INT_LIT": "integer literal",
-    "FLOAT_LIT": "float literal",
+    "REAL_LIT": "real literal",
     "LPAR": "'('",
     "RPAR": "')'",
     "LSQB": "'['",

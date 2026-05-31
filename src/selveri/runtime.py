@@ -8,8 +8,8 @@ from typing import Any, Dict, Optional
 
 @dataclass(frozen=True)
 class DeclType:
-    kind: str  # "INT" | "FLOAT" | "LIST"
-    elem_kind: Optional[str]  # for LIST: "INT" | "FLOAT"
+    kind: str  # "INT" | "REAL" | "LIST"
+    elem_kind: Optional[str]  # for LIST: "INT" | "REAL"
     size: Optional[int]  # for LIST: fixed size for DECL, None for LDECL
 
 

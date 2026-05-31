@@ -23,7 +23,7 @@ if 2 = 2 then
     x : Int;
     x := 3;
     { Always x = 3 };
-    y : Float;
+    y : Real;
     y := x + x;
 fi
 

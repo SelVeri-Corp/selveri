@@ -62,7 +62,7 @@ class DomainRange(Domain):
 
 @dataclass(frozen=True)
 class DomainInterval(Domain):
-    """Real interval with independent open/closed endpoints (float bounds)."""
+    """Real interval with independent open/closed endpoints (real bounds)."""
     lo: AExp
     hi: AExp
     left_closed: bool
@@ -75,7 +75,7 @@ class DomainInterval(Domain):
 
 @dataclass(frozen=True)
 class DomainType(Domain):
-    """Domain given by a scalar type (e.g. Int, Float)."""
+    """Domain given by a scalar type (e.g. Int, Real)."""
     ty: DeclType
 
     def __str__(self) -> str:

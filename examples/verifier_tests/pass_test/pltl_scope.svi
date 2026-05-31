@@ -1,11 +1,11 @@
-x : Float;
+x : Real;
 x := 3.14;
 
 i : Int;
 i := 0;
-y: Float;
+y: Real;
 while i < 10 do
-    x : Float;
+    x : Real;
     x := 0.5 * i;
     y := x;
     i := i + 1;

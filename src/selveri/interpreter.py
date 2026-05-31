@@ -15,10 +15,12 @@ from .compiler import IRInstr
 from .runtime import DeclType, Scope, State, _UNSET
 from .SelVerifier.verifier import VerificationEngine
 
+real = type(0.0)
+
 
 @dataclass
 class ExecutionResult:
-    state: Dict[str, float | int | List[float | int]]
+    state: Dict[str, real | int | List[real | int]]
     scope: Dict[str, DeclType]
     stack: List[Any]
     pc: int
@@ -48,10 +50,10 @@ class FunctionEntry:
 _LABEL_RE = re.compile(r"^\s*(\d+)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*(.*?)\s*$")
 # parse integer
 _INT_RE = re.compile(r"^[+-]?\d+$")
-# parse float
-_FLOAT_RE = re.compile(r"^[+-]?(?:\d+\.\d*|\d*\.\d+)$")
-# parse list type List[INT|FLOAT[, size]]
-_LIST_TEXT_RE = re.compile(r"^LIST\s*\[\s*(INT|FLOAT)\s*(?:,\s*([+-]?\d+)\s*)?\]$", re.IGNORECASE)
+# parse real
+_REAL_RE = re.compile(r"^[+-]?(?:\d+\.\d*|\d*\.\d+)$")
+# parse list type List[INT|REAL[, size]]
+_LIST_TEXT_RE = re.compile(r"^LIST\s*\[\s*(INT|REAL)\s*(?:,\s*([+-]?\d+)\s*)?\]$", re.IGNORECASE)
 
 def _split_top_level_commas(s: str) -> List[str]:
     """
@@ -105,15 +107,15 @@ def _split_top_level_commas(s: str) -> List[str]:
         parts.append(tail)
     return parts
 
-# parse scalar token: INT | FLOAT
+# parse scalar token: INT | REAL
 def _parse_scalar_token(token: str) -> Any:
     t = token.strip()
     if len(t) >= 2 and t[0] == t[-1] and t[0] in {"'", '"'}:
         return ast.literal_eval(t)
     if _INT_RE.fullmatch(t):
         return int(t)
-    if _FLOAT_RE.fullmatch(t):
-        return float(t)
+    if _REAL_RE.fullmatch(t):
+        return real(t)
     return t
 
 # parse label line: LABEL OP [args]
@@ -176,8 +178,8 @@ def _type_from_object(obj: Any) -> DeclType:
         if s == "INT":
             return DeclType("INT", None, None)
 
-        if s == "FLOAT":
-            return DeclType("FLOAT", None, None)
+        if s == "REAL":
+            return DeclType("REAL", None, None)
 
         m = _LIST_TEXT_RE.match(s)
         if m:
@@ -187,9 +189,9 @@ def _type_from_object(obj: Any) -> DeclType:
 
         # repr-like dataclass string, for example:
         # TypeList(elem=TypeInt(), size=IntLit(value=6))
-        # TypeList(elem_type=TypeFloat(), size=IntLit(value=3))
+        # TypeList(elem_type=TypeReal(), size=IntLit(value=3))
         if s.startswith("TypeList"):
-            elem_kind = "INT" if "TypeInt" in s else "FLOAT" if "TypeFloat" in s else None
+            elem_kind = "INT" if "TypeInt" in s else "REAL" if "TypeReal" in s else None
             size_match = re.search(r"IntLit\s*\(\s*value\s*=\s*([+-]?\d+)\s*\)", s)
             size = int(size_match.group(1)) if size_match else None
             if elem_kind is None:
@@ -204,8 +206,8 @@ def _type_from_object(obj: Any) -> DeclType:
     if cls_name == "TypeInt":
         return DeclType("INT", None, None)
 
-    if cls_name == "TypeFloat":
-        return DeclType("FLOAT", None, None)
+    if cls_name == "TypeReal":
+        return DeclType("REAL", None, None)
 
     if cls_name in {"TypeList", "TypeDynamicList", "TypeListParam"}:
         elem_obj = None
@@ -218,7 +220,7 @@ def _type_from_object(obj: Any) -> DeclType:
             raise IRParseError(f"Could not read list element type from: {obj}")
 
         elem_type = _type_from_object(elem_obj)
-        if elem_type.kind != "INT" and elem_type.kind != "FLOAT":
+        if elem_type.kind != "INT" and elem_type.kind != "REAL":
             raise IRParseError(f"Only flat numeric lists are supported at runtime, got: {obj}")
 
         size: Optional[int] = None
@@ -253,11 +255,11 @@ def _type_from_funcenv_arg(obj: Any) -> DeclType:
         if s == "INT":
             return DeclType("INT", None, None)
 
-        if s == "FLOAT":
-            return DeclType("FLOAT", None, None)
+        if s == "REAL":
+            return DeclType("REAL", None, None)
 
         if s.upper().startswith("LIST"):
-            elem_match = re.search(r"LIST\s*\[\s*(INT|FLOAT)\b", s, re.IGNORECASE)
+            elem_match = re.search(r"LIST\s*\[\s*(INT|REAL)\b", s, re.IGNORECASE)
             if elem_match:
                 return DeclType("LIST", elem_match.group(1).upper(), None)
 
@@ -278,18 +280,18 @@ def _funcenv_metadata(args: Tuple[Any, ...]) -> Tuple[Optional[str], Optional[De
 # type casting
 def _coerce_value(value: Any, decl_type: DeclType) -> Any:
     if decl_type.kind == "INT":
-        if isinstance(value, float):
-            raise IRRuntimeError(f"Type mismatch: cannot assign float {value} to INT.")
+        if isinstance(value, real):
+            raise IRRuntimeError(f"Type mismatch: cannot assign real {value} to INT.")
         try:
             return int(value)
         except ValueError:
             raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to INT.")
 
-    if decl_type.kind == "FLOAT":
+    if decl_type.kind == "REAL":
         try:
-            return float(value)
+            return real(value)
         except ValueError:
-            raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to FLOAT.")
+            raise IRRuntimeError(f"Type mismatch: cannot assign '{value}' to REAL.")
 
     if decl_type.kind == "LIST":
         if not isinstance(value, list):
@@ -333,7 +335,7 @@ class SelVerIRInterpreter:
         self.label_to_index: Dict[int, int] = {}
         self.functions: Dict[str, FunctionEntry] = {}
 
-        self.stack: List[Union[int, float]] = []
+        self.stack: List[Union[int, real]] = []
         self.runtime: RuntimeConfiguration = self._fresh_runtime()
         self.call_stack: List[CallFrame] = []
 
@@ -448,12 +450,12 @@ class SelVerIRInterpreter:
             return DeclType("INT", None, None)
         if isinstance(value, int):
             return DeclType("INT", None, None)
-        if isinstance(value, float):
-            return DeclType("FLOAT", None, None)
+        if isinstance(value, real):
+            return DeclType("REAL", None, None)
         if isinstance(value, list):
             elem_kind = "INT"
-            if any(isinstance(item, float) for item in value):
-                elem_kind = "FLOAT"
+            if any(isinstance(item, real) for item in value):
+                elem_kind = "REAL"
             return DeclType("LIST", elem_kind, len(value))
         raise IRRuntimeError(f"Unsupported runtime value: {value!r}")
 
@@ -600,11 +602,11 @@ class SelVerIRInterpreter:
             self.pc += 1
             return
 
-        if op == "fDIV":
+        if op == "rDIV":
             left, right = self._pop_binary_operands()
-            if float(right) == 0.0:
-                raise IRRuntimeError("Float division by zero.")
-            self._push(float(left) / float(right))
+            if real(right) == 0.0:
+                raise IRRuntimeError("Real division by zero.")
+            self._push(real(left) / real(right))
             self.pc += 1
             return
 
@@ -841,7 +843,7 @@ class SelVerIRInterpreter:
                 self.verifier.register_declaration(name, self.runtime.scope.scope_id)
             return
 
-        if decl_type.kind == "FLOAT":
+        if decl_type.kind == "REAL":
             self._declare(name, decl_type, 0.0)
 
             # record the declaration step of the variable
@@ -892,7 +894,7 @@ class SelVerIRInterpreter:
         arg = args[0]
 
         # literal values
-        if isinstance(arg, (int, float)):
+        if isinstance(arg, (int, real)):
             self._push(arg)
             return
 
@@ -914,7 +916,7 @@ class SelVerIRInterpreter:
         name = str(args[0]).strip()
         decl_type = self._get_decl_type(name)
 
-        if decl_type.kind in {"INT", "FLOAT"}:
+        if decl_type.kind in {"INT", "REAL"}:
             value = self._pop()
             self._set_value(name, _coerce_value(value, decl_type))
 
@@ -996,7 +998,7 @@ class SelVerIRInterpreter:
         name = str(args[0]).strip()
         decl_type = self._get_decl_type(name)
 
-        if decl_type.kind in {"INT", "FLOAT"}:
+        if decl_type.kind in {"INT", "REAL"}:
             raise IRRuntimeError("LEN expects a list target.")
 
         if decl_type.kind == "LIST":
