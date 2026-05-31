@@ -13,8 +13,8 @@ from ltlf2dfa.base import MonaProgram
 from ltlf2dfa.ltlf2dfa import output2dot
 from ltlf2dfa.parser.ltlf import LTLfParser
 
-from ..defs import FutureAutomaton, FutureTransition
-from ..errors import VerificationError
+from selveri.common.errors import VerificationError
+from selveri.verifier.models import FutureAutomaton, FutureTransition
 
 INITIAL_STATE_RE = re.compile(r"init\s*->\s*([A-Za-z0-9_]+)\s*;")
 ACCEPTING_STATES_RE = re.compile(r"node\s*\[shape\s*=\s*doublecircle\];\s*(.*?)\s*;")

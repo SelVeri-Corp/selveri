@@ -5,19 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from .parser import (
-    parse_selveri,
-    Program,
-    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
-    TypeNode, BasicType, TypeInt, TypeReal, TypeList, TypeDynamicList,
-    AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
-    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
-    FunctionDecl, Write, WriteLine,
-)
-from .spec_parser import parse_spec as parse_spec_formula
-from .specs import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
-
-from .errors import (
+from selveri.common.errors import (
     CompilerError,
     ParserError,
     duplicate_declaration_error,
@@ -26,34 +14,22 @@ from .errors import (
     type_mismatch_error,
     unknown_identifier_error,
 )
+from selveri.high_level.parser import (
+    parse_selveri,
+    Program,
+    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
+    TypeNode, BasicType, TypeInt, TypeReal, TypeList, TypeDynamicList,
+    AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
+    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
+    FunctionDecl, Write, WriteLine,
+)
+from selveri.ir.instr import IRInstr
+from selveri.spec.models import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
+from selveri.spec.parser import parse_spec as parse_spec_formula
 
 RESERVED_NAMES = ["retvar", "read", "write", "len", "writeline"]
 
 real = type(0.0)
-
-# -----------------------
-# IR instruction model
-# -----------------------
-@dataclass
-class IRInstr:
-    label: int # used for the jump indexes
-    op: str # operand
-    args: Tuple[Union[str, int, real], ...] = () # arguments
-    span: object | None = None
-
-    def render(self) -> str:
-        rendered_args = ", ".join(self._render_arg(index, arg) for index, arg in enumerate(self.args))
-        return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
-
-    def _render_arg(self, index: int, arg: Union[str, int, real]) -> str:
-        if self.op == "VERI" and isinstance(arg, str):
-            return repr(arg)
-        if self.op == "VERIP" and index == 1 and isinstance(arg, str):
-            return repr(arg)
-        if self.op == "OBT" and index == 2 and isinstance(arg, str):
-            return repr(arg)
-        return str(arg)
-
 
 # Patch reference for jumps
 # As we do not know the target address of the jump until after the code is generated, we need to patch the jump address later.
@@ -250,10 +226,9 @@ class SelVeriCompiler:
 
     def _get_spec_free_vars(self, spec: Spec) -> set[str]:
         free = set()
-        from .specs import SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
-        from .spec_parser import ABoundVar
-        from .parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
-        from .specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        from selveri.high_level.parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
+        from selveri.spec.models import DomainIdent, DomainValues, DomainRange, DomainInterval, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+        from selveri.spec.parser import ABoundVar
         
         def walk_aexp(a):
             if isinstance(a, ABoundVar): pass

@@ -4,14 +4,15 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from z3 import Not, Solver, simplify, sat, unsat, unknown
 from sympy import Basic
 
-from ..defs import RuntimeConfiguration, FutureObligation
-from ..diagnostics import DiagnosticCode, DiagnosticLabel
-from ..errors import ParserError, SpecDomainBoundsError, VerificationError, VerifierRuntimeError
-from ..spec_parser import parse_spec
-from ..specs import ParsedSpec, RawSpec, Spec, SpecBinOp, SpecFromBExp, SpecQuant, SpecType, SpecUnOp
-from .future_automaton import compile_future_automaton
-from .future_mapper import FutureLTLMapper
-from .mapper import Z3Mapper
+from selveri.abstract_machine.config import RuntimeConfiguration
+from selveri.common.diagnostics import DiagnosticCode, DiagnosticLabel
+from selveri.common.errors import ParserError, SpecDomainBoundsError, VerificationError, VerifierRuntimeError
+from selveri.spec.models import ParsedSpec, RawSpec, Spec, SpecBinOp, SpecFromBExp, SpecQuant, SpecType, SpecUnOp
+from selveri.spec.parser import parse_spec
+from selveri.verifier.future_automaton import compile_future_automaton
+from selveri.verifier.future_mapper import FutureLTLMapper
+from selveri.verifier.models import FutureObligation
+from selveri.verifier.z3_mapper import Z3Mapper
 
 real = type(0.0)
 
@@ -160,7 +161,7 @@ class VerificationEngine:
         innermost body. This allows nested quantifiers like:
             Exists a in [1...10] . Exists b in [5,6,7,9] . &a * &a = &b
         """
-        from ..errors import IRRuntimeError
+        from selveri.common.errors import IRRuntimeError
 
         parsed_spec = self.resolve_spec(snapshot.scope.scope_id, spec_id, formula_text)
         spec = parsed_spec.ast
@@ -265,8 +266,8 @@ class VerificationEngine:
     ) -> None:
         """Register a quantifier's bound variable as a free Z3 variable in the mapper,
         and add its domain constraints to the solver."""
-        from ..errors import IRRuntimeError
-        from ..specs import DomainType, DomainRange, DomainInterval, DomainValues
+        from selveri.common.errors import IRRuntimeError
+        from selveri.spec.models import DomainType, DomainRange, DomainInterval, DomainValues
         from z3 import Int, Real, And, Or
 
         bound_var = quant_spec.var
@@ -305,8 +306,8 @@ class VerificationEngine:
 
     def _z3_value_to_python(self, z3_val: Any) -> Tuple[Any, Any]:
         """Convert a Z3 model value to a Python (value, DeclType) pair."""
-        from ..runtime import DeclType
-        from ..errors import IRRuntimeError
+        from selveri.common.runtime import DeclType
+        from selveri.common.errors import IRRuntimeError
         from z3 import is_int_value, is_rational_value, is_true, is_false
 
         if is_int_value(z3_val):
@@ -474,7 +475,7 @@ class VerificationEngine:
         return variables
 
     def _bexp_get_free_variables(self, bexp: Any, variables: set[str]) -> None:
-        from ..parser import BNot, BBinOp, BCompare, BTruthy, BBool
+        from selveri.high_level.parser import BNot, BBinOp, BCompare, BTruthy, BBool
         if isinstance(bexp, BNot):
             self._bexp_get_free_variables(bexp.rhs, variables)
         elif isinstance(bexp, BBinOp):
@@ -487,8 +488,8 @@ class VerificationEngine:
             self._aexp_get_free_variables(bexp.aexp, variables)
 
     def _aexp_get_free_variables(self, aexp: Any, variables: set[str]) -> None:
-        from ..parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, RealLit, FuncCall, ListLit
-        from ..spec_parser import ABoundVar
+        from selveri.high_level.parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, RealLit, FuncCall, ListLit
+        from selveri.spec.parser import ABoundVar
         if isinstance(aexp, ABoundVar):
             pass  # bound variables are not free; handled by _spec_get_free_variables via SpecQuant.discard
         elif isinstance(aexp, AVar):
@@ -512,7 +513,7 @@ class VerificationEngine:
         # IntLit, RealLit — no variables
 
     def _domain_get_free_variables(self, domain: Any, variables: set[str]) -> None:
-        from ..specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        from selveri.spec.models import DomainIdent, DomainValues, DomainRange, DomainInterval
         if domain is None:
             return
         elif isinstance(domain, DomainIdent):

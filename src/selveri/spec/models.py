@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from .diagnostics import SourceSpan
-from .runtime import DeclType
+from selveri.common.diagnostics import SourceSpan
+from selveri.common.runtime import DeclType
 
 if TYPE_CHECKING:
-    from .parser import AExp, BExp
+    from selveri.high_level.parser import AExp, BExp
 
 
 class SpecType(Enum):

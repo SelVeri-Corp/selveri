@@ -4,24 +4,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict
 
 from sympy.core.basic import Basic
-from .diagnostics import SourceSpan
-from .runtime import Scope, State
-if TYPE_CHECKING: # this runs only during type checking and does not import the specs module
-    # defs -> specs -> parser -> defs
-    from .specs import Spec
 
-class AExp: pass
-class BExp: pass
-class Stmt: pass
+from selveri.common.diagnostics import SourceSpan
 
-@dataclass(frozen=True)
-class RuntimeConfiguration:
-    state: State
-    scope: Scope
-    
+if TYPE_CHECKING:
+    from selveri.spec.models import Spec
+
+
 @dataclass(frozen=True)
 class Formula:
     uid: int
+
 
 @dataclass(frozen=True)
 class FutureTransition:
@@ -30,6 +23,7 @@ class FutureTransition:
     guard_text: str
     guard_formula: Basic
 
+
 @dataclass(frozen=True)
 class FutureAutomaton:
     formula_text: str
@@ -37,6 +31,7 @@ class FutureAutomaton:
     accepting_states: frozenset[str]
     transitions_by_state: Dict[str, tuple[FutureTransition, ...]]
     can_reach_accepting: frozenset[str]
+
 
 @dataclass
 class FutureObligation:
@@ -49,4 +44,4 @@ class FutureObligation:
     automaton: FutureAutomaton
     atom_table: Dict[str, Spec]
     current_state: str
-    steps_to_skip: int # added for flexibility to skip some amount of steps for a certain spec
+    steps_to_skip: int

@@ -8,8 +8,7 @@ from typing import Dict, Iterator, List, Optional
 from lark import Lark, LarkError, Token, Transformer, UnexpectedInput, v_args
 from lark.exceptions import VisitError
 
-from .defs import AExp, BExp, Stmt
-from .diagnostics import (
+from selveri.common.diagnostics import (
     DiagnosticCode,
     DiagnosticLabel,
     SourceFile,
@@ -17,9 +16,10 @@ from .diagnostics import (
     format_found_token,
     render_expected_tokens,
 )
-from .errors import ParserError, parse_error
-from .preprocessor import extract_raw_specs
-from .specs import RawSpec
+from selveri.common.errors import ParserError, parse_error
+from selveri.high_level.ast import AExp, BExp, Stmt
+from selveri.high_level.preprocessor import extract_raw_specs
+from selveri.spec.models import RawSpec
 
 real = type(0.0)
 

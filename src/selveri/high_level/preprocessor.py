@@ -5,9 +5,9 @@ Preprocessor takes high level source code and extracts raw specs. Replaces spec 
 from typing import Dict, List, Tuple, Optional
 import re
 
-from .diagnostics import DiagnosticCode, DiagnosticLabel, SourceFile, SourceSpan
-from .errors import PreprocessorError
-from .specs import RawSpec, RawSpecKind
+from selveri.common.diagnostics import DiagnosticCode, DiagnosticLabel, SourceFile, SourceSpan
+from selveri.common.errors import PreprocessorError
+from selveri.spec.models import RawSpec, RawSpecKind
 
 
 def _advance_position(ch: str, line: int, column: int) -> Tuple[int, int]:
