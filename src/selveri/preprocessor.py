@@ -5,8 +5,9 @@ Preprocessor takes high level source code and extracts raw specs. Replaces spec 
 from typing import Dict, List, Tuple, Optional
 import re
 
+from .diagnostics import DiagnosticCode, DiagnosticLabel, SourceFile, SourceSpan
 from .errors import PreprocessorError
-from .specs import RawSpec, SourceLocation, SourceSpan, RawSpecKind
+from .specs import RawSpec, RawSpecKind
 
 
 def _advance_position(ch: str, line: int, column: int) -> Tuple[int, int]:
@@ -40,8 +41,28 @@ def _consume_block_comment(src: str, start: int, line: int, column: int) -> Tupl
         cur_line, cur_column = _advance_position(ch, cur_line, cur_column)
     raise PreprocessorError("Unterminated block comment.")
 
+
+def _preprocessor_error(
+    *,
+    code: str,
+    title: str,
+    message: str,
+    span: SourceSpan,
+    label: str,
+    hint: str | None = None,
+) -> PreprocessorError:
+    return PreprocessorError(
+        message,
+        code=code,
+        title=title,
+        span=span,
+        labels=(DiagnosticLabel(span, label, "primary"),),
+        hint=hint,
+    )
+
 def _scan_spec_block(
     src: str,
+    source: SourceFile,
     start_index: int,
     start_line: int,
     start_column: int,
@@ -61,7 +82,15 @@ def _scan_spec_block(
 
         ch = src[index]
         if ch == "{":
-            depth += 1
+            nested_span = SourceSpan.from_positions(source, start_pos=index, end_pos=index + 1)
+            raise _preprocessor_error(
+                code=DiagnosticCode.PREPROCESSOR_NESTED_SPEC,
+                title="nested specification block",
+                message="specification blocks cannot be nested",
+                span=nested_span,
+                label="nested `{` is not allowed inside a specification block",
+                hint="remove the inner braces or rewrite the predicate",
+            )
         elif ch == "}":
             depth -= 1
             if depth == 0:
@@ -74,9 +103,30 @@ def _scan_spec_block(
         index += 1
         cur_line, cur_column = _advance_position(ch, cur_line, cur_column)
 
-    raise PreprocessorError("Unterminated specification annotation.")
+    start_span = SourceSpan.from_positions(source, start_pos=start_index, end_pos=start_index + 1)
+    raise _preprocessor_error(
+        code=DiagnosticCode.PREPROCESSOR_UNCLOSED_SPEC,
+        title="unclosed specification block",
+        message="expected closing `}`",
+        span=start_span,
+        label="specification block starts here",
+        hint="close the specification block with `}`",
+    )
 
-def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
+def _layout_preserving_placeholder(consumed: str, placeholder: str) -> str:
+    """
+    Preserve the layout of the original source code by adding spaces to the placeholder.
+    """
+    if "\n" not in consumed:
+        if len(placeholder) <= len(consumed):
+            return placeholder + (" " * (len(consumed) - len(placeholder)))
+        return placeholder
+
+    tail_width = len(consumed.rsplit("\n", 1)[-1])
+    return placeholder + ("\n" * consumed.count("\n")) + (" " * tail_width)
+
+
+def extract_raw_specs(src: str, source_file: SourceFile | None = None) -> Tuple[str, Dict[str, RawSpec]]:
     # Keep the high-level parser independent from spec syntax by replacing
     # annotation bodies with opaque placeholders before the grammar runs.
     rewritten: List[str] = []
@@ -86,6 +136,7 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
     column = 1
     next_spec_id = 0
 
+    source = source_file or SourceFile("", src)
     while index < len(src):
         if src.startswith("//", index):
             next_index, line, column = _consume_line_comment(src, index, line, column)
@@ -105,6 +156,7 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
             start_column = column
             raw_text, close_index, end_line, end_column, line, column = _scan_spec_block(
                 src,
+                source,
                 index,
                 start_line,
                 start_column,
@@ -112,7 +164,17 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
             try:
                 kind, spec_name, formula_text = classify_raw_spec_body(raw_text)
             except ValueError as exc:
-                raise PreprocessorError(str(exc)) from None
+                span = SourceSpan(source, start_line, start_column, end_line, end_column + 1, index, close_index + 1)
+                if "Empty specification" in str(exc):
+                    raise _preprocessor_error(
+                        code=DiagnosticCode.PREPROCESSOR_EMPTY_SPEC,
+                        title="empty specification",
+                        message="a specification block must contain a predicate",
+                        span=span,
+                        label="specification block is empty",
+                        hint="write a condition such as `{ x > 0 }`",
+                    ) from None
+                raise PreprocessorError(str(exc), span=span) from None
             
             identifier = ""
             if spec_name:
@@ -123,22 +185,28 @@ def extract_raw_specs(src: str) -> Tuple[str, Dict[str, RawSpec]]:
 
 
             if kind == RawSpecKind.SPEC_START:
-                placeholder = f"_SELVERI_SPEC_START_{identifier}"
+                placeholder = f"@S_{identifier}"
             elif kind == RawSpecKind.SPEC_END:
-                placeholder = f"_SELVERI_SPEC_END_{identifier}"
+                placeholder = f"@E_{identifier}"
+            elif kind == RawSpecKind.SPEC_NAMED:
+                placeholder = f"@N_{identifier}"
             else:
-                placeholder = f"_SELVERI_SPEC_{identifier}"
-
+                placeholder = f"@{identifier}"
             raw_specs[placeholder] = RawSpec(
                 spec_id=identifier,
                 formula_text=formula_text,
                 location=SourceSpan(
-                    start=SourceLocation(line=start_line, column=start_column),
-                    end=SourceLocation(line=end_line, column=end_column),
+                    source=source,
+                    start_line=start_line,
+                    start_column=start_column,
+                    end_line=end_line,
+                    end_column=end_column + 1,
+                    start_pos=index,
+                    end_pos=close_index + 1,
                 ),
                 kind=kind
             )
-            rewritten.append(placeholder)
+            rewritten.append(_layout_preserving_placeholder(src[index : close_index + 1], placeholder))
             index = close_index + 1
             continue
 

@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from .defs import RuntimeConfiguration
-from .errors import IRRuntimeError, IRParseError
+from .diagnostics import DiagnosticCode
+from .errors import IRRuntimeError, IRParseError, index_out_of_bounds_error
 from .compiler import IRInstr
 from .runtime import DeclType, Scope, State, _UNSET
 from .SelVerifier.verifier import VerificationEngine
@@ -148,7 +149,7 @@ def _parse_label_line(line: str) -> IRInstr:
     else:
         args = [_parse_scalar_token(p) for p in _split_top_level_commas(rest)]
 
-    return IRInstr(label, op, tuple(args))
+    return IRInstr(label, op, tuple(args), None)
 
 
 def parse_ir_text(text: str) -> List[IRInstr]:
@@ -559,12 +560,12 @@ class SelVerIRInterpreter:
             return
 
         if op == "LLOAD":
-            self._exec_lload(instr.args)
+            self._exec_lload(instr.args, getattr(instr, "span", None))
             self.pc += 1
             return
 
         if op == "LSTORE":
-            self._exec_lstore(instr.args)
+            self._exec_lstore(instr.args, getattr(instr, "span", None))
             self.pc += 1
             return
 
@@ -938,7 +939,7 @@ class SelVerIRInterpreter:
 
         raise IRRuntimeError(f"Unsupported STORE target type: {decl_type}")
 
-    def _exec_lload(self, args: Tuple[Any, ...]) -> None:
+    def _exec_lload(self, args: Tuple[Any, ...], span=None) -> None:
         if len(args) != 1:
             raise IRRuntimeError("LLOAD expects one target list.")
         name = str(args[0]).strip() # get the name of the list
@@ -949,10 +950,17 @@ class SelVerIRInterpreter:
         idx = int(self._pop()) # index from the stack
         arr = self._get_value(name)
         if idx < 0 or idx >= len(arr):
-            raise IRRuntimeError(f"List index out of bounds: {name}[{idx}]")
+            if span is not None:
+                raise index_out_of_bounds_error(name=name, index=idx, length=len(arr), span=span)
+            raise IRRuntimeError(
+                f"valid index range for `{name}` is 0..{max(len(arr) - 1, 0)}",
+                code=DiagnosticCode.RUNTIME_INDEX_OUT_OF_BOUNDS,
+                title="index out of bounds",
+                notes=(f"`len({name})` evaluated to {len(arr)}",),
+            )
         self._push(arr[idx])
 
-    def _exec_lstore(self, args: Tuple[Any, ...]) -> None:
+    def _exec_lstore(self, args: Tuple[Any, ...], span=None) -> None:
         if len(args) != 1:
             raise IRRuntimeError("LSTORE expects one target list.")
         name = str(args[0]).strip()
@@ -966,7 +974,14 @@ class SelVerIRInterpreter:
 
         arr = self._get_value(name)
         if idx < 0 or idx >= len(arr):
-            raise IRRuntimeError(f"List index out of bounds: {name}[{idx}]")
+            if span is not None:
+                raise index_out_of_bounds_error(name=name, index=idx, length=len(arr), span=span)
+            raise IRRuntimeError(
+                f"valid index range for `{name}` is 0..{max(len(arr) - 1, 0)}",
+                code=DiagnosticCode.RUNTIME_INDEX_OUT_OF_BOUNDS,
+                title="index out of bounds",
+                notes=(f"`len({name})` evaluated to {len(arr)}",),
+            )
 
         elem_type = DeclType(decl_type.elem_kind or "INT", None, None)
         arr[idx] = _coerce_value(value, elem_type)

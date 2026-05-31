@@ -5,6 +5,7 @@ from z3 import Not, Solver, simplify, sat, unsat, unknown
 from sympy import Basic
 
 from ..defs import RuntimeConfiguration, FutureObligation
+from ..diagnostics import DiagnosticCode, DiagnosticLabel
 from ..errors import ParserError, SpecDomainBoundsError, VerificationError, VerifierRuntimeError
 from ..spec_parser import parse_spec
 from ..specs import ParsedSpec, RawSpec, Spec, SpecBinOp, SpecFromBExp, SpecQuant, SpecType, SpecUnOp
@@ -25,6 +26,7 @@ class VerificationEngine:
         self.fltl_pending: Dict[tuple[int, str], FutureObligation] = dict() # for future LTL verification pending obligations
         # (scope_id, spec_id) -> parsed spec; same id may resolve many times (e.g. loop conditions) if formula matches
         self.resolved_specs: Dict[tuple[int, Any], ParsedSpec] = dict()
+        self.raw_specs: Dict[Any, RawSpec] = dict()
 
         # for past-LTL start markers
         self.pltl_start_marker_step: Dict[tuple[int, str], int] = dict()
@@ -38,6 +40,10 @@ class VerificationEngine:
         self.fltl_pending.clear()
         self.pltl_start_marker_step.clear()
         self.resolved_specs.clear()
+
+    def register_raw_specs(self, raw_specs: Iterable[RawSpec]) -> None:
+        for raw_spec in raw_specs:
+            self.raw_specs[raw_spec.spec_id] = raw_spec
 
     def handle_step(self, snapshot: RuntimeConfiguration) -> None:
         self.history.append(snapshot)
@@ -56,18 +62,29 @@ class VerificationEngine:
                 )
             return existing
 
-        raw_spec = RawSpec(spec_id=spec_id, formula_text=formula_text)
+        raw_spec = self.raw_specs.get(spec_id, RawSpec(spec_id=spec_id, formula_text=formula_text))
         try:
             spec_ast = parse_spec(formula_text)
         except ParserError as exc:
-            if raw_spec.location is None:
-                raise VerificationError(f"Failed to parse specification #{spec_id}: {exc}") from None
-            raise VerifierRuntimeError(
-                "Failed to parse specification "
-                f"#{spec_id} at "
-                f"{raw_spec.location.start.line}:{raw_spec.location.start.column}: {exc}"
+            raise VerificationError(
+                f"Failed to parse specification {raw_spec.spec_id!r}: {exc.diagnostic.message}",
+                code=DiagnosticCode.VERIFICATION_INVALID_SPECIFICATION,
+                span=raw_spec.location,
+                title="invalid specification",
+                labels=(
+                    (DiagnosticLabel(raw_spec.location, "specification could not be parsed", "primary"),)
+                    if raw_spec.location is not None
+                    else ()
+                ),
+                notes=(f"specification text: {formula_text}",),
             ) from None
-        parsed = ParsedSpec(spec_id=spec_id, formula_text=formula_text, spec_type=spec_ast.spec_type, ast=spec_ast)
+        parsed = ParsedSpec(
+            spec_id=spec_id,
+            formula_text=formula_text,
+            spec_type=spec_ast.spec_type,
+            ast=spec_ast,
+            location=raw_spec.location,
+        )
         self.resolved_specs[key] = parsed
         return parsed
 
@@ -153,7 +170,16 @@ class VerificationEngine:
         if innermost_body is None:
             raise IRRuntimeError(
                 f"obtain({var_name}, ...) failed: no existential quantifier binding "
-                f"'{var_name}' found in the specification. Spec: {parsed_spec.formula_text}"
+                f"'{var_name}' found in the specification",
+                code=DiagnosticCode.RUNTIME_OBTAIN_FAILED,
+                span=parsed_spec.location,
+                title="obtain failed",
+                labels=(
+                    (DiagnosticLabel(parsed_spec.location, f"`&{var_name}` is not bound by `Exists`", "primary"),)
+                    if parsed_spec.location is not None
+                    else ()
+                ),
+                hint=f"bind `{var_name}` with an existential quantifier in the specification",
             )
 
         solver = Solver()
@@ -171,8 +197,16 @@ class VerificationEngine:
 
         if result != sat:
             raise IRRuntimeError(
-                f"obtain({var_name}, ...) failed: no satisfying witness exists "
-                f"(solver returned {result}). Spec: {parsed_spec.formula_text}"
+                f"obtain({var_name}, ...) failed: no satisfying witness exists",
+                code=DiagnosticCode.RUNTIME_OBTAIN_FAILED,
+                span=parsed_spec.location,
+                title="obtain failed",
+                labels=(
+                    (DiagnosticLabel(parsed_spec.location, "no value satisfies this obtain specification", "primary"),)
+                    if parsed_spec.location is not None
+                    else ()
+                ),
+                notes=(f"solver returned {result}", f"specification text: {parsed_spec.formula_text}"),
             )
 
         model = solver.model()
@@ -185,8 +219,16 @@ class VerificationEngine:
                 return self._z3_value_to_python(z3_val)
 
         raise IRRuntimeError(
-            f"obtain({var_name}, ...) failed: bound variable '&{var_name}' "
-            f"not found in the Z3 model. Spec: {parsed_spec.formula_text}"
+            f"obtain({var_name}, ...) failed: bound variable `&{var_name}` was not found in the solver model",
+            code=DiagnosticCode.RUNTIME_OBTAIN_FAILED,
+            span=parsed_spec.location,
+            title="obtain failed",
+            labels=(
+                (DiagnosticLabel(parsed_spec.location, f"solver model did not include `&{var_name}`", "primary"),)
+                if parsed_spec.location is not None
+                else ()
+            ),
+            notes=(f"specification text: {parsed_spec.formula_text}",),
         )
 
     def _collect_quant_chain(
@@ -504,6 +546,7 @@ class VerificationEngine:
         obligation = FutureObligation(
             spec_id=spec.spec_id,
             source_spec=spec.formula_text,
+            source_span=self.raw_specs.get(spec.spec_id).location if spec.spec_id in self.raw_specs else None,
             created_at_step=self.last_step,
             scope_id=snapshot.scope.scope_id,
             lexical_depth=lexical_depth,
@@ -633,11 +676,16 @@ class VerificationEngine:
                 )
 
     def raise_spec_failure(self, parsed_spec: ParsedSpec, detail: str) -> None:
+        raw_spec = self.raw_specs.get(parsed_spec.spec_id)
         raise VerificationError(
-            f"Specification {parsed_spec.spec_id} failed: {detail}: {parsed_spec.formula_text}"
+            f"Specification {parsed_spec.spec_id} failed: {detail}.",
+            span=raw_spec.location if raw_spec is not None else None,
+            notes=(f"specification text: {parsed_spec.formula_text}",),
         )
 
     def raise_future_failure(self, obligation: FutureObligation, detail: str) -> None:
         raise VerificationError(
-            f"Future specification {obligation.spec_id} failed: {detail}: {obligation.source_spec}"
+            f"Future specification {obligation.spec_id} failed: {detail}.",
+            span=obligation.source_span,
+            notes=(f"specification text: {obligation.source_spec}",),
         )
