@@ -1,0 +1,15 @@
+// Greek identifiers in a small function
+
+function Δ(θ : Int) -> Int ::
+    ρ : Int;
+    ρ := θ + 1;
+    return ρ;
+end
+
+τ : Int;
+call Δ(4);
+τ := retvar;
+
+writeline(τ);
+{ τ = 5 };
+{ ∀ θ in [4...4] . (&θ + 1) = τ };

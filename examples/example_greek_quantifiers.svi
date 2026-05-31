@@ -1,0 +1,13 @@
+// Unicode quantifiers (∀, ∃) with Greek bound variables
+
+α : Int;
+β : Int;
+γ : Int;
+
+α := 2;
+β := 4;
+γ := 6;
+
+{ ∀ x ∈ [α, β, γ] . &x > 0 };
+{ ∃ μ ∈ [0...2] . (&μ = 1) && (γ = 6) };
+{ ∀ i in [0...2] . (&i = 0) => (α = 2) };
