@@ -275,7 +275,7 @@ def _unicode_alias_items() -> list[types.CompletionItem]:
         types.CompletionItem(
             label=alias,
             kind=types.CompletionItemKind.Text,
-            detail=f"Lean-style Unicode alias: {char}",
+            detail=f"Unicode alias: {char}",
             insert_text=char,
             sort_text=f"0{alias}",
         )

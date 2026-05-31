@@ -10,7 +10,7 @@ import {
 let client: LanguageClient | undefined;
 let applyingUnicodeAlias = false;
 
-const LEAN_UNICODE_ALIASES: Record<string, string> = {
+const UNICODE_ALIASES: Record<string, string> = {
   "\\forall": "∀",
   "\\exists": "∃",
   "\\alpha": "α",
@@ -71,7 +71,7 @@ const LEAN_UNICODE_ALIASES: Record<string, string> = {
 };
 
 const MAX_UNICODE_ALIAS_LENGTH = Math.max(
-  ...Object.keys(LEAN_UNICODE_ALIASES).map((alias) => alias.length)
+  ...Object.keys(UNICODE_ALIASES).map((alias) => alias.length)
 );
 
 function registerUnicodeInput(context: vscode.ExtensionContext): void {
@@ -103,7 +103,7 @@ function registerUnicodeInput(context: vscode.ExtensionContext): void {
         }
 
         const alias = match[0];
-        const replacement = LEAN_UNICODE_ALIASES[alias];
+        const replacement = UNICODE_ALIASES[alias];
         if (!replacement) {
           continue;
         }

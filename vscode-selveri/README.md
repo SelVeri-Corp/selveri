@@ -7,8 +7,8 @@ Language support for **SelVeri** (`.svi` files): syntax highlighting, parse/comp
 - Syntax highlighting for current SelVeri syntax, including `{ ... }` specification blocks, named specs, temporal operators, `obtain`, and bound variables such as `&i`.
 - Diagnostics powered by the current Python parser and compiler, including source ranges, diagnostic codes, notes, hints, and related spans.
 - Hover documentation for keywords, builtins, temporal operators, declarations, parameters, and functions.
-- Completion for keywords, builtins, snippets, declared variables, parameters, functions, and Lean-style Unicode aliases.
-- Automatic Lean-style Unicode input in `.svi` files, for example `\forall` to `∀`, `\exists` to `∃`, and `\phi` to `φ`.
+- Completion for keywords, builtins, snippets, declared variables, parameters, functions, and Unicode aliases.
+- Automatic Unicode input in `.svi` files, for example `\forall` to `∀`, `\exists` to `∃`, and `\phi` to `φ`.
 - Document symbols for functions, parameters, and declarations.
 
 ## Current Syntax Examples
