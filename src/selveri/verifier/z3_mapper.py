@@ -4,12 +4,12 @@ from enum import Enum
 from typing import Any, Dict
 from z3 import *
 
-from ..runtime import Scope, State, _UNSET
-from ..defs import RuntimeConfiguration
-from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
-from ..spec_parser import ABoundVar
-from ..errors import VerifierRuntimeError
-from ..parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
+from selveri.abstract_machine.config import RuntimeConfiguration
+from selveri.common.errors import VerifierRuntimeError
+from selveri.common.runtime import Scope, State, _UNSET
+from selveri.high_level.ast import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
+from selveri.spec.models import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
+from selveri.spec.parser import ABoundVar
 
 class QuantifierType(Enum):
     Forall = 0

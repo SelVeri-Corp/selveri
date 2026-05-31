@@ -4,6 +4,56 @@ SelVeri is an **educational, imperative** programming language designed to bridg
 
 Unlike traditional languages that rely on runtime errors or unit tests to catch bugs, SelVeri employs _Dynamic Verification_ by utilizing its **First-Order Logic Runtime Engine**. SelVeri integrates the Z3 SMT Solver directly into its runtime. This allows developers to embed complex mathematical and logical specifications—including quantifiers ($\forall, \exists$) and logical implications—which are verified in real-time as the program executes.
 
+## Source layout
+
+Python package root: `src/selveri/`
+
+```
+src/selveri/
+├── __init__.py
+├── __main__.py              # python -m selveri
+├── cli.py                   # CLI entry (parse → compile → run)
+│
+├── common/                  # shared infrastructure
+│   ├── diagnostics.py       # source spans, rendered errors
+│   ├── errors.py            # SelVeriError hierarchy
+│   ├── runtime.py           # State, Scope, DeclType
+│   └── types.py             # shared scalars (e.g. real = float)
+│
+├── high_level/              # .svi source language
+│   ├── ast.py               # HL AST nodes
+│   ├── parser.py            # Lark parser, parse_selveri
+│   ├── preprocessor.py      # {spec} extraction
+│   └── grammars/
+│       └── grammar.lark
+│
+├── spec/                    # specification / annotation language
+│   ├── models.py            # Spec, RawSpec, domains
+│   ├── parser.py            # parse_spec
+│   └── grammars/
+│       └── spec_grammar.lark
+│
+├── compiler/                # high-level AST → SelVerIR
+│   └── compiler.py
+│
+├── ir/                      # intermediate representation
+│   ├── instr.py             # IRInstr
+│   └── text.py              # IR text parse/serialize helpers
+│
+├── abstract_machine/        # SelVerIR interpreter (VM)
+│   ├── config.py            # RuntimeConfiguration
+│   └── interpreter.py
+│
+└── verifier/                # Z3 / LTL verification engine
+    ├── engine.py            # VerificationEngine
+    ├── z3_mapper.py
+    ├── future_mapper.py
+    ├── future_automaton.py
+    └── models.py            # FutureAutomaton, obligations, …
+```
+
+Pipeline flow: `high_level` → `compiler` → `ir` → `abstract_machine`, with `spec` + `verifier` hooked into compile/run, and `common` used throughout.
+
 ## Setup
 
 Create a Virtual Environment (Optional):
