@@ -79,3 +79,47 @@ counterexamples when available.
 
 See [docs/errors.md](docs/errors.md) for diagnostic codes, examples, and
 guidance for adding new errors.
+
+# Selveri VsCode Extension
+
+## Prerequisites
+
+The `selveri` Python package and LSP dependencies must be installed in the interpreter used by the extension:
+
+```bash
+pip install -e /path/to/selveri
+pip install -r vscode-selveri/server/requirements.txt
+```
+
+## Build & Install
+
+```bash
+cd vscode-selveri
+npm install
+npm run compile
+npx vsce package
+code --install-extension selveri-0.1.0.vsix
+```
+
+## Development
+
+1. Open the `vscode-selveri` folder in VS Code.
+2. Open `client/src/extension.ts`.
+3. Press F5 to launch an Extension Development Host.
+
+Example `.vscode/launch.json`:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/client/out/**/*.js"]
+    }
+  ]
+}
+```
