@@ -27,7 +27,7 @@ from .errors import (
     unknown_identifier_error,
 )
 
-RESERVED_NAMES = ["retvar", "read", "write", "len"]
+RESERVED_NAMES = ["retvar", "read", "write", "len", "writeline"]
 
 real = type(0.0)
 

@@ -151,6 +151,8 @@ func_stmt_seq: func_stmt*
                     | list_assign
                     | func_call
                     | pass_stmt
+                    | write_stmt
+                    | writeline_stmt
                     | return_stmt
                     | spec_annot
 
