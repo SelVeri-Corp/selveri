@@ -6,10 +6,11 @@ from pathlib import Path
 
 from lark import Lark, LarkError, Transformer, UnexpectedInput, v_args
 
-from .diagnostics import format_found_token, render_expected_tokens
-from .errors import ParserError, VerifierRuntimeError, parse_error
-from .runtime import DeclType
-from .parser import (
+from selveri.common.diagnostics import format_found_token, render_expected_tokens
+from selveri.common.errors import ParserError, VerifierRuntimeError, parse_error
+from selveri.common.runtime import DeclType
+from selveri.common.types import real
+from selveri.high_level.ast import (
     ABinOp,
     ALen,
     AExp,
@@ -23,23 +24,25 @@ from .parser import (
     BNot,
     BTruthy,
     BasicType,
-    FloatLit,
     IntLit,
     ListLit,
-    TypeFloat,
+    RealLit,
     TypeInt,
     TypeList,
+    TypeReal,
 )
+
+
 def _basic_type_to_decl_type(bt):
-    """Convert a parser-level BasicType (TypeInt/TypeFloat) to a runtime DeclType."""
+    """Convert a parser-level BasicType (TypeInt/TypeReal) to a runtime DeclType."""
     if isinstance(bt, TypeInt):
         return DeclType("INT", None, None)
-    elif isinstance(bt, TypeFloat):
-        return DeclType("FLOAT", None, None)
+    elif isinstance(bt, TypeReal):
+        return DeclType("REAL", None, None)
     else:
         raise ParserError(f"Unsupported type for quantifier domain: {bt}")
 
-from .specs import (
+from selveri.spec.models import (
     DomainIdent,
     DomainInterval,
     DomainRange,
@@ -75,14 +78,14 @@ class SpecAstBuilder(Transformer):
     # types
     def type_int(self) -> TypeInt: return TypeInt()
 
-    def type_float(self) -> TypeFloat: return TypeFloat()
+    def type_real(self) -> TypeReal: return TypeReal()
 
     def type_list(self, elem: BasicType, dimension, shape): return TypeList(elem, IntLit(int(dimension)), shape)
 
     def aexp_list(self, *items): return list(items)
     def aexp(self, expr): return expr
     def int_lit(self, tok): return IntLit(int(tok))
-    def float_lit(self, tok): return FloatLit(float(tok))
+    def real_lit(self, tok): return RealLit(real(tok))
     def list_lit(self, *args): return ListLit(list(args))
     def a_var(self, name): return AVar(str(name))
     def a_bound_var(self, name): return ABoundVar(str(name))

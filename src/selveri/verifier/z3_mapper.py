@@ -4,12 +4,12 @@ from enum import Enum
 from typing import Any, Dict
 from z3 import *
 
-from ..runtime import Scope, State, _UNSET
-from ..defs import RuntimeConfiguration
-from ..specs import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
-from ..spec_parser import ABoundVar
-from ..errors import VerifierRuntimeError
-from ..parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
+from selveri.abstract_machine.config import RuntimeConfiguration
+from selveri.common.errors import VerifierRuntimeError
+from selveri.common.runtime import Scope, State, _UNSET
+from selveri.high_level.ast import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
+from selveri.spec.models import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
+from selveri.spec.parser import ABoundVar
 
 class QuantifierType(Enum):
     Forall = 0
@@ -51,12 +51,12 @@ class Z3Mapper():
             var_z3_name = Z3Mapper.get_z3_var_name(var, scope.scope_id)
             if vartype.kind == "INT":
                 self.free_var_map[var_z3_name] = Int(var_z3_name)
-            elif vartype.kind == "FLOAT":
+            elif vartype.kind == "REAL":
                 self.free_var_map[var_z3_name] = Real(var_z3_name)
             elif vartype.kind == "LIST":
                 if vartype.elem_kind == "INT":
                     self.free_var_map[var_z3_name] = Array(var_z3_name, IntSort(), IntSort())
-                elif vartype.elem_kind == "FLOAT":
+                elif vartype.elem_kind == "REAL":
                     self.free_var_map[var_z3_name] = Array(var_z3_name, IntSort(), RealSort())
                 else:
                     raise VerifierRuntimeError(f"Unsupported list element type: {vartype.elem_kind}")
@@ -83,7 +83,7 @@ class Z3Mapper():
                         raise VerifierRuntimeError(f"Variable {var} has size mismatch")
                     for i in range(vartype.size):
                         solver.add(self.free_var_map[var_z3_name][i] == value[i])
-                else: # INT or FLOAT
+                else: # INT or REAL
                     solver.add(self.free_var_map[var_z3_name] == value)
             except Z3Exception as e:
                 if "sort mismatch" in str(e):
@@ -118,7 +118,7 @@ class Z3Mapper():
     def map_FOL_aexp(self, aexp: AExp) -> z3types.ExprRef :
         if isinstance(aexp, IntLit):
             return IntVal(aexp.value)
-        elif isinstance(aexp, FloatLit):
+        elif isinstance(aexp, RealLit):
             return RealVal(aexp.value)
         elif isinstance(aexp, ListLit):
             return self.map_FOL_listlit(aexp)
@@ -140,7 +140,7 @@ class Z3Mapper():
                 if len_z3_name not in self.free_var_map:
                     raise VerifierRuntimeError(f"Length shadow variable {aexp.name}_len_1 of the list {aexp.name} (Z3 name: {var_z3_name}) not mapped")
                 return self.free_var_map[len_z3_name]
-            else: # INT or FLOAT
+            else: # INT or REAL
                 return IntVal(0)
         elif isinstance(aexp, AIndex):
             return self.map_FOL_aindex(aexp)
@@ -176,7 +176,7 @@ class Z3Mapper():
         if not flat_elems:
             raise VerifierRuntimeError("Empty list literal is not supported in specifications")
         mapped = [self.map_FOL_aexp(x) for x in flat_elems]
-        use_real = any(isinstance(x, FloatLit) for x in flat_elems) or any(
+        use_real = any(isinstance(x, RealLit) for x in flat_elems) or any(
             me.is_real() for me in mapped
         )
         if use_real:
@@ -292,7 +292,7 @@ class Z3Mapper():
                 raise VerifierRuntimeError("List domain is not supported for Z3 quantifier")
             elif domain.ty.kind == "INT":
                 bound_var_z3 = Int("&" + bound_var)
-            elif domain.ty.kind == "FLOAT":
+            elif domain.ty.kind == "REAL":
                 bound_var_z3 = Real("&" + bound_var)
             else:
                 raise VerifierRuntimeError(f"Unsupported domain type: {domain}")

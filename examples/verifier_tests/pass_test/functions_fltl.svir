@@ -1,0 +1,104 @@
+0: GOTO 81
+1: FUNCENV driveCounter, INT
+2: DECL INT, target
+3: STORE target
+4: DECL INT, start
+5: STORE start
+6: STEP
+7: DECL INT, x
+8: STEP
+9: LOAD start
+10: STORE x
+11: STEP
+12: VERI 'reach', 'Eventually x = target'
+13: VERI 'nonnegative', 'Always x >= 0'
+14: LOAD x
+15: LOAD target
+16: LT
+17: JZ 27
+18: CSCOPE
+19: VERI 0, 'x < target'
+20: LOAD x
+21: PUSH 1
+22: ADD
+23: STORE x
+24: STEP
+25: PSCOPE
+26: GOTO 14
+27: NOOP
+28: VERI 1, 'x = target'
+29: SPEC_END reach
+30: SPEC_END nonnegative
+31: LOAD x
+32: RET
+33: FUNCENV fillPositive, LIST[INT,1, [IntLit(value=4)]]
+34: DECL INT, seed
+35: STORE seed
+36: STEP
+37: DECL INT, _out_len_1
+38: PUSH 4
+39: STORE _out_len_1
+40: PUSH 1
+41: PUSH 4
+42: MUL
+43: LDECL LIST[INT], out
+44: STEP
+45: PUSH 0
+46: PUSH 0
+47: PUSH 0
+48: PUSH 0
+49: PUSH 4
+50: STORE out
+51: STEP
+52: DECL INT, i
+53: STEP
+54: PUSH 0
+55: STORE i
+56: STEP
+57: VERI 'filled', 'Eventually (Forall idx in [0...3] . out[&idx] > 0)'
+58: LOAD i
+59: LEN out
+60: LT
+61: JZ 76
+62: CSCOPE
+63: LOAD seed
+64: LOAD i
+65: ADD
+66: LOAD i
+67: LSTORE out
+68: STEP
+69: LOAD i
+70: PUSH 1
+71: ADD
+72: STORE i
+73: STEP
+74: PSCOPE
+75: GOTO 58
+76: NOOP
+77: VERI 2, 'Forall idx in [0...3] . out[&idx] > 0'
+78: SPEC_END filled
+79: LOAD out
+80: RET
+81: PUSH 1
+82: PUSH 5
+83: CALL driveCounter
+84: DECL INT, result
+85: STEP
+86: LOAD retvar
+87: STORE result
+88: STEP
+89: VERI 3, 'result = 5'
+90: PUSH 3
+91: CALL fillPositive
+92: DECL INT, _lst_len_1
+93: PUSH 4
+94: STORE _lst_len_1
+95: PUSH 1
+96: PUSH 4
+97: MUL
+98: LDECL LIST[INT], lst
+99: STEP
+100: LOAD retvar
+101: STORE lst
+102: STEP
+103: VERI 4, 'Forall idx in [0...3] . lst[&idx] > 0'

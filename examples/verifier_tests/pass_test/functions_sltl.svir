@@ -1,0 +1,107 @@
+0: GOTO 83
+1: FUNCENV stagedValue, INT
+2: DECL INT, seed
+3: STORE seed
+4: STEP
+5: DECL INT, x
+6: STEP
+7: LOAD seed
+8: STORE x
+9: STEP
+10: SPEC_START stage
+11: LOAD x
+12: PUSH 1
+13: ADD
+14: STORE x
+15: STEP
+16: VERI 'stage', '(Historically x = seed + 1) => (Next x = seed + 2)'
+17: LOAD x
+18: PUSH 1
+19: ADD
+20: STORE x
+21: STEP
+22: SPEC_END stage
+23: LOAD x
+24: PUSH 10
+25: ADD
+26: STORE x
+27: STEP
+28: LOAD x
+29: RET
+30: FUNCENV guardedListUpdate, LIST[INT,1, [IntLit(value=3)]]
+31: DECL INT, base
+32: STORE base
+33: STEP
+34: DECL INT, _lst_len_1
+35: PUSH 3
+36: STORE _lst_len_1
+37: PUSH 1
+38: PUSH 3
+39: MUL
+40: LDECL LIST[INT], lst
+41: STEP
+42: LOAD base
+43: PUSH 0
+44: LSTORE lst
+45: STEP
+46: LOAD base
+47: PUSH 1
+48: LSTORE lst
+49: STEP
+50: LOAD base
+51: PUSH 2
+52: LSTORE lst
+53: STEP
+54: DECL INT, idx
+55: STEP
+56: PUSH 0
+57: STORE idx
+58: STEP
+59: SPEC_START mutate
+60: LOAD base
+61: PUSH 1
+62: ADD
+63: PUSH 0
+64: LSTORE lst
+65: STEP
+66: LOAD base
+67: PUSH 2
+68: ADD
+69: PUSH 1
+70: LSTORE lst
+71: STEP
+72: VERI 'mutate', '(Once lst[0] = base + 1) => (Eventually lst[2] = base + 3)'
+73: LOAD base
+74: PUSH 3
+75: ADD
+76: PUSH 2
+77: LSTORE lst
+78: STEP
+79: SPEC_END mutate
+80: VERI 0, 'Forall i in [0...2] . lst[&i] > base'
+81: LOAD lst
+82: RET
+83: PUSH 4
+84: CALL stagedValue
+85: DECL INT, v
+86: STEP
+87: LOAD retvar
+88: STORE v
+89: STEP
+90: VERI 1, 'v = 16'
+91: PUSH 10
+92: CALL guardedListUpdate
+93: DECL INT, _lst_len_1
+94: PUSH 3
+95: STORE _lst_len_1
+96: PUSH 1
+97: PUSH 3
+98: MUL
+99: LDECL LIST[INT], lst
+100: STEP
+101: LOAD retvar
+102: STORE lst
+103: STEP
+104: VERI 2, 'lst[0] = 11'
+105: VERI 3, 'lst[1] = 12'
+106: VERI 4, 'lst[2] = 13'

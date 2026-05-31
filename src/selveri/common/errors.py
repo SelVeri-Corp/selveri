@@ -129,7 +129,7 @@ SelVeriCompileError = CompilerError
 def _pretty_type(value: str | None) -> str | None:
     if value is None:
         return None
-    return {"INT": "Int", "FLOAT": "Float"}.get(value, value)
+    return {"INT": "Int", "REAL": "Real"}.get(value, value)
 
 
 def parse_error(

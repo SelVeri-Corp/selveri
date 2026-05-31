@@ -1,0 +1,57 @@
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{xcolor}
+\usepackage{titling}
+\tcbuselibrary{breakable,skins}
+
+\definecolor{SelVeriBlue}{HTML}{1F4E79}
+\definecolor{SelVeriRule}{HTML}{B7C9D9}
+\definecolor{SelVeriCodeBg}{HTML}{F7F9FB}
+\definecolor{SelVeriCodeRule}{HTML}{D8E1EA}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\renewcommand{\arraystretch}{1.18}
+\setlength{\emergencystretch}{3em}
+
+\titleformat{\section}
+  {\Large\bfseries\color{SelVeriBlue}}
+  {\thesection}{0.75em}{}
+  [\titlerule]
+\titleformat{\subsection}
+  {\large\bfseries\color{SelVeriBlue}}
+  {\thesubsection}{0.75em}{}
+\titlespacing*{\section}{0pt}{1.6em}{0.7em}
+\titlespacing*{\subsection}{0pt}{1.2em}{0.45em}
+
+\pretitle{\begin{center}\vspace*{1.5em}\Huge\bfseries\color{SelVeriBlue}}
+\posttitle{\par\vspace{0.6em}{\color{SelVeriRule}\rule{0.72\linewidth}{0.8pt}}\end{center}}
+\preauthor{\begin{center}\large}
+\postauthor{\end{center}}
+\predate{\begin{center}\small}
+\postdate{\end{center}\vspace{1.5em}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small SelVeri Error Diagnostics}
+\rhead{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{SelVeriRule}\leaders\hrule height \headrulewidth\hfill}}
+
+\tcolorboxenvironment{Shaded}{
+  colback=SelVeriCodeBg,
+  colframe=SelVeriCodeRule,
+  boxrule=0.5pt,
+  arc=1.5pt,
+  left=6pt,
+  right=6pt,
+  top=5pt,
+  bottom=5pt,
+  breakable,
+  enhanced,
+  before skip=0.8em,
+  after skip=0.8em
+}

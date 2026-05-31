@@ -6,12 +6,12 @@ from pathlib import Path
 from time import perf_counter
 import traceback
 
-from .compiler import SelVeriCompiler
-from .diagnostics import render_diagnostic, render_internal_error, should_use_color
-from .errors import SelVeriError
-from .interpreter import interpret_ir_code
-from .parser import parse_selveri
-from .SelVerifier.verifier import VerificationEngine
+from selveri.abstract_machine import interpret_ir_code
+from selveri.common.diagnostics import render_diagnostic, render_internal_error, should_use_color
+from selveri.common.errors import SelVeriError
+from selveri.compiler import SelVeriCompiler
+from selveri.high_level.parser import parse_selveri
+from selveri.verifier import VerificationEngine
 
 def run_pipeline(
     input_path: Path,

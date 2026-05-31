@@ -5,19 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from .parser import (
-    parse_selveri,
-    Program,
-    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
-    TypeNode, BasicType, TypeInt, TypeFloat, TypeList, TypeDynamicList,
-    AExp, IntLit, FloatLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
-    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
-    FunctionDecl, Write, WriteLine,
-)
-from .spec_parser import parse_spec as parse_spec_formula
-from .specs import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
-
-from .errors import (
+from selveri.common.types import real
+from selveri.common.errors import (
     CompilerError,
     ParserError,
     duplicate_declaration_error,
@@ -26,32 +15,20 @@ from .errors import (
     type_mismatch_error,
     unknown_identifier_error,
 )
+from selveri.high_level.ast import (
+    Program,
+    Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
+    TypeNode, BasicType, TypeInt, TypeReal, TypeList, TypeDynamicList,
+    AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp, ARead, FuncCall,
+    BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
+    FunctionDecl, Write, WriteLine,
+)
+from selveri.high_level.parser import parse_selveri
+from selveri.ir.instr import IRInstr
+from selveri.spec.models import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
+from selveri.spec.parser import parse_spec as parse_spec_formula
 
-RESERVED_NAMES = ["retvar", "read", "write", "len"]
-
-# -----------------------
-# IR instruction model
-# -----------------------
-@dataclass
-class IRInstr:
-    label: int # used for the jump indexes
-    op: str # operand
-    args: Tuple[Union[str, int, float], ...] = () # arguments
-    span: object | None = None
-
-    def render(self) -> str:
-        rendered_args = ", ".join(self._render_arg(index, arg) for index, arg in enumerate(self.args))
-        return f"{self.label}: {self.op}" + (f" {rendered_args}" if rendered_args else "")
-
-    def _render_arg(self, index: int, arg: Union[str, int, float]) -> str:
-        if self.op == "VERI" and isinstance(arg, str):
-            return repr(arg)
-        if self.op == "VERIP" and index == 1 and isinstance(arg, str):
-            return repr(arg)
-        if self.op == "OBT" and index == 2 and isinstance(arg, str):
-            return repr(arg)
-        return str(arg)
-
+RESERVED_NAMES = ["retvar", "read", "write", "len", "writeline"]
 
 # Patch reference for jumps
 # As we do not know the target address of the jump until after the code is generated, we need to patch the jump address later.
@@ -186,7 +163,7 @@ class SelVeriCompiler:
     def pc(self) -> int:
         return len(self.code) # program counter
 
-    def emit(self, op: str, *args: Union[str, int, float], span=None) -> int:
+    def emit(self, op: str, *args: Union[str, int, real], span=None) -> int:
         self.code.append(IRInstr(self.pc(), op, args, span if span is not None else self._current_span))
         return len(self.code) - 1 # index (label) of the last emitted instruction
 
@@ -248,10 +225,9 @@ class SelVeriCompiler:
 
     def _get_spec_free_vars(self, spec: Spec) -> set[str]:
         free = set()
-        from .specs import SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
-        from .spec_parser import ABoundVar
-        from .parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
-        from .specs import DomainIdent, DomainValues, DomainRange, DomainInterval
+        from selveri.high_level.ast import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
+        from selveri.spec.models import DomainIdent, DomainValues, DomainRange, DomainInterval, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
+        from selveri.spec.parser import ABoundVar
         
         def walk_aexp(a):
             if isinstance(a, ABoundVar): pass
@@ -411,8 +387,8 @@ class SelVeriCompiler:
         """
         if isinstance(a, IntLit):
             return a.value
-        if isinstance(a, FloatLit):
-            raise CompilerError("Expected compile-time integer expression, found float literal.")
+        if isinstance(a, RealLit):
+            raise CompilerError("Expected compile-time integer expression, found real literal.")
         if isinstance(a, ALen):
             info = self._get_list_info(a.name)
             if info.top_level_len is None:
@@ -529,9 +505,9 @@ class SelVeriCompiler:
 
     def _basic_types_compatible(self, actual: TypeNode, expected: TypeNode) -> bool:
         if type(actual) is BasicType:
-            return isinstance(expected, (TypeInt, TypeFloat))
-        if isinstance(expected, TypeFloat):
-            return isinstance(actual, (TypeInt, TypeFloat)) # integers are casted into floats gracefully
+            return isinstance(expected, (TypeInt, TypeReal))
+        if isinstance(expected, TypeReal):
+            return isinstance(actual, (TypeInt, TypeReal)) # integers are casted into reals gracefully
         return type(actual) is type(expected)
 
     def _infer_list_literal_type(self, literal: ListLit) -> TypeList:
@@ -548,14 +524,14 @@ class SelVeriCompiler:
             raise CompilerError("Empty list literals are not supported.")
 
         first_type = self._infer_imm_type(literal.items[0])
-        if isinstance(first_type, (TypeInt, TypeFloat)):
+        if isinstance(first_type, (TypeInt, TypeReal)):
             elem_type = first_type
             for item in literal.items[1:]:
                 item_type = self._infer_imm_type(item)
-                if not isinstance(item_type, (TypeInt, TypeFloat)):
+                if not isinstance(item_type, (TypeInt, TypeReal)):
                     raise CompilerError("List literal items must have a uniform nesting depth.")
-                if isinstance(elem_type, TypeFloat) or isinstance(item_type, TypeFloat):
-                    elem_type = TypeFloat()
+                if isinstance(elem_type, TypeReal) or isinstance(item_type, TypeReal):
+                    elem_type = TypeReal()
             return TypeList(elem_type, IntLit(1), [IntLit(len(literal.items))])
 
         nested_info = self._list_info_from_type(first_type)
@@ -570,28 +546,28 @@ class SelVeriCompiler:
             if item_info.dimension != nested_info.dimension or item_info.shape != nested_shape:
                 raise CompilerError("Nested list literal must be rectangular.")
             if item_info.elem_type != elem_type:
-                if isinstance(elem_type, TypeInt) and isinstance(item_info.elem_type, TypeFloat):
-                    elem_type = TypeFloat()
-                elif not (isinstance(elem_type, TypeFloat) and isinstance(item_info.elem_type, TypeInt)):
+                if isinstance(elem_type, TypeInt) and isinstance(item_info.elem_type, TypeReal):
+                    elem_type = TypeReal()
+                elif not (isinstance(elem_type, TypeReal) and isinstance(item_info.elem_type, TypeInt)):
                     raise CompilerError("Nested list literal elements must have a uniform basic type.")
 
         shape = [IntLit(len(literal.items))]
         shape.extend(IntLit(dim) for dim in nested_shape if dim is not None)
         return TypeList(elem_type, IntLit(len(shape)), shape)
 
-    def _infer_imm_type(self, imm: Union[IntLit, FloatLit, ListLit]) -> TypeNode:
+    def _infer_imm_type(self, imm: Union[IntLit, RealLit, ListLit]) -> TypeNode:
         if isinstance(imm, IntLit):
             return TypeInt()
-        if isinstance(imm, FloatLit):
-            return TypeFloat()
+        if isinstance(imm, RealLit):
+            return TypeReal()
         if isinstance(imm, ListLit):
             return self._infer_list_literal_type(imm)
 
     def _flatten_list_literal(
         self,
-        literal: Union[ListLit, IntLit, FloatLit],
+        literal: Union[ListLit, IntLit, RealLit],
         expected_type: TypeNode,
-    ) -> List[Union[int, float]]:
+    ) -> List[Union[int, real]]:
         if isinstance(expected_type, TypeList):
             if not isinstance(literal, ListLit):
                 raise CompilerError("Nested list literal shape does not match the expected list type.")
@@ -600,7 +576,7 @@ class SelVeriCompiler:
                 raise CompilerError(
                     f"List literal length mismatch: expected {expected_len}, got {len(literal.items)}."
                 )
-            flat: List[Union[int, float]] = []
+            flat: List[Union[int, real]] = []
             if expected_type.dimension.value == 1:
                 sub_expected: TypeNode = expected_type.elem
             else:
@@ -618,9 +594,9 @@ class SelVeriCompiler:
                 raise CompilerError("Int lists require integer elements.")
             return [literal.value]
 
-        if isinstance(expected_type, TypeFloat):
-            if not isinstance(literal, (IntLit, FloatLit)):
-                raise CompilerError("Float lists require numeric elements.")
+        if isinstance(expected_type, TypeReal):
+            if not isinstance(literal, (IntLit, RealLit)):
+                raise CompilerError("Real lists require numeric elements.")
             return [literal.value]
 
         raise CompilerError("Unsupported list literal type.")
@@ -628,8 +604,8 @@ class SelVeriCompiler:
     def _default_value_expr(self, type_node: TypeNode) -> AExp:
         if isinstance(type_node, TypeInt):
             return IntLit(0)
-        if isinstance(type_node, TypeFloat):
-            return FloatLit(0.0)
+        if isinstance(type_node, TypeReal):
+            return RealLit(0.0)
         if isinstance(type_node, TypeList):
             size = self._eval_const_int(type_node.shape[0])
             if type_node.dimension.value == 1:
@@ -696,8 +672,8 @@ class SelVeriCompiler:
     def _type_of_aexp(self, expr: AExp) -> TypeNode:
         if isinstance(expr, IntLit):
             return TypeInt()
-        if isinstance(expr, FloatLit):
-            return TypeFloat()
+        if isinstance(expr, RealLit):
+            return TypeReal()
         if isinstance(expr, ListLit):
             return self._infer_list_literal_type(expr)
         if isinstance(expr, AVar):
@@ -714,16 +690,16 @@ class SelVeriCompiler:
             return self._get_type_list_access(info, indices)
         if isinstance(expr, AUnOp):
             inner = self._type_of_aexp(expr.rhs)
-            if not isinstance(inner, (TypeInt, TypeFloat)):
+            if not isinstance(inner, (TypeInt, TypeReal)):
                 raise CompilerError("Unary '-' can only be applied to basic numeric expressions.")
             return inner
         if isinstance(expr, ABinOp):
             left = self._type_of_aexp(expr.left)
             right = self._type_of_aexp(expr.right)
-            if not isinstance(left, (TypeInt, TypeFloat)) or not isinstance(right, (TypeInt, TypeFloat)):
+            if not isinstance(left, (TypeInt, TypeReal)) or not isinstance(right, (TypeInt, TypeReal)):
                 raise CompilerError("Binary arithmetic operators can only be applied to basic numeric expressions.")
-            if isinstance(left, TypeFloat) or isinstance(right, TypeFloat):
-                return TypeFloat()
+            if isinstance(left, TypeReal) or isinstance(right, TypeReal):
+                return TypeReal()
             return TypeInt()
         if isinstance(expr, FuncCall):
             func_info = self.functions.get(expr.name)
@@ -739,8 +715,8 @@ class SelVeriCompiler:
     def _ct_type(self, type_node: BasicType) -> str:
         if isinstance(type_node, TypeInt):
             return "INT"
-        if isinstance(type_node, TypeFloat):
-            return "FLOAT"
+        if isinstance(type_node, TypeReal):
+            return "REAL"
         raise CompilerError(f"Unsupported non-basic type in DECL: {type(type_node).__name__}")
 
     def _ir_list_type(self, elem_type: BasicType) -> str:
@@ -749,9 +725,25 @@ class SelVeriCompiler:
         """
         if isinstance(elem_type, TypeInt):
             return "LIST[INT]"
-        if isinstance(elem_type, TypeFloat):
-            return "LIST[FLOAT]"
+        if isinstance(elem_type, TypeReal):
+            return "LIST[REAL]"
         raise CompilerError(f"Unsupported list element type: {type(elem_type).__name__}")
+
+    def _ir_type_text(self, type_node: TypeNode) -> str:
+        """Serialize a type for IR metadata (DECL/LDECL/FUNCENV), not HL AST ``__str__``."""
+        if isinstance(type_node, TypeInt):
+            return "INT"
+        if isinstance(type_node, TypeReal):
+            return "REAL"
+        if isinstance(type_node, TypeDynamicList):
+            return self._ir_list_type(type_node.elem)
+        if isinstance(type_node, TypeList):
+            flat_size = self._list_info_from_type(type_node).flat_size
+            if flat_size is not None:
+                elem = "INT" if isinstance(type_node.elem, TypeInt) else "REAL"
+                return f"LIST[{elem}, {flat_size}]"
+            return self._ir_list_type(type_node.elem)
+        raise CompilerError(f"Unsupported type for IR metadata: {type(type_node).__name__}")
 
     def _emit_list_literal_packet(self, literal: ListLit, expected: Optional[_ListInfo] = None) -> _ListInfo:
         literal_type = self._infer_list_literal_type(literal)
@@ -830,7 +822,7 @@ class SelVeriCompiler:
         if isinstance(expr, IntLit):
             self.emit("PUSH", expr.value)
             return
-        if isinstance(expr, FloatLit):
+        if isinstance(expr, RealLit):
             self.emit("PUSH", expr.value)
             return
         if isinstance(expr, ListLit):
@@ -873,7 +865,7 @@ class SelVeriCompiler:
                 self.emit("MUL")
                 return
             if expr.op == "/":
-                self.emit("fDIV" if isinstance(self._type_of_aexp(expr), TypeFloat) else "iDIV")
+                self.emit("rDIV" if isinstance(self._type_of_aexp(expr), TypeReal) else "iDIV")
                 return
             raise CompilerError(f"Unsupported binary operator in arithmetic expression: {expr.op}")
         if isinstance(expr, ARead):
@@ -1002,7 +994,7 @@ class SelVeriCompiler:
         name = decl.name
         type_node = decl.type_node
 
-        if isinstance(type_node, (TypeInt, TypeFloat)):
+        if isinstance(type_node, (TypeInt, TypeReal)):
             self._declare_basic(name, type_node, self._span_of(decl))
             return
 
@@ -1023,7 +1015,7 @@ class SelVeriCompiler:
     def _compile_assign(self, stmt: Assign) -> None:
         target_type = self._get_declared_type(stmt.name)
 
-        if isinstance(target_type, (TypeInt, TypeFloat)):
+        if isinstance(target_type, (TypeInt, TypeReal)):
             source_type = self._type_of_aexp(stmt.aexp)
             if not self._basic_types_compatible(source_type, target_type):
                 raise type_mismatch_error(
@@ -1225,7 +1217,7 @@ class SelVeriCompiler:
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
-        self.emit("FUNCENV", func.name, f"{func.return_type}")
+        self.emit("FUNCENV", func.name, self._ir_type_text(func.return_type))
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
         self.current_return_type = func.return_type
@@ -1236,7 +1228,7 @@ class SelVeriCompiler:
         try:
             for param in reversed(func.params):
                 self._current_span = self._span_of(param) or self._span_of(func) or old_span
-                if isinstance(param.type_node, (TypeInt, TypeFloat)):
+                if isinstance(param.type_node, (TypeInt, TypeReal)):
                     self._declare_basic(param.name, param.type_node, self._span_of(param))
                     self.emit("STORE", param.name) # fetch parameter value from stack
                     continue

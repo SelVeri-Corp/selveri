@@ -1,0 +1,112 @@
+0: GOTO 79
+1: FUNCENV boundedPrefixSum, INT
+2: DECL INT, limit
+3: STORE limit
+4: DECL INT, _lst_len_1
+5: STORE _lst_len_1
+6: LOAD _lst_len_1
+7: LDECL LIST[INT], lst
+8: LOAD _lst_len_1
+9: STORE lst
+10: STEP
+11: DECL INT, total
+12: STEP
+13: PUSH 0
+14: STORE total
+15: STEP
+16: DECL INT, i
+17: STEP
+18: PUSH 0
+19: STORE i
+20: STEP
+21: VERI 0, 'total = 0'
+22: VERI 1, 'Historically total = 0'
+23: LOAD i
+24: LOAD limit
+25: LT
+26: JZ 51
+27: CSCOPE
+28: VERI 2, 'i >= 0'
+29: VERI 3, 'i < len(lst)'
+30: VERI 4, 'lst[i] > 0'
+31: LOAD total
+32: LOAD i
+33: LLOAD lst
+34: ADD
+35: STORE total
+36: STEP
+37: LOAD i
+38: PUSH 1
+39: ADD
+40: STORE i
+41: STEP
+42: VERI 5, 'total > 0'
+43: VERI 6, 'i > 0'
+44: VERI 7, 'Once total = 0'
+45: VERI 8, 'Historically total >= 0'
+46: VERI 9, '(i = 1) => (total = 2)'
+47: VERI 10, '(i = 2) => (total = 6)'
+48: VERI 11, '(i = 3) => (total = 12)'
+49: PSCOPE
+50: GOTO 23
+51: NOOP
+52: VERI 12, 'i = limit'
+53: VERI 13, 'total = 12'
+54: VERI 14, 'Forall idx in [0...limit - 1] . lst[&idx] > 0'
+55: LOAD total
+56: RET
+57: FUNCENV bumpTwice, INT
+58: DECL INT, x
+59: STORE x
+60: STEP
+61: VERI 15, 'x >= 0'
+62: VERI 16, 'Historically x >= 0'
+63: LOAD x
+64: PUSH 1
+65: ADD
+66: STORE x
+67: STEP
+68: VERI 17, 'x > 0'
+69: VERI 18, 'Once x = 3'
+70: LOAD x
+71: PUSH 1
+72: ADD
+73: STORE x
+74: STEP
+75: VERI 19, 'x = 5'
+76: VERI 20, 'Historically x >= 0'
+77: LOAD x
+78: RET
+79: DECL INT, _lst_len_1
+80: PUSH 5
+81: STORE _lst_len_1
+82: PUSH 1
+83: PUSH 5
+84: MUL
+85: LDECL LIST[INT], lst
+86: STEP
+87: PUSH 2
+88: PUSH 4
+89: PUSH 6
+90: PUSH 8
+91: PUSH 10
+92: PUSH 5
+93: STORE lst
+94: STEP
+95: LOAD lst
+96: PUSH 3
+97: CALL boundedPrefixSum
+98: DECL INT, sum
+99: STEP
+100: LOAD retvar
+101: STORE sum
+102: STEP
+103: VERI 21, 'sum = 12'
+104: PUSH 3
+105: CALL bumpTwice
+106: DECL INT, answer
+107: STEP
+108: LOAD retvar
+109: STORE answer
+110: STEP
+111: VERI 22, 'answer = 5'

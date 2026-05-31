@@ -2,7 +2,7 @@
 
 { start theta };
 
-y : Float;
+y : Real;
 
 x : Int;
 x := 1;

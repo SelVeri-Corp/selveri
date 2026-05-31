@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
-from ..errors import VerificationError
-from ..specs import Spec, SpecBinOp, SpecType, SpecUnOp
+from selveri.common.errors import VerificationError
+from selveri.spec.models import Spec, SpecBinOp, SpecType, SpecUnOp
 
 @dataclass(frozen=True)
 class MappedFutureFormula:
