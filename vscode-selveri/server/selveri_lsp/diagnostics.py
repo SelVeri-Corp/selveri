@@ -1,106 +1,184 @@
-"""Diagnostics: parse + compile SelVeri source → LSP Diagnostic list."""
+"""Diagnostics: current SelVeri parse + compile errors as LSP diagnostics."""
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Iterable
+from urllib.parse import unquote, urlparse
+
 from lsprotocol import types
-from lark import UnexpectedToken, UnexpectedCharacters, UnexpectedEOF
 
-from selveri.parser import SELVERI_PARSER
-from selveri.errors import CompilerError, ParserError
+from selveri.compiler import compile_selveri_source_to_ir_text
+from selveri.diagnostics import (
+    Diagnostic,
+    DiagnosticFix,
+    DiagnosticLabel,
+    DiagnosticNote,
+    DiagnosticSeverity,
+    SourceSpan,
+    make_diagnostic,
+)
+from selveri.errors import SelVeriError
+from selveri.parser import collect_raw_specs, parse_selveri
+from selveri.spec_parser import parse_spec
+from selveri.specs import RawSpecKind
 
-# The compiler may not be importable if the package is in an intermediate state
-# (e.g., it references parser symbols that haven't been added yet).
-try:
-    from selveri.compiler import compile_selveri_source_to_ir_text as _compile
-    _COMPILER_AVAILABLE = True
-except ImportError:
-    _COMPILER_AVAILABLE = False
-    _compile = None  # type: ignore[assignment]
+
+def _path_from_uri(uri_or_path: str | None) -> str | None:
+    if not uri_or_path:
+        return None
+    parsed = urlparse(uri_or_path)
+    if parsed.scheme != "file":
+        return uri_or_path
+    path = unquote(parsed.path)
+    if parsed.netloc:
+        path = f"//{parsed.netloc}{path}"
+    if len(path) >= 3 and path[0] == "/" and path[2] == ":":
+        path = path[1:]
+    return str(Path(path))
 
 
-def _make_diag(
-    start_line: int,
-    start_col: int,
-    end_line: int,
-    end_col: int,
-    message: str,
-    severity: types.DiagnosticSeverity = types.DiagnosticSeverity.Error,
-) -> types.Diagnostic:
+def _uri_from_path(source_path: str | None) -> str:
+    if not source_path:
+        return ""
+    if urlparse(source_path).scheme:
+        return source_path
+    try:
+        return Path(source_path).resolve().as_uri()
+    except ValueError:
+        return source_path
+
+
+def _position(line: int, column: int) -> types.Position:
+    return types.Position(line=max(line - 1, 0), character=max(column - 1, 0))
+
+
+def _range_from_span(span: SourceSpan | None) -> types.Range:
+    if span is None:
+        return types.Range(
+            start=types.Position(line=0, character=0),
+            end=types.Position(line=0, character=1),
+        )
+
+    start = _position(span.start_line, span.start_column)
+    end = _position(span.end_line, span.end_column)
+    if end.line == start.line and end.character <= start.character:
+        end = types.Position(line=start.line, character=start.character + 1)
+    return types.Range(start=start, end=end)
+
+
+def _severity(severity: DiagnosticSeverity) -> types.DiagnosticSeverity:
+    if severity is DiagnosticSeverity.WARNING:
+        return types.DiagnosticSeverity.Warning
+    return types.DiagnosticSeverity.Error
+
+
+def _note_text(note: DiagnosticNote | str) -> str:
+    if isinstance(note, DiagnosticNote):
+        return f"{note.kind}: {note.message}"
+    return f"note: {note}"
+
+
+def _fix_text(fix: DiagnosticFix) -> str:
+    if fix.replacement is None:
+        return f"fix: {fix.message}"
+    return f"fix: {fix.message} -> {fix.replacement}"
+
+
+def _message(diag: Diagnostic) -> str:
+    title = f"{diag.title}: " if diag.title and diag.title != "error" else ""
+    lines = [f"{title}{diag.message}"]
+    if diag.hint:
+        lines.append(f"hint: {diag.hint}")
+    lines.extend(_note_text(note) for note in diag.notes)
+    lines.extend(_fix_text(fix) for fix in diag.fixes)
+    return "\n".join(lines)
+
+
+def _related_information(
+    labels: Iterable[DiagnosticLabel],
+    *,
+    fallback_uri: str,
+) -> list[types.DiagnosticRelatedInformation]:
+    related: list[types.DiagnosticRelatedInformation] = []
+    for label in labels:
+        message = label.message or label.style
+        span = label.span
+        related.append(
+            types.DiagnosticRelatedInformation(
+                location=types.Location(
+                    uri=_uri_from_path(span.source.path) or fallback_uri,
+                    range=_range_from_span(span),
+                ),
+                message=message,
+            )
+        )
+    return related
+
+
+def _to_lsp_diagnostic(diag: Diagnostic, *, document_uri: str) -> types.Diagnostic:
     return types.Diagnostic(
-        range=types.Range(
-            start=types.Position(line=start_line, character=start_col),
-            end=types.Position(line=end_line, character=end_col),
-        ),
-        message=message,
-        severity=severity,
+        range=_range_from_span(diag.span),
+        message=_message(diag),
+        severity=_severity(diag.severity),
+        code=diag.code,
         source="selveri",
+        related_information=_related_information(
+            diag.labels,
+            fallback_uri=document_uri,
+        ),
     )
 
 
-def get_diagnostics(source: str) -> list[types.Diagnostic]:
-    """Return LSP diagnostics for *source* by running the parser then compiler."""
-    # --- Step 1: Parse using raw Lark so we get precise line/col from exceptions ---
-    try:
-        SELVERI_PARSER.parse(source)
-    except UnexpectedToken as e:
-        line = (e.line or 1) - 1
-        col = (e.column or 1) - 1
-        token_str = str(e.token) if e.token else "?"
-        msg = f"Syntax error: unexpected token '{token_str}'"
-        expected = getattr(e, "expected", None)
-        if expected:
-            readable = [_readable_terminal(t) for t in sorted(expected) if not t.startswith("__")]
-            if readable:
-                msg += f". Expected: {', '.join(readable[:6])}"
-        return [_make_diag(line, col, line, col + len(token_str), msg)]
-
-    except UnexpectedCharacters as e:
-        line = (e.line or 1) - 1
-        col = (e.column or 1) - 1
-        char = getattr(e, "char", "?")
-        msg = f"Syntax error: unexpected character '{char}'"
-        return [_make_diag(line, col, line, col + 1, msg)]
-
-    except UnexpectedEOF as e:
-        # Point to the last line
-        lines = source.splitlines()
-        last_line = max(len(lines) - 1, 0)
-        last_col = len(lines[-1]) if lines else 0
-        expected = getattr(e, "expected", None)
-        msg = "Syntax error: unexpected end of file"
-        if expected:
-            readable = [_readable_terminal(t) for t in sorted(expected) if not t.startswith("__")]
-            if readable:
-                msg += f". Expected: {', '.join(readable[:6])}"
-        return [_make_diag(last_line, last_col, last_line, last_col, msg)]
-
-    # --- Step 2: Compile to catch type / scope errors ---
-    if _COMPILER_AVAILABLE and _compile is not None:
+def _validate_specs(source: str, source_path: str | None) -> Diagnostic | None:
+    program = parse_selveri(source, source_path)
+    for raw_spec in collect_raw_specs(program):
+        if raw_spec.kind in (RawSpecKind.SPEC_START, RawSpecKind.SPEC_END):
+            continue
         try:
-            _compile(source)
-        except CompilerError as e:
-            return [_make_diag(0, 0, 0, 1, str(e))]
-        except ParserError as e:
-            return [_make_diag(0, 0, 0, 1, str(e))]
+            parse_spec(raw_spec.formula_text or "")
+        except SelVeriError as exc:
+            diag = exc.diagnostic
+            if diag.span is not None:
+                return diag
+            if raw_spec.location is None:
+                return diag
+            return make_diagnostic(
+                category=diag.category,
+                title=diag.title,
+                message=diag.message,
+                span=raw_spec.location,
+                code=diag.code,
+                severity=diag.severity,
+                notes=diag.notes,
+                hint=diag.hint,
+                labels=(
+                    DiagnosticLabel(
+                        raw_spec.location,
+                        "specification could not be parsed",
+                        "primary",
+                    ),
+                ),
+                fixes=diag.fixes,
+                context=diag.context,
+                counterexample=diag.counterexample,
+            )
+    return None
 
+
+def get_diagnostics(source: str, source_path: str | None = None) -> list[types.Diagnostic]:
+    """Return parse/compile diagnostics for SelVeri source.
+
+    This intentionally stops before interpretation/verification so editing a
+    document never executes user code or waits for input.
+    """
+    path = _path_from_uri(source_path)
+    document_uri = _uri_from_path(source_path) if source_path else ""
+    try:
+        parse_selveri(source, path)
+        spec_diag = _validate_specs(source, path)
+        if spec_diag is not None:
+            return [_to_lsp_diagnostic(spec_diag, document_uri=document_uri)]
+        compile_selveri_source_to_ir_text(source, path)
+    except SelVeriError as exc:
+        return [_to_lsp_diagnostic(exc.diagnostic, document_uri=document_uri)]
     return []
-
-
-def _readable_terminal(terminal: str) -> str:
-    """Convert Lark terminal names to human-readable strings."""
-    _MAP = {
-        "IDENT": "identifier",
-        "INT_LIT": "integer literal",
-        "FLOAT_LIT": "float literal",
-        "COMP_OP": "comparison operator (=, <, <=, >, >=)",
-        "LPAR": "(",
-        "RPAR": ")",
-        "LSQB": "[",
-        "RSQB": "]",
-        "LBRACE": "{",
-        "RBRACE": "}",
-        "SEMICOLON": ";",
-        "COLON": ":",
-        "COMMA": ",",
-        "DOT": ".",
-    }
-    return _MAP.get(terminal, terminal.lower().replace("_", " "))
