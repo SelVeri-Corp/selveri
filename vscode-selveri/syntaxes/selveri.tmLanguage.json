@@ -5,6 +5,8 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#spec-block" },
+    { "include": "#function-definition-name" },
+    { "include": "#function-call-name" },
     { "include": "#keywords-control" },
     { "include": "#keywords-function" },
     { "include": "#keywords-io" },
@@ -13,8 +15,6 @@
     { "include": "#special-variables" },
     { "include": "#builtin-functions" },
     { "include": "#types" },
-    { "include": "#function-definition-name" },
-    { "include": "#function-call-name" },
     { "include": "#numbers" },
     { "include": "#operators" },
     { "include": "#punctuation" }
@@ -42,7 +42,7 @@
     "spec-block": {
       "name": "meta.spec.selveri",
       "begin": "\\{",
-      "end": "\\}\\s*;",
+      "end": "\\}",
       "beginCaptures": {
         "0": { "name": "punctuation.definition.spec.begin.selveri" }
       },
@@ -52,12 +52,32 @@
       "patterns": [
         { "include": "#comments" },
         {
+          "name": "keyword.control.spec.marker.selveri",
+          "match": "\\b(start|end)\\b(?=\\s+[A-Za-z][A-Za-z0-9_]*\\s*\\})"
+        },
+        {
+          "name": "entity.name.label.spec.selveri",
+          "match": "\\b[A-Za-z][A-Za-z0-9_]*\\b(?=\\s*:=)"
+        },
+        {
+          "name": "keyword.other.spec.quantifier.selveri",
+          "match": "\\b(Forall|Exists)\\b|[∀∃∈]"
+        },
+        {
           "name": "keyword.other.spec.temporal.selveri",
-          "match": "\\b(Forall|Exists|Always|Eventually|Next|Historically|Once|Previously|Since|Until)\\b"
+          "match": "\\b(Always|Eventually|Next|Historically|Once|Previously|Since|Until)\\b"
+        },
+        {
+          "name": "variable.parameter.bound.selveri",
+          "match": "&[A-Za-z_\\u0370-\\u03FF\\u1F00-\\u1FFF][A-Za-z0-9_\\u0370-\\u03FF\\u1F00-\\u1FFF]*"
         },
         {
           "name": "keyword.operator.logical.spec.selveri",
           "match": "=>|\\|\\||&&|!"
+        },
+        {
+          "name": "keyword.operator.range.selveri",
+          "match": "\\.\\.\\."
         },
         { "include": "#boolean-literals" },
         { "include": "#boolean-operators" },
@@ -65,10 +85,7 @@
         { "include": "#builtin-functions" },
         { "include": "#types" },
         { "include": "#numbers" },
-        {
-          "name": "keyword.operator.selveri",
-          "match": ":=|->|::|<=|>=|<|>|="
-        },
+        { "include": "#operators" },
         { "include": "#punctuation" }
       ]
     },
@@ -81,7 +98,7 @@
       "match": "\\b(function|end|return|call)\\b"
     },
     "keywords-io": {
-      "name": "keyword.other.selveri",
+      "name": "keyword.other.io.selveri",
       "match": "\\b(pass|read|write|writeline)\\b"
     },
     "boolean-literals": {
@@ -93,26 +110,34 @@
       "match": "\\b(not|and|or|xor)\\b"
     },
     "special-variables": {
-      "name": "variable.language.selveri",
-      "match": "\\b(retvar|in)\\b"
+      "patterns": [
+        {
+          "name": "variable.language.selveri",
+          "match": "\\b(retvar|in|Var)\\b"
+        },
+        {
+          "name": "variable.parameter.bound.selveri",
+          "match": "&[A-Za-z_\\u0370-\\u03FF\\u1F00-\\u1FFF][A-Za-z0-9_\\u0370-\\u03FF\\u1F00-\\u1FFF]*"
+        }
+      ]
     },
     "builtin-functions": {
       "name": "support.function.builtin.selveri",
-      "match": "\\blen\\b(?=\\s*\\()"
+      "match": "\\b(len|read|write|writeline|obtain)\\b(?=\\s*\\()"
     },
     "types": {
       "name": "storage.type.selveri",
       "match": "\\b(Int|Float|List)\\b"
     },
     "function-definition-name": {
-      "match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "match": "\\b(function)\\s+([A-Za-z\\u0370-\\u03FF\\u1F00-\\u1FFF][A-Za-z0-9_\\u0370-\\u03FF\\u1F00-\\u1FFF]*)\\b",
       "captures": {
         "1": { "name": "keyword.other.function.selveri" },
         "2": { "name": "entity.name.function.selveri" }
       }
     },
     "function-call-name": {
-      "match": "\\b(call)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "match": "\\b(call)\\s+([A-Za-z\\u0370-\\u03FF\\u1F00-\\u1FFF][A-Za-z0-9_\\u0370-\\u03FF\\u1F00-\\u1FFF]*)\\b",
       "captures": {
         "1": { "name": "keyword.other.function.selveri" },
         "2": { "name": "entity.name.function.call.selveri" }
@@ -132,7 +157,7 @@
     },
     "operators": {
       "name": "keyword.operator.selveri",
-      "match": ":=|->|::|<=|>=|<|>|="
+      "match": "\\.\\.\\.|:=|->|::|=>|<=|>=|<|>|=|\\+|-|\\*|/"
     },
     "punctuation": {
       "patterns": [
@@ -151,6 +176,10 @@
         {
           "name": "punctuation.definition.type.selveri",
           "match": ":"
+        },
+        {
+          "name": "punctuation.bracket.selveri",
+          "match": "[\\[\\]()]"
         }
       ]
     }

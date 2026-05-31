@@ -1,17 +1,20 @@
 {
   "name": "selveri",
   "displayName": "SelVeri",
-  "description": "Language support for SelVeri — syntax highlighting, diagnostics, hover, and completion",
-  "version": "0.1.0",
-  "publisher": "selveri",
+  "icon": "./icons/selveri-icon.png",
+  "description": "Language support for SelVeri: syntax highlighting, diagnostics, hover, completion, and symbols",
+  "version": "0.9.0",
+  "publisher": "Selveri-Corp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Selveri-Corp/selveri.git",
+    "directory": "vscode-selveri"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Programming Languages"
-  ],
-  "activationEvents": [
-    "onLanguage:selveri"
   ],
   "main": "./client/out/extension.js",
   "contributes": {
@@ -22,8 +25,18 @@
         "extensions": [".svi"],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./icons/selveri-icon.svg",
-          "dark": "./icons/selveri-icon.svg"
+          "light": "./icons/selver-icon.png",
+          "dark": "./icons/selver-icon-dark.png"
+        }
+      },
+      {
+        "id": "selveri-ir",
+        "aliases": ["SelVerIR", "selveri-ir", "svir"],
+        "extensions": [".svir"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/selverir-icon.png",
+          "dark": "./icons/selverir-icon-dark.png"
         }
       }
     ],
@@ -32,6 +45,11 @@
         "language": "selveri",
         "scopeName": "source.selveri",
         "path": "./syntaxes/selveri.tmLanguage.json"
+      },
+      {
+        "language": "selveri-ir",
+        "scopeName": "source.selveri-ir",
+        "path": "./syntaxes/selveri-ir.tmLanguage.json"
       }
     ],
     "commands": [
@@ -78,6 +96,6 @@
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.3.0",
-    "@vscode/vsce": "^2.24.0"
+    "@vscode/vsce": "^3.9.1"
   }
 }

@@ -31,6 +31,13 @@ def test_unicode_greek_identifiers_and_quantifiers_are_valid() -> None:
     assert diagnostics == []
 
 
+def test_unicode_element_of_in_quantifiers_is_valid() -> None:
+    diagnostics = get_diagnostics(
+        "x: Int;\nx := 1;\n{ ∀ i ∈ [0...1] . &i >= 0 };\n{ ∃ j ∈ Int . &j = x };\n"
+    )
+    assert diagnostics == []
+
+
 def test_malformed_spec_reports_spec_span() -> None:
     diagnostics = get_diagnostics("x: Int;\n{ x = };\n")
     assert len(diagnostics) == 1
@@ -68,7 +75,7 @@ def test_completions_include_current_builtins_and_symbols() -> None:
     source = "function inc(v: Int) -> Int ::\nreturn v + 1;\nend\nx: Int;\n"
     labels = {item.label for item in get_completions(source, types.Position(line=3, character=0))}
     assert {"obtain", "read", "write", "writeline", "Forall", "Exists"} <= labels
-    assert {"\\forall", "\\exists", "\\phi"} <= labels
+    assert {"\\forall", "\\exists", "\\in", "\\phi"} <= labels
     assert {"x", "v", "inc"} <= labels
 
 

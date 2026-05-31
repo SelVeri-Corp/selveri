@@ -1,0 +1,146 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SelVerIR",
+  "scopeName": "source.selveri-ir",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#label-line" },
+    { "include": "#strings" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#instructions" },
+    { "include": "#punctuation" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.selveri-ir",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.selveri-ir",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.begin.selveri-ir" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.comment.end.selveri-ir" }
+          }
+        }
+      ]
+    },
+    "label-line": {
+      "match": "^\\s*(\\d+)(:)(\\s*)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "constant.numeric.label.selveri-ir" },
+        "2": { "name": "punctuation.separator.label.selveri-ir" },
+        "4": { "name": "keyword.other.instruction.selveri-ir" }
+      }
+    },
+    "instructions": {
+      "name": "keyword.other.instruction.selveri-ir",
+      "match": "\\b(DECL|LDECL|PUSH|LOAD|STORE|LLOAD|LSTORE|LEN|ADD|SUB|MUL|iDIV|fDIV|EQ|LT|LE|GT|GE|NEG|AND|OR|XOR|JZ|GOTO|CALL|CSCOPE|PSCOPE|FUNCENV|RET|WRITE|WRITELN|LWRITE|LWRITELN|READ|VERI|VERIP|SPEC_START|SPEC_END|OBT|STEP|NOOP)\\b"
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.selveri-ir",
+          "match": "\\b(INT|FLOAT)\\b"
+        },
+        {
+          "name": "storage.type.list.selveri-ir",
+          "match": "\\bLIST\\s*\\[\\s*(INT|FLOAT)(?:\\s*,\\s*[-+]?\\d+)?\\s*\\]"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.selveri-ir",
+          "begin": "'",
+          "end": "'",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.selveri-ir" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.selveri-ir" }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.selveri-ir",
+              "match": "\\\\."
+            },
+            {
+              "name": "keyword.other.spec.quantifier.selveri-ir",
+              "match": "\\b(Forall|Exists)\\b|[\\u2200\\u2203\\u2208]"
+            },
+            {
+              "name": "keyword.other.spec.temporal.selveri-ir",
+              "match": "\\b(Always|Eventually|Next|Historically|Once|Previously|Since|Until)\\b"
+            },
+            {
+              "name": "keyword.operator.logical.spec.selveri-ir",
+              "match": "=>|\\|\\||&&|!"
+            },
+            {
+              "name": "keyword.operator.range.selveri-ir",
+              "match": "\\.\\.\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.selveri-ir",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.selveri-ir" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.selveri-ir" }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.selveri-ir",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.selveri-ir",
+          "match": "\\b[-+]?[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.selveri-ir",
+          "match": "\\b[-+]?[0-9]+\\b"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.selveri-ir",
+          "match": ","
+        },
+        {
+          "name": "punctuation.bracket.selveri-ir",
+          "match": "[\\[\\]()]"
+        },
+        {
+          "name": "punctuation.definition.spec.selveri-ir",
+          "match": "[{}]"
+        }
+      ]
+    },
+    "identifiers": {
+      "name": "variable.other.selveri-ir",
+      "match": "\\b[A-Za-z_\\u0370-\\u03FF\\u1F00-\\u1FFF][A-Za-z0-9_\\u0370-\\u03FF\\u1F00-\\u1FFF]*\\b"
+    }
+  }
+}

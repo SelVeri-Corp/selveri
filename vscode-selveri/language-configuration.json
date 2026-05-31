@@ -22,5 +22,5 @@
     "increaseIndentPattern": "\\b(then|do)\\s*$|::\\s*$",
     "decreaseIndentPattern": "^\\s*\\b(fi|od|end)\\b"
   },
-  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*"
+  "wordPattern": "[A-Za-z_\\u0370-\\u03FF\\u1F00-\\u1FFF][A-Za-z0-9_\\u0370-\\u03FF\\u1F00-\\u1FFF]*"
 }

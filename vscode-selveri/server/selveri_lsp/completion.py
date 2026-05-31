@@ -60,6 +60,7 @@ BUILTINS = ["read", "write", "writeline", "len", "obtain"]
 UNICODE_ALIASES = {
     "\\forall": "∀",
     "\\exists": "∃",
+    "\\in": "∈",
     "\\alpha": "α",
     "\\beta": "β",
     "\\gamma": "γ",

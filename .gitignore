@@ -4,3 +4,5 @@ __pycache__/
 node_modules/
 package-lock.json
 vscode-selveri/client/out/
+.vscode/
+*.vsix
