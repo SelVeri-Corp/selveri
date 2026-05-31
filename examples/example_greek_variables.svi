@@ -1,7 +1,7 @@
 // Greek letters as variable names (φ, π, λ)
 
-φ : Float;
-π : Float;
+φ : Real;
+π : Real;
 λ : Int;
 
 φ := 1.618;
