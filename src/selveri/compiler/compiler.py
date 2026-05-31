@@ -729,6 +729,22 @@ class SelVeriCompiler:
             return "LIST[REAL]"
         raise CompilerError(f"Unsupported list element type: {type(elem_type).__name__}")
 
+    def _ir_type_text(self, type_node: TypeNode) -> str:
+        """Serialize a type for IR metadata (DECL/LDECL/FUNCENV), not HL AST ``__str__``."""
+        if isinstance(type_node, TypeInt):
+            return "INT"
+        if isinstance(type_node, TypeReal):
+            return "REAL"
+        if isinstance(type_node, TypeDynamicList):
+            return self._ir_list_type(type_node.elem)
+        if isinstance(type_node, TypeList):
+            flat_size = self._list_info_from_type(type_node).flat_size
+            if flat_size is not None:
+                elem = "INT" if isinstance(type_node.elem, TypeInt) else "REAL"
+                return f"LIST[{elem}, {flat_size}]"
+            return self._ir_list_type(type_node.elem)
+        raise CompilerError(f"Unsupported type for IR metadata: {type(type_node).__name__}")
+
     def _emit_list_literal_packet(self, literal: ListLit, expected: Optional[_ListInfo] = None) -> _ListInfo:
         literal_type = self._infer_list_literal_type(literal)
         actual_info = self._list_info_from_type(literal_type)
@@ -1201,7 +1217,7 @@ class SelVeriCompiler:
         entry_pc = self.pc()
         self.functions[func.name] = (func, entry_pc)
 
-        self.emit("FUNCENV", func.name, f"{func.return_type}")
+        self.emit("FUNCENV", func.name, self._ir_type_text(func.return_type))
         self.scope = _ScopeFrame()
         self.scope.bindings["retvar"] = None
         self.current_return_type = func.return_type

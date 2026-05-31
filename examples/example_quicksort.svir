@@ -1,5 +1,5 @@
 0: GOTO 280
-1: FUNCENV append, LIST[INT, 1]
+1: FUNCENV append, LIST[INT]
 2: DECL INT, element
 3: STORE element
 4: DECL INT, _lst_len_1
@@ -50,7 +50,7 @@
 49: STEP
 50: LOAD res
 51: RET
-52: FUNCENV init, LIST[INT, 1]
+52: FUNCENV init, LIST[INT]
 53: DECL INT, _lst_len_1
 54: STORE _lst_len_1
 55: LOAD _lst_len_1
@@ -97,7 +97,7 @@
 96: NOOP
 97: LOAD res
 98: RET
-99: FUNCENV partition, LIST[INT, 1]
+99: FUNCENV partition, LIST[INT]
 100: DECL INT, high
 101: STORE high
 102: DECL INT, low
@@ -194,7 +194,7 @@
 193: CALL append
 194: LOAD retvar
 195: RET
-196: FUNCENV quickSort, LIST[INT, 1]
+196: FUNCENV quickSort, LIST[INT]
 197: DECL INT, high
 198: STORE high
 199: DECL INT, low
