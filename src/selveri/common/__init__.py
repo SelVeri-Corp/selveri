@@ -17,6 +17,7 @@ from .diagnostics import (
 )
 from .errors import SelVeriError
 from .runtime import DeclType, Scope, State, _UNSET
+from .types import real
 
 __all__ = [
     "Counterexample",
@@ -39,4 +40,5 @@ __all__ = [
     "render_expected_tokens",
     "render_internal_error",
     "should_use_color",
+    "real",
 ]

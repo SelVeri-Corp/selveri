@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
+from selveri.common.types import real
 from selveri.common.errors import (
     CompilerError,
     ParserError,
@@ -14,8 +15,7 @@ from selveri.common.errors import (
     type_mismatch_error,
     unknown_identifier_error,
 )
-from selveri.high_level.parser import (
-    parse_selveri,
+from selveri.high_level.ast import (
     Program,
     Stmt, Decl, Assign, ListAssign, Pass, If, While, SpecAnnot, Return, AObtain,
     TypeNode, BasicType, TypeInt, TypeReal, TypeList, TypeDynamicList,
@@ -23,13 +23,12 @@ from selveri.high_level.parser import (
     BExp, BBool, BNot, BBinOp, BCompare, BTruthy, BSpec,
     FunctionDecl, Write, WriteLine,
 )
+from selveri.high_level.parser import parse_selveri
 from selveri.ir.instr import IRInstr
 from selveri.spec.models import RawSpec, RawSpecKind, Spec, SpecType as VerifierSpecType
 from selveri.spec.parser import parse_spec as parse_spec_formula
 
 RESERVED_NAMES = ["retvar", "read", "write", "len", "writeline"]
-
-real = type(0.0)
 
 # Patch reference for jumps
 # As we do not know the target address of the jump until after the code is generated, we need to patch the jump address later.
@@ -226,7 +225,7 @@ class SelVeriCompiler:
 
     def _get_spec_free_vars(self, spec: Spec) -> set[str]:
         free = set()
-        from selveri.high_level.parser import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
+        from selveri.high_level.ast import AVar, ALen, BNot, BBinOp, BCompare, BTruthy, AIndex, AUnOp, ABinOp, FuncCall, ListLit
         from selveri.spec.models import DomainIdent, DomainValues, DomainRange, DomainInterval, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant
         from selveri.spec.parser import ABoundVar
         

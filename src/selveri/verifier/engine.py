@@ -6,6 +6,7 @@ from sympy import Basic
 
 from selveri.abstract_machine.config import RuntimeConfiguration
 from selveri.common.diagnostics import DiagnosticCode, DiagnosticLabel
+from selveri.common.types import real
 from selveri.common.errors import ParserError, SpecDomainBoundsError, VerificationError, VerifierRuntimeError
 from selveri.spec.models import ParsedSpec, RawSpec, Spec, SpecBinOp, SpecFromBExp, SpecQuant, SpecType, SpecUnOp
 from selveri.spec.parser import parse_spec
@@ -14,7 +15,6 @@ from selveri.verifier.future_mapper import FutureLTLMapper
 from selveri.verifier.models import FutureObligation
 from selveri.verifier.z3_mapper import Z3Mapper
 
-real = type(0.0)
 
 class VerificationEngine:
 
@@ -475,7 +475,7 @@ class VerificationEngine:
         return variables
 
     def _bexp_get_free_variables(self, bexp: Any, variables: set[str]) -> None:
-        from selveri.high_level.parser import BNot, BBinOp, BCompare, BTruthy, BBool
+        from selveri.high_level.ast import BNot, BBinOp, BCompare, BTruthy, BBool
         if isinstance(bexp, BNot):
             self._bexp_get_free_variables(bexp.rhs, variables)
         elif isinstance(bexp, BBinOp):
@@ -488,7 +488,7 @@ class VerificationEngine:
             self._aexp_get_free_variables(bexp.aexp, variables)
 
     def _aexp_get_free_variables(self, aexp: Any, variables: set[str]) -> None:
-        from selveri.high_level.parser import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, RealLit, FuncCall, ListLit
+        from selveri.high_level.ast import AVar, ALen, AIndex, AUnOp, ABinOp, IntLit, RealLit, FuncCall, ListLit
         from selveri.spec.parser import ABoundVar
         if isinstance(aexp, ABoundVar):
             pass  # bound variables are not free; handled by _spec_get_free_variables via SpecQuant.discard

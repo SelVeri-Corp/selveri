@@ -9,7 +9,8 @@ from lark import Lark, LarkError, Transformer, UnexpectedInput, v_args
 from selveri.common.diagnostics import format_found_token, render_expected_tokens
 from selveri.common.errors import ParserError, VerifierRuntimeError, parse_error
 from selveri.common.runtime import DeclType
-from selveri.high_level.parser import (
+from selveri.common.types import real
+from selveri.high_level.ast import (
     ABinOp,
     ALen,
     AExp,
@@ -23,15 +24,14 @@ from selveri.high_level.parser import (
     BNot,
     BTruthy,
     BasicType,
-    RealLit,
     IntLit,
     ListLit,
-    TypeReal,
+    RealLit,
     TypeInt,
     TypeList,
+    TypeReal,
 )
 
-real = type(0.0)
 
 def _basic_type_to_decl_type(bt):
     """Convert a parser-level BasicType (TypeInt/TypeReal) to a runtime DeclType."""

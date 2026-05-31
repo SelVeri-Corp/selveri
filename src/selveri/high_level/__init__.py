@@ -1,3 +1,3 @@
-from .ast import AExp, BExp, Stmt
+from selveri.high_level.ast import AExp, BExp, Program, Stmt
 
-__all__ = ["AExp", "BExp", "Stmt"]
+__all__ = ["AExp", "BExp", "Program", "Stmt"]

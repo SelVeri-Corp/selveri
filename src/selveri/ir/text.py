@@ -5,9 +5,8 @@ import re
 from typing import Any, List
 
 from selveri.common.errors import IRParseError
+from selveri.common.types import real
 from selveri.ir.instr import IRInstr
-
-real = type(0.0)
 
 _LABEL_RE = re.compile(r"^\s*(\d+)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*(.*?)\s*$")
 _INT_RE = re.compile(r"^[+-]?\d+$")

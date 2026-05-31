@@ -8,7 +8,7 @@ from selveri.common.diagnostics import SourceSpan
 from selveri.common.runtime import DeclType
 
 if TYPE_CHECKING:
-    from selveri.high_level.parser import AExp, BExp
+    from selveri.high_level.ast import AExp, BExp
 
 
 class SpecType(Enum):

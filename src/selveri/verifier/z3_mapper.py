@@ -7,7 +7,7 @@ from z3 import *
 from selveri.abstract_machine.config import RuntimeConfiguration
 from selveri.common.errors import VerifierRuntimeError
 from selveri.common.runtime import Scope, State, _UNSET
-from selveri.high_level.parser import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
+from selveri.high_level.ast import BExp, BBool, BNot, BBinOp, BCompare, BTruthy, AExp, IntLit, RealLit, ListLit, AVar, ALen, AIndex, AUnOp, ABinOp
 from selveri.spec.models import Spec, SpecFromBExp, SpecUnOp, SpecBinOp, SpecQuant, Domain, DomainIdent, DomainInterval, DomainRange, DomainType, DomainValues, DomainVar
 from selveri.spec.parser import ABoundVar
 

@@ -12,11 +12,10 @@ from selveri.abstract_machine.config import RuntimeConfiguration
 from selveri.common.diagnostics import DiagnosticCode
 from selveri.common.errors import IRRuntimeError, IRParseError, index_out_of_bounds_error
 from selveri.common.runtime import DeclType, Scope, State, _UNSET
+from selveri.common.types import real
 from selveri.ir.instr import IRInstr
 from selveri.ir.text import parse_ir_text
 from selveri.verifier.engine import VerificationEngine
-
-real = type(0.0)
 
 
 @dataclass

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple, Union
 
-real = type(0.0)
+from selveri.common.types import real
 
 
 @dataclass
