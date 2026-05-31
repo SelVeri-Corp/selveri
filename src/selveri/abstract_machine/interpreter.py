@@ -13,7 +13,13 @@ from selveri.common.errors import IRRuntimeError, IRParseError, index_out_of_bou
 from selveri.common.runtime import DeclType, Scope, State, _UNSET
 from selveri.common.types import real
 from selveri.ir.instr import IRInstr
-from selveri.ir.text import coerce_ir_int, parse_ir_text, parse_scalar_token, resolve_label_target
+from selveri.ir.text import (
+    coerce_ir_int,
+    parse_ir_text,
+    parse_list_decl_type_text,
+    parse_scalar_token,
+    resolve_label_target,
+)
 from selveri.verifier.engine import VerificationEngine
 
 
@@ -42,9 +48,6 @@ class FunctionEntry:
     return_type: Optional[DeclType]
 
 
-_LIST_TEXT_RE = re.compile(r"^LIST\s*\[\s*(INT|REAL)\s*(?:,\s*([+-]?\d+)\s*)?\]$", re.IGNORECASE)
-
-
 def _type_from_object(obj: Any) -> DeclType:
     if isinstance(obj, DeclType):
         return obj
@@ -59,11 +62,10 @@ def _type_from_object(obj: Any) -> DeclType:
         if s == "REAL":
             return DeclType("REAL", None, None)
 
-        m = _LIST_TEXT_RE.match(s)
-        if m:
-            elem = m.group(1).upper()
-            size = m.group(2)
-            return DeclType("LIST", elem, None if size is None else int(size))
+        list_type = parse_list_decl_type_text(s)
+        if list_type is not None:
+            elem, size = list_type
+            return DeclType("LIST", elem, size)
 
         # repr-like dataclass string, for example:
         # TypeList(elem=TypeInt(), size=IntLit(value=6))
@@ -125,10 +127,10 @@ def _type_from_funcenv_arg(obj: Any) -> DeclType:
         if s == "REAL":
             return DeclType("REAL", None, None)
 
-        if s.upper().startswith("LIST"):
-            elem_match = re.search(r"LIST\s*\[\s*(INT|REAL)\b", s, re.IGNORECASE)
-            if elem_match:
-                return DeclType("LIST", elem_match.group(1).upper(), None)
+        list_type = parse_list_decl_type_text(s)
+        if list_type is not None:
+            elem, size = list_type
+            return DeclType("LIST", elem, size)
 
         raise IRParseError(f"Unknown FUNCENV return type: {obj}")
 

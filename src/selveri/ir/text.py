@@ -11,6 +11,8 @@ from selveri.ir.instr import IRInstr
 _LABEL_RE = re.compile(r"^\s*(\d+)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*(.*?)\s*$")
 _INT_RE = re.compile(r"^[+-]?\d+$")
 _REAL_RE = re.compile(r"^[+-]?(?:\d+\.\d*|\d*\.\d+)$")
+_LIST_TEXT_RE = re.compile(r"^LIST\s*\[\s*(INT|REAL)\s*(?:,\s*([+-]?\d+)\s*)?\]$", re.IGNORECASE)
+_LIST_ELEM_RE = re.compile(r"LIST\s*\[\s*(INT|REAL)\b", re.IGNORECASE)
 
 
 def _split_top_level_commas(s: str) -> List[str]:
@@ -85,6 +87,19 @@ def resolve_label_target(target: Any) -> Optional[int]:
         return target
     if isinstance(target, str):
         return parse_int_literal(target)
+    return None
+
+
+def parse_list_decl_type_text(text: str) -> Optional[tuple[str, Optional[int]]]:
+    """Parse IR list declaration text such as ``LIST[INT]`` or ``LIST[REAL, 6]``."""
+    s = text.strip()
+    match = _LIST_TEXT_RE.match(s)
+    if match:
+        size = match.group(2)
+        return match.group(1).upper(), None if size is None else int(size)
+    partial = _LIST_ELEM_RE.search(s)
+    if partial:
+        return partial.group(1).upper(), None
     return None
 
 
