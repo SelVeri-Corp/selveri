@@ -87,7 +87,7 @@ guidance for adding new errors.
 The `selveri` Python package and LSP dependencies must be installed in the interpreter used by the extension:
 
 ```bash
-pip install -e /path/to/selveri
+pip install -e <path_to_selveri>
 pip install -r vscode-selveri/server/requirements.txt
 ```
 
