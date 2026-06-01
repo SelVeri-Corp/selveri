@@ -1,0 +1,25 @@
+0: GOTO 14
+1: FUNCENV Δ, INT
+2: DECL INT, θ
+3: STORE θ
+4: STEP
+5: DECL INT, ρ
+6: STEP
+7: LOAD θ
+8: PUSH 1
+9: ADD
+10: STORE ρ
+11: STEP
+12: LOAD ρ
+13: RET
+14: DECL INT, τ
+15: STEP
+16: PUSH 4
+17: CALL Δ
+18: LOAD retvar
+19: STORE τ
+20: STEP
+21: LOAD τ
+22: WRITELN
+23: VERI 0, 'τ = 5'
+24: VERI 1, '∀ θ in [4...4] . (&θ + 1) = τ'

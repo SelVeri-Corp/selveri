@@ -1,0 +1,9 @@
+0: DECL INT, ω
+1: STEP
+2: OBT ξ, 0, '∃ ξ in Var[Int] . &ξ = 42'
+3: STORE ω
+4: STEP
+5: LOAD ω
+6: WRITELN
+7: VERI 1, 'ω = 42'
+8: VERI 2, '∃ ξ in Var[Int] . &ξ = ω'
