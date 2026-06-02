@@ -1,0 +1,8 @@
+// Greek names for a list and element-wise specs
+
+σ : List[Int, 1, 4];
+σ := [10, 20, 30, 40];
+
+{ ∀ κ in [0...3] . σ[&κ] > 0 };
+{ ∃ κ in [0...3] . σ[&κ] = 30 };
+{ ∀ ε in σ . &ε >= 10 };

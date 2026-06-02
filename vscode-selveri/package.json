@@ -1,0 +1,101 @@
+{
+  "name": "selveri",
+  "displayName": "SelVeri",
+  "icon": "./icons/selveri-icon.png",
+  "description": "Language support for SelVeri: syntax highlighting, diagnostics, hover, completion, and symbols",
+  "version": "0.9.0",
+  "publisher": "Selveri-Corp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Selveri-Corp/selveri.git",
+    "directory": "vscode-selveri"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./client/out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "selveri",
+        "aliases": ["SelVeri", "selveri"],
+        "extensions": [".svi"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/selveri-icon.png",
+          "dark": "./icons/selveri-icon-dark.png"
+        }
+      },
+      {
+        "id": "selveri-ir",
+        "aliases": ["SelVerIR", "selveri-ir", "svir"],
+        "extensions": [".svir"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/selverir-icon.png",
+          "dark": "./icons/selverir-icon-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "selveri",
+        "scopeName": "source.selveri",
+        "path": "./syntaxes/selveri.tmLanguage.json"
+      },
+      {
+        "language": "selveri-ir",
+        "scopeName": "source.selveri-ir",
+        "path": "./syntaxes/selveri-ir.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "selveri.runFile",
+        "title": "SelVeri: Run File"
+      },
+      {
+        "command": "selveri.emitIR",
+        "title": "SelVeri: Compile to IR"
+      },
+      {
+        "command": "selveri.restartServer",
+        "title": "SelVeri: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "SelVeri",
+      "properties": {
+        "selveri.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Path to the Python interpreter that has the selveri package installed."
+        },
+        "selveri.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace communication between VSCode and the SelVeri language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "watch": "tsc -watch -p tsconfig.json",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^3.9.1"
+  }
+}

@@ -216,9 +216,10 @@ def extract_raw_specs(src: str, source_file: SourceFile | None = None) -> Tuple[
 
     return "".join(rewritten), raw_specs
 
-_NAMED_SPEC_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:=\s*(.*)$", re.DOTALL)
-_SPEC_START_RE = re.compile(r"^start\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
-_SPEC_END_RE = re.compile(r"^end\s+([A-Za-z][A-Za-z0-9_]*)\s*$")
+_IDENT_RE = r"[A-Za-z\u0370-\u03FF\u1F00-\u1FFF][A-Za-z0-9_\u0370-\u03FF\u1F00-\u1FFF]*"
+_NAMED_SPEC_RE = re.compile(rf"^({_IDENT_RE})\s*:=\s*(.*)$", re.DOTALL)
+_SPEC_START_RE = re.compile(rf"^start\s+({_IDENT_RE})\s*$")
+_SPEC_END_RE = re.compile(rf"^end\s+({_IDENT_RE})\s*$")
 
 def classify_raw_spec_body(text: str) -> Tuple[RawSpecKind, Optional[str], Optional[str]]:
     """

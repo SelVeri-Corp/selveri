@@ -4,7 +4,7 @@
 %ignore /\/\/[^\n]*/
 %ignore /\/\*[\s\S]*?\*\//
 
-IDENT: /[A-Za-z_][A-Za-z0-9_]*/
+IDENT: /[A-Za-z_\u0370-\u03FF\u1F00-\u1FFF][A-Za-z0-9_\u0370-\u03FF\u1F00-\u1FFF]*/
 REAL_LIT: /[0-9]+\.[0-9]+/
 INT_LIT: /[0-9]+/
 
@@ -34,8 +34,8 @@ start: spec
                 | "Next" temporal_unary              -> snext
                 | "Eventually" temporal_unary        -> seventually
                 | "Always" temporal_unary            -> salways
-                | "Forall" IDENT "in" domain "." state_spec -> sforall
-                | "Exists" IDENT "in" domain "." state_spec -> sexists
+                | ("Forall" | "∀") IDENT ("in" | "∈") domain "." state_spec -> sforall
+                | ("Exists" | "∃") IDENT ("in" | "∈") domain "." state_spec -> sexists
                 | bexp                           -> sbexp
                 | "(" spec ")"
 
@@ -51,8 +51,8 @@ start: spec
           | state_unary
 
 ?state_unary: "!" state_unary               -> state_snot
-             | "Forall" IDENT "in" domain "." state_spec -> state_forall
-             | "Exists" IDENT "in" domain "." state_spec -> state_exists
+             | ("Forall" | "∀") IDENT ("in" | "∈") domain "." state_spec -> state_forall
+             | ("Exists" | "∃") IDENT ("in" | "∈") domain "." state_spec -> state_exists
              | bexp                           -> state_sbexp
              | "(" state_spec ")"
 

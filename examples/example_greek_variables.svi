@@ -1,0 +1,17 @@
+// Greek letters as variable names (φ, π, λ)
+
+φ : Real;
+π : Real;
+λ : Int;
+
+φ := 1.618;
+π := 3.14159;
+λ := 7;
+
+writeline(φ);
+writeline(π);
+writeline(λ);
+
+{ φ > 0 };
+{ π > 3 && π < 4 };
+{ λ = 7 };

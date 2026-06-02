@@ -1,0 +1,18 @@
+0: DECL INT, α
+1: STEP
+2: DECL INT, β
+3: STEP
+4: DECL INT, γ
+5: STEP
+6: PUSH 2
+7: STORE α
+8: STEP
+9: PUSH 4
+10: STORE β
+11: STEP
+12: PUSH 6
+13: STORE γ
+14: STEP
+15: VERI 0, '∀ x ∈ [α, β, γ] . &x > 0'
+16: VERI 1, '∃ μ ∈ [0...2] . (&μ = 1) && (γ = 6)'
+17: VERI 2, '∀ i in [0...2] . (&i = 0) => (α = 2)'

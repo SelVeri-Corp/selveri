@@ -47,14 +47,14 @@ def run_pipeline(
     verifier.register_raw_specs(compiler.raw_specs.values())
     result = interpret_ir_code(code, verifier=verifier, max_steps=max_steps)
     end_time = perf_counter()
-    print(f"\nExecution time: {end_time - start_time:.6f} seconds")
 
     if debug:
+        print(f"\nExecution time: {end_time - start_time:.6f} seconds")
         print("Final state:")
         print(result.state)
         print("\nFinal stack:")
         print(result.stack)
-    print(f"Steps: {result.steps}")
+        print(f"Steps: {result.steps}")
     return 0
 
 

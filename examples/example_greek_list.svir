@@ -1,0 +1,18 @@
+0: DECL INT, _σ_len_1
+1: PUSH 4
+2: STORE _σ_len_1
+3: PUSH 1
+4: PUSH 4
+5: MUL
+6: LDECL LIST[INT], σ
+7: STEP
+8: PUSH 10
+9: PUSH 20
+10: PUSH 30
+11: PUSH 40
+12: PUSH 4
+13: STORE σ
+14: STEP
+15: VERI 0, '∀ κ in [0...3] . σ[&κ] > 0'
+16: VERI 1, '∃ κ in [0...3] . σ[&κ] = 30'
+17: VERI 2, '∀ ε in σ . &ε >= 10'
