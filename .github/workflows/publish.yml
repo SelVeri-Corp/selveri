@@ -1,8 +1,6 @@
 name: Publish Python Distribution to PyPI
 
 on:
-  push:
-    branches: [main]
   release:
     types: [published]
 
