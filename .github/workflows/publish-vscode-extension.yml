@@ -1,0 +1,69 @@
+name: Publish VS Code Extension
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: vscode-selveri
+
+jobs:
+  publish:
+    name: Publish extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check package version matches release tag
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+
+          echo "package.json version: $PACKAGE_VERSION"
+          echo "release tag version: $TAG_VERSION"
+
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch. package.json must match the GitHub release tag."
+            exit 1
+          fi
+
+      - name: Compile
+        run: npm run compile --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Package extension
+        run: |
+          EXT_NAME=$(node -p "require('./package.json').name")
+          EXT_VERSION=$(node -p "require('./package.json').version")
+          VSIX_NAME="${EXT_NAME}-${EXT_VERSION}.vsix"
+
+          npx vsce package --out "$VSIX_NAME"
+          echo "VSIX_NAME=$VSIX_NAME" >> "$GITHUB_ENV"
+
+      - name: Publish to VS Code Marketplace
+        run: npx vsce publish --packagePath "$VSIX_NAME"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Attach VSIX to GitHub Release
+        run: gh release upload "$GITHUB_REF_NAME" "vscode-selveri/$VSIX_NAME" --clobber
+        working-directory: .
+        env:
+            GH_TOKEN: ${{ github.token }}
