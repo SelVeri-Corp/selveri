@@ -34,8 +34,10 @@ KEYWORD_DOCS: dict[str, str] = {
     "write": "```selveri\nwrite(expr);\n```\n\nWrites an expression to stdout.",
     "writeline": "```selveri\nwriteline(expr);\n```\n\nWrites an expression to stdout followed by a newline.",
     "obtain": "```selveri\nx := obtain(&w, { Exists w in Int . &w > 0 });\n```\n\nFinds a witness for an existential specification and returns it as an arithmetic expression.",
-    "Int": "Integer type.",
-    "Real": "Real (floating-point) type.",
+    "Int": "Integer type. Equivalent to `ℤ`.",
+    "Real": "Real (floating-point) type. Equivalent to `ℝ`.",
+    "ℤ": "Integer type (ℤ). Same as `Int`.",
+    "ℝ": "Real (floating-point) type (ℝ). Same as `Real`.",
     "List": "```selveri\nitems: List[Int, 1, len];\nfunction f(xs: List[Int, 1]) -> Int ::\n```\n\nStatic lists include a shape after the dimension. Rank-1 function parameters can omit the shape for variable-length lists.",
     "true": "Boolean literal `true`.",
     "false": "Boolean literal `false`.",
@@ -46,7 +48,7 @@ KEYWORD_DOCS: dict[str, str] = {
     "retvar": "Special variable holding the return value of the most recent `call` statement.",
     "len": "```selveri\nlen(listName)\n```\n\nReturns the first-dimension length of a list.",
     "in": "Introduces a quantifier domain in `Forall` and `Exists` specifications.",
-    "Forall": "```selveri\n{ Forall i in [0...len(xs) - 1] . xs[&i] >= 0 };\n```\n\nUniversal quantifier. Domains include ranges, intervals, lists, identifiers, `Int`, `Real`, `Var[Int]`, and `Var[Real]`.",
+    "Forall": "```selveri\n{ Forall i in [0...len(xs) - 1] . xs[&i] >= 0 };\n```\n\nUniversal quantifier. Domains include ranges, intervals, lists, identifiers, `Int`, `Real`, `ℤ`, `ℝ`, `Var[Int]`, and `Var[Real]`.",
     "Exists": "```selveri\n{ Exists x in [1...10] . &x * &x = 9 };\n```\n\nExistential quantifier.",
     "Always": "Future temporal operator: the formula holds at all future states.",
     "Eventually": "Future temporal operator: the formula holds at some future state.",
@@ -71,7 +73,7 @@ def _word_at(source: str, position: types.Position) -> str:
     col = min(position.character, len(line))
     if col > 0 and col == len(line):
         col -= 1
-    if col < len(line) and line[col] in "∀∃":
+    if col < len(line) and line[col] in "∀∃ℤℝ":
         return line[col]
     if col < len(line) and line[col] == "&":
         col += 1

@@ -33,6 +33,8 @@ KEYWORDS = [
     "pass",
     "Int",
     "Real",
+    "ℤ",
+    "ℝ",
     "List",
     "true",
     "false",
@@ -116,6 +118,8 @@ UNICODE_ALIASES = {
     "\\Chi": "Χ",
     "\\Psi": "Ψ",
     "\\Omega": "Ω",
+    "\\integer": "ℤ",
+    "\\real": "ℝ",
 }
 
 SNIPPETS: list[tuple[str, str, str]] = [

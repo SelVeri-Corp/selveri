@@ -68,6 +68,8 @@ const UNICODE_ALIASES: Record<string, string> = {
   "\\Chi": "Χ",
   "\\Psi": "Ψ",
   "\\Omega": "Ω",
+  "\\integer": "ℤ",
+  "\\real": "ℝ",
 };
 
 const MAX_UNICODE_ALIAS_LENGTH = Math.max(

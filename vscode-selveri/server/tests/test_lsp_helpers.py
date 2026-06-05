@@ -75,8 +75,20 @@ def test_completions_include_current_builtins_and_symbols() -> None:
     source = "function inc(v: Int) -> Int ::\nreturn v + 1;\nend\nx: Int;\n"
     labels = {item.label for item in get_completions(source, types.Position(line=3, character=0))}
     assert {"obtain", "read", "write", "writeline", "Forall", "Exists"} <= labels
-    assert {"\\forall", "\\exists", "\\in", "\\phi"} <= labels
+    assert {"\\forall", "\\exists", "\\in", "\\phi", "\\integer", "\\real"} <= labels
     assert {"x", "v", "inc"} <= labels
+
+
+def test_unicode_scalar_types_parse_and_typecheck() -> None:
+    diagnostics = get_diagnostics(
+        "x: ℤ;\ny: ℝ;\nx := 1;\ny := x;\n{ Exists j in ℤ . &j = x };\n"
+    )
+    assert diagnostics == []
+
+
+def test_unicode_integer_type_hover() -> None:
+    source = "x: ℤ;\n"
+    assert "Integer type" in _hover_text(source, 0, 3)
 
 
 def test_ir_completions_include_instructions_types_labels_and_variables() -> None:

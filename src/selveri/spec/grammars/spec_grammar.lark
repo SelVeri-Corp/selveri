@@ -70,8 +70,8 @@ start: spec
                | "[" aexp ";" aexp ")" -> interval_halfopen
                | "(" aexp ";" aexp "]" -> interval_halfclosed
 
-?basic_type: "Int"                         -> type_int
-           | "Real"                       -> type_real
+?basic_type: ("Int" | "ℤ")                 -> type_int
+           | ("Real" | "ℝ")                -> type_real
 ?type: basic_type
      | "List" "[" basic_type "," INT_LIT "," aexp_list "]" -> type_list
 
