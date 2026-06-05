@@ -3,7 +3,7 @@
   "displayName": "SelVeri",
   "icon": "./icons/selveri-icon.png",
   "description": "Language support for SelVeri: syntax highlighting, diagnostics, hover, completion, and symbols",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "publisher": "Selveri-Corp",
   "repository": {
     "type": "git",

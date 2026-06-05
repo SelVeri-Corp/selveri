@@ -1,0 +1,638 @@
+\documentclass[11pt]{article}
+
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+
+\geometry{margin=1in}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codekw}{RGB}{0,70,130}
+\definecolor{codestr}{RGB}{120,40,40}
+\definecolor{codecm}{RGB}{90,100,90}
+
+\lstdefinelanguage{SelVeri}{
+  morekeywords={
+    Int,Real,List,function,return,call,if,then,else,fi,while,do,od,
+    pass,true,false,and,or,xor,not,read,write,writeline,len,obtain,
+    Forall,Exists,in,Var,Previously,Once,Historically,Next,Eventually,
+    Always,Since,Until,start,end
+  },
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]"
+}
+
+\lstset{
+  language=SelVeri,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecm}\itshape,
+  stringstyle=\color{codestr},
+  backgroundcolor=\color{codebg},
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  frame=single,
+  framerule=0.2pt,
+  breaklines=true,
+  tabsize=4
+}
+
+\title{SelVeri User Manual\\\large Current Source Language and Runtime Functionality}
+\author{SelVeri Project}
+\date{June 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Overview}
+
+SelVeri is an educational imperative programming language with built-in runtime verification. A SelVeri program is written in a \texttt{.svi} source file, compiled to the SelVerIR intermediate representation, and interpreted by the SelVerIR abstract machine. During interpretation, specifications embedded in the source program are checked by the verification engine.
+
+The current implementation supports:
+
+\begin{itemize}[nosep]
+  \item statically declared \texttt{Int}, \texttt{Real}, and multidimensional \texttt{List} variables;
+  \item arithmetic and boolean expressions;
+  \item declarations, assignments, list element assignments, \texttt{if}, \texttt{while}, and \texttt{pass};
+  \item functions with parameters, return values, and the special return variable \texttt{retvar};
+  \item console input and output with \texttt{read()}, \texttt{write()}, and \texttt{writeline()};
+  \item embedded first-order, past temporal, future temporal, and separated temporal specifications;
+  \item witness extraction through \texttt{obtain};
+  \item structured diagnostics for parse, compile, runtime, and verification errors.
+\end{itemize}
+
+\section{Running Programs}
+
+Install the project dependencies from the repository root:
+
+\begin{lstlisting}
+pip install -r requirements.txt
+pip install -e .
+\end{lstlisting}
+
+Run a SelVeri source file:
+
+\begin{lstlisting}
+selveri examples/example_loop.svi
+\end{lstlisting}
+
+The same pipeline can be launched through Python:
+
+\begin{lstlisting}
+python -m selveri examples/example_loop.svi
+\end{lstlisting}
+
+To write generated SelVerIR to disk, pass \texttt{--emit-ir}. If no output path is supplied, the IR file is written next to the source with the \texttt{.svir} extension.
+
+\begin{lstlisting}
+selveri examples/example_loop.svi --emit-ir
+selveri examples/example_loop.svi --emit-ir --output-ir out/example_loop.svir
+\end{lstlisting}
+
+Useful command-line flags are:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Flag & Meaning \\
+\midrule
+\texttt{--emit-ir} & write generated SelVerIR to a file \\
+\texttt{--output-ir PATH} & choose the generated IR path \\
+\texttt{--print-ir} & print generated SelVerIR before execution \\
+\texttt{--max-steps N} & stop after at most \texttt{N} interpreted instructions \\
+\texttt{--debug} & print compilation time, execution time, final state, stack, and steps \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Future-time temporal specifications use MONA through the verification engine. For formulas using \texttt{Next}, \texttt{Eventually}, \texttt{Always}, or \texttt{Until}, the \texttt{mona} executable must be available on \texttt{PATH}.
+
+\section{Lexical Structure}
+
+Whitespace is ignored except where it separates tokens. SelVeri supports line comments and block comments:
+
+\begin{lstlisting}
+// line comment
+/* block comment */
+\end{lstlisting}
+
+Identifiers may start with a Latin or Greek letter and may continue with letters, digits, underscores, and Greek characters. In source programs, identifiers do not start with an underscore in the high-level grammar. Specification-bound identifiers may also start with an underscore.
+
+Integer literals contain only digits. Real literals contain digits, a decimal point, and more digits:
+
+\begin{lstlisting}
+0
+42
+3.14159
+\end{lstlisting}
+
+The names \texttt{retvar}, \texttt{read}, \texttt{write}, \texttt{writeline}, and \texttt{len} are reserved and cannot be declared by user programs.
+
+\section{Types and Values}
+
+\subsection{Scalar Types}
+
+\texttt{Int} stores integer values. \texttt{Real} stores floating-point real values. Integer values can be assigned to \texttt{Real} variables, but real values cannot be assigned to \texttt{Int} variables.
+
+The symbols \texttt{ℤ} and \texttt{ℝ} denote the same types as \texttt{Int} and \texttt{Real}; they may be used interchangeably in declarations, list element types, and quantifier domains.
+
+\begin{lstlisting}
+x : Int;
+x := 10;
+
+y : Real;
+y := 3.5;
+y := x;      // allowed: Int to Real
+
+z : ℤ;       // same as Int
+w : ℝ;       // same as Real
+\end{lstlisting}
+
+Variables are initialized when declared. An \texttt{Int} (or \texttt{ℤ}) starts as \texttt{0}; a \texttt{Real} (or \texttt{ℝ}) starts as \texttt{0.0}.
+
+\subsection{Lists}
+
+A list type has an element type, a rank, and one shape expression per dimension:
+
+\begin{lstlisting}
+numbers : List[Int, 1, 5];
+matrix  : List[Real, 2, 3, 4];
+\end{lstlisting}
+
+\texttt{List[Int, 1, 5]} is a one-dimensional list of five integers. \texttt{List[Real, 2, 3, 4]} is a two-dimensional real list with shape $3 \times 4$. The rank must match the number of shape expressions.
+
+List literals use square brackets and can be nested:
+
+\begin{lstlisting}
+numbers := [1, 2, 3, 4, 5];
+
+matrix : List[Int, 2, 3, 2];
+matrix := [[1, 2], [3, 4], [5, 6]];
+\end{lstlisting}
+
+Lists are stored by the runtime as flat arrays, but source code uses multidimensional indexing:
+
+\begin{lstlisting}
+matrix[1] := [30, 40];  // assign a sub-list
+matrix[2][1] := 8;      // assign one scalar element
+\end{lstlisting}
+
+Indexes are zero-based. Out-of-bounds accesses are runtime errors. The expression \texttt{len(xs)} returns the first-dimension length of a list.
+
+\section{Expressions}
+
+\subsection{Arithmetic Expressions}
+
+Arithmetic expressions support:
+
+\begin{itemize}[nosep]
+  \item literals and variables;
+  \item list indexing;
+  \item \texttt{len(name)};
+  \item unary minus;
+  \item \texttt{+}, \texttt{-}, \texttt{*}, and \texttt{/};
+  \item \texttt{read()};
+  \item \texttt{obtain(...)}.
+\end{itemize}
+
+Operator precedence follows the usual arithmetic order: unary minus, multiplication and division, then addition and subtraction. Parentheses override precedence.
+
+\begin{lstlisting}
+x := 1 + 2 * 3;
+y := (1 + 2) * 3;
+z := -x + y / 2;
+\end{lstlisting}
+
+Integer division is used when the expression type is \texttt{Int}; real division is used when the expression type is \texttt{Real}. Division by zero is a runtime error.
+
+\subsection{Boolean Expressions}
+
+Boolean expressions support:
+
+\begin{itemize}[nosep]
+  \item \texttt{true} and \texttt{false};
+  \item comparisons \texttt{=}, \texttt{<}, \texttt{<=}, \texttt{>}, and \texttt{>=};
+  \item \texttt{not}, \texttt{and}, \texttt{xor}, and \texttt{or};
+  \item arithmetic expressions used as truthy values;
+  \item specification blocks used as boolean predicates.
+\end{itemize}
+
+\begin{lstlisting}
+if x > 0 and not (y = 0) then
+    writeline(x);
+fi
+\end{lstlisting}
+
+The boolean precedence order is \texttt{not}, \texttt{and}, \texttt{xor}, then \texttt{or}. Arithmetic expressions are false when they evaluate to zero and true otherwise.
+
+\section{Statements}
+
+Statements that must end with a semicolon are declarations, assignments, list assignments, function-call statements, \texttt{pass}, \texttt{write}, \texttt{writeline}, \texttt{return}, and specification annotations. \texttt{if ... fi} and \texttt{while ... od} must not be followed by a semicolon.
+
+\subsection{Declarations and Assignments}
+
+\begin{lstlisting}
+x : Int;
+x := 1;
+
+r : Real;
+r := 2.5;
+
+xs : List[Int, 1, 3];
+xs := [10, 20, 30];
+xs[1] := 99;
+\end{lstlisting}
+
+A name may be declared only once in the same scope. Inner block scopes may declare names that hide outer declarations. Assigning to a name found in an outer scope updates that outer variable.
+
+\subsection{Conditionals}
+
+\begin{lstlisting}
+if x = 1 then
+    x := 2;
+else
+    x := 3;
+fi
+\end{lstlisting}
+
+The \texttt{else} part is optional:
+
+\begin{lstlisting}
+if x > 0 then
+    writeline(x);
+fi
+\end{lstlisting}
+
+Each branch executes in a child scope.
+
+\subsection{Loops}
+
+\begin{lstlisting}
+i : Int;
+i := 0;
+sum : Int;
+sum := 0;
+
+while i < len(xs) do
+    sum := sum + xs[i];
+    i := i + 1;
+od
+\end{lstlisting}
+
+Each loop body execution uses a child scope. Variables declared inside a loop body are not visible after the body scope exits. The interpreter enforces a maximum step count; use \texttt{--max-steps} to change it.
+
+\subsection{Pass}
+
+\texttt{pass;} performs no operation.
+
+\begin{lstlisting}
+if x = 0 then
+    pass;
+else
+    x := x - 1;
+fi
+\end{lstlisting}
+
+\section{Input and Output}
+
+\texttt{write(expr)} prints a value without a trailing newline. \texttt{writeline(expr)} prints a value followed by a newline. Lists are printed in bracketed form.
+
+\begin{lstlisting}
+x : Int;
+x := 5;
+write(x);
+writeline(2);
+\end{lstlisting}
+
+\texttt{read()} reads one line from standard input and parses it as an integer or real scalar.
+
+\begin{lstlisting}
+z : Int;
+z := read();
+writeline(z);
+
+w : Real;
+w := read();
+writeline(w);
+\end{lstlisting}
+
+\section{Functions}
+
+Function declarations must appear before the top-level statement sequence:
+
+\begin{lstlisting}
+function add(a: Int, b: Int) -> Int ::
+    return a + b;
+end
+
+result : Int;
+call add(2, 3);
+result := retvar;
+\end{lstlisting}
+
+A function call is a statement of the form \texttt{call name(args);}. The return value is written to the special variable \texttt{retvar} in the caller. A program normally copies \texttt{retvar} into a declared variable immediately after the call.
+
+\subsection{Parameters and Return Types}
+
+Function parameters and return values can use scalar types, fully shaped list types, and rank-1 dynamic list types:
+
+\begin{lstlisting}
+function sumFive(xs: List[Int, 1, 5]) -> Int ::
+    i : Int;
+    i := 0;
+    total : Int;
+    total := 0;
+    while i < 5 do
+        total := total + xs[i];
+        i := i + 1;
+    od
+    return total;
+end
+
+function sum(xs: List[Int, 1]) -> Int ::
+    i : Int;
+    i := 0;
+    total : Int;
+    total := 0;
+    while i < len(xs) do
+        total := total + xs[i];
+        i := i + 1;
+    od
+    return total;
+end
+\end{lstlisting}
+
+\texttt{List[Int, 1]} in a function type is a rank-1 variable-length list. In the current compiler, dynamic list parameters are supported only for rank 1.
+
+If a function body does not guarantee a \texttt{return} on every path, the compiler appends a default return. The default is \texttt{0} for \texttt{Int}, \texttt{0.0} for \texttt{Real}, and a zero-filled list for list return types.
+
+\section{Specifications}
+
+Specification annotations are written in braces and end with semicolons when used as statements:
+
+\begin{lstlisting}
+{ x > 0 };
+{ Forall i in [0...len(xs) - 1] . xs[&i] >= 0 };
+\end{lstlisting}
+
+The preprocessor extracts specification blocks before normal parsing. Nested specification braces are not allowed. Comments may appear inside specification blocks.
+
+\subsection{State Formulas}
+
+Specifications can contain boolean expressions, logical connectives, implication, and quantifiers.
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Syntax & Meaning \\
+\midrule
+\texttt{! p} & negation \\
+\texttt{p \&\& q} & conjunction \\
+\texttt{p || q} & disjunction \\
+\texttt{p => q} & implication, right-associative \\
+\texttt{Forall x in D . p} & universal quantification \\
+\texttt{Exists x in D . p} & existential quantification \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The symbolic forms \(\forall\), \(\exists\), and \(\in\) are accepted by the specification grammar as alternatives to \texttt{Forall}, \texttt{Exists}, and \texttt{in}.
+
+Bound variables are referenced with an ampersand:
+
+\begin{lstlisting}
+{ Forall i in [0...4] . xs[&i] > 0 };
+{ Exists e in xs . &e = 10 };
+\end{lstlisting}
+
+\subsection{Quantifier Domains}
+
+Supported quantifier domains are:
+
+\begin{itemize}[nosep]
+  \item explicit values: \texttt{[a, b, c]};
+  \item integer ranges: \texttt{[lo...hi]};
+  \item real intervals: \texttt{[lo; hi]}, \texttt{(lo; hi)}, \texttt{[lo; hi)}, and \texttt{(lo; hi]};
+  \item an identifier, commonly a list name;
+  \item scalar types: \texttt{Int} and \texttt{Real};
+  \item visible variables of a scalar type: \texttt{Var[Int]} and \texttt{Var[Real]}.
+\end{itemize}
+
+\begin{lstlisting}
+{ Forall i in [0...len(xs) - 1] . xs[&i] >= 0 };
+{ Exists v in [1, 2, 3] . &v = 2 };
+{ Forall x in Var[Int] . &x >= 0 };
+\end{lstlisting}
+
+\subsection{Temporal Specifications}
+
+SelVeri supports past-time, future-time, and separated temporal formulas.
+
+Past-time operators:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Operator & Meaning \\
+\midrule
+\texttt{Previously p} & \texttt{p} held at the previous step \\
+\texttt{Once p} & \texttt{p} held at some past or current step \\
+\texttt{Historically p} & \texttt{p} held at every past and current step \\
+\texttt{p Since q} & \texttt{q} held at some past point and \texttt{p} held since then \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Future-time operators:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Operator & Meaning \\
+\midrule
+\texttt{Next p} & \texttt{p} holds at the next step \\
+\texttt{Eventually p} & \texttt{p} holds at some future or current step \\
+\texttt{Always p} & \texttt{p} holds at every future and current step \\
+\texttt{p Until q} & \texttt{q} eventually holds and \texttt{p} holds until then \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Examples:
+
+\begin{lstlisting}
+x : Int;
+x := 0;
+{ Next x = 1 };
+x := 1;
+
+{ Eventually x = 3 };
+x := 2;
+x := 3;
+
+{ Historically x >= 0 };
+\end{lstlisting}
+
+A separated temporal formula has a past-time antecedent and a future-time consequent:
+
+\begin{lstlisting}
+{ (Once x = 0) => (Eventually x = 5) };
+\end{lstlisting}
+
+\subsection{Named Specifications and Temporal Regions}
+
+A named specification assigns a formula to a name:
+
+\begin{lstlisting}
+{ nonnegative := Always x >= 0 };
+\end{lstlisting}
+
+Future temporal and separated temporal specifications can be delimited with an end marker:
+
+\begin{lstlisting}
+{ target := Eventually x = 10 };
+x := 5;
+x := 10;
+{ end target };
+\end{lstlisting}
+
+Past temporal and separated temporal specifications can be delimited with a start marker:
+
+\begin{lstlisting}
+{ start history };
+x := 1;
+x := 2;
+{ history := Once x = 1 };
+\end{lstlisting}
+
+The compiler enforces the marker direction:
+
+\begin{itemize}[nosep]
+  \item \texttt{\{ start name \}} applies only to past temporal or separated formulas.
+  \item \texttt{\{ end name \}} applies only to future temporal or separated formulas.
+  \item A started named specification must be defined in the same scope.
+  \item A future end marker must refer to a named specification already defined in the same scope.
+\end{itemize}
+
+\subsection{Specification Predicates in Boolean Expressions}
+
+A specification block can be used where a boolean expression is expected. At runtime it is checked by the verifier and produces \texttt{1} for true or \texttt{0} for false.
+
+\begin{lstlisting}
+if { Exists i in [0...4] . xs[&i] = 10 } then
+    writeline(1);
+else
+    writeline(0);
+fi
+\end{lstlisting}
+
+If the interpreter is run without a verifier, specification predicates are treated optimistically as true. The standard \texttt{selveri} command attaches a verifier.
+
+\section{Witness Extraction with \texttt{obtain}}
+
+\texttt{obtain} asks the verifier for a witness value satisfying an existential specification. The first argument names the bound variable whose witness should be returned.
+
+\begin{lstlisting}
+y : Int;
+y := 5;
+
+r : Int;
+r := obtain(&x, { Exists x in Int . &x = y });
+{ r = 5 };
+\end{lstlisting}
+
+The result can be used anywhere an arithmetic expression is accepted:
+
+\begin{lstlisting}
+r2 : Int;
+r2 := obtain(&a, { Exists a in [1...10] . &a * &a = 9 });
+
+if obtain(&i, { Exists i in [2...5] . &i = 2 }) - 2 then
+    writeline(1);
+else
+    writeline(0);
+fi
+\end{lstlisting}
+
+If no verifier is attached, \texttt{obtain} is a runtime error. If the formula has no suitable witness, verification fails.
+
+\section{Complete Example}
+
+\begin{lstlisting}
+function sum(xs: List[Int, 1]) -> Int ::
+    i : Int;
+    i := 0;
+    total : Int;
+    total := 0;
+
+    while i < len(xs) do
+        total := total + xs[i];
+        i := i + 1;
+    od
+
+    return total;
+end
+
+xs : List[Int, 1, 5];
+xs := [1, 2, 3, 4, 5];
+
+{ Forall i in [0...len(xs) - 1] . xs[&i] > 0 };
+
+call sum(xs);
+answer : Int;
+answer := retvar;
+
+{ answer = 15 };
+writeline(answer);
+\end{lstlisting}
+
+\section{Current Limitations and Rules}
+
+\begin{itemize}
+  \item Source-level string values are not supported.
+  \item User-defined boolean variables are not a separate type; booleans are represented as integer truth values.
+  \item Function calls are statements. Return values are read from \texttt{retvar}.
+  \item Dynamic list types are supported in function types as \texttt{List[T, rank]}, but the current compiler supports dynamic list parameters only for rank 1.
+  \item Ordinary variable declarations use fully shaped list types such as \texttt{List[Int, 2, 3, 4]}.
+  \item List indexes are zero-based and checked at runtime.
+  \item A specification block cannot contain another specification block.
+  \item \texttt{if ... fi} and \texttt{while ... od} are not terminated by semicolons.
+  \item Future temporal verification requires MONA on \texttt{PATH}.
+  \item The interpreter aborts after the configured maximum number of instructions.
+\end{itemize}
+
+\section{Diagnostics}
+
+SelVeri reports failures as structured diagnostics with source spans when available. The implementation distinguishes parser, preprocessor, compiler, runtime, and verification errors. Common failures include:
+
+\begin{itemize}[nosep]
+  \item malformed source syntax or malformed specification syntax;
+  \item nested or unclosed specification blocks;
+  \item duplicate declarations in the same scope;
+  \item use of undefined variables or undefined functions;
+  \item assignment or argument type mismatches;
+  \item list dimension or shape mismatches;
+  \item out-of-bounds list indexing;
+  \item failed verification conditions;
+  \item missing MONA support for future temporal specifications.
+\end{itemize}
+
+Use \texttt{--debug} when diagnosing internal failures or inspecting final runtime state.
+
+\end{document}

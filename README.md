@@ -4,6 +4,10 @@ SelVeri is an **educational, imperative** programming language designed to bridg
 
 Unlike traditional languages that rely on runtime errors or unit tests to catch bugs, SelVeri employs _Dynamic Verification_ by utilizing its **First-Order Logic Runtime Engine**. SelVeri integrates the Z3 SMT Solver directly into its runtime. This allows developers to embed complex mathematical and logical specifications—including quantifiers ($\forall, \exists$) and logical implications—which are verified in real-time as the program executes.
 
+## User Manual
+
+For language syntax, specification annotations, verification features, and usage examples, refer to the [SelVeri User Manual](doc/UserManual/SelVeri_User_Manual.pdf).
+
 ## Source layout
 
 Python package root: `src/selveri/`
@@ -148,7 +152,7 @@ cd vscode-selveri
 npm install
 npm run compile
 npx vsce package
-code --install-extension selveri-0.9.3.vsix
+code --install-extension selveri-0.9.4.vsix
 ```
 
 ## Development
