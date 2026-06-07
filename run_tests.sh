@@ -4,12 +4,12 @@
 
 set -uo pipefail
 
-PASS_DIR="examples/verifier_tests/pass_test"
-FAIL_DIR="examples/verifier_tests/fail_tests"
-SELVERI_LP_PASS_DIR="examples/selveri_lp_tests/pass_test"
-SELVERI_LP_FAIL_DIR="examples/selveri_lp_tests/fail_tests"
-DIAGNOSTICS_FAIL_DIR="examples/diagnostics/fail"
-EXAMPLES_DIR="examples"
+PASS_DIR="tests/verifier_tests/pass_test"
+FAIL_DIR="tests/verifier_tests/fail_tests"
+SELVERI_LP_PASS_DIR="tests/selveri_lp_tests/pass_test"
+SELVERI_LP_FAIL_DIR="tests/selveri_lp_tests/fail_tests"
+DIAGNOSTICS_FAIL_DIR="tests/diagnostics/fail"
+EXAMPLES_DIR="tests"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'

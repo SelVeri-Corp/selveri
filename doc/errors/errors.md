@@ -211,7 +211,7 @@ renderer independent from compiler, parser, runtime, and verifier internals.
 Normal mode:
 
 ```text
-selveri examples/diagnostics/fail/duplicate_declaration.svi
+selveri tests/diagnostics/fail/duplicate_declaration.svi
 ```
 
 prints a formatted diagnostic and exits with status code `1`.
@@ -219,7 +219,7 @@ prints a formatted diagnostic and exits with status code `1`.
 Debug mode:
 
 ```text
-selveri examples/diagnostics/fail/duplicate_declaration.svi --debug
+selveri tests/diagnostics/fail/duplicate_declaration.svi --debug
 ```
 
 still renders `SelVeriError` diagnostics normally, but unexpected internal

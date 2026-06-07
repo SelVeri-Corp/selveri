@@ -104,25 +104,25 @@ mona -h
 Run parser -> compiler -> interpreter from the project root:
 
 ```
-python selveri.py examples/example_loop.svi
+python selveri.py examples/payment_fraud_review.svi
 ```
 
 After editable install, you can use the command directly:
 
 ```
-selveri examples/example_loop.svi
+selveri examples/payment_fraud_review.svi
 ```
 
 By default, IR is **not** written to disk. To generate `.svir` output, pass `--emit-ir`:
 
 ```
-selveri examples/example_loop.svi --emit-ir
+selveri examples/payment_fraud_review.svi --emit-ir
 ```
 
 Or choose a custom path:
 
 ```
-selveri examples/example_loop.svi --emit-ir --output-ir out/example_loop.svir
+selveri examples/payment_fraud_review.svi --emit-ir --output-ir out/payment_fraud_review.svir
 ```
 
 ## Error Diagnostics
