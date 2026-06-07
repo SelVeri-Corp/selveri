@@ -6,7 +6,7 @@ from pathlib import Path
 from time import perf_counter
 import traceback
 
-from selveri.abstract_machine import interpret_ir_code
+from selveri.abstract_machine import interpret_ir_code, interpret_ir_text
 from selveri.common.diagnostics import render_diagnostic, render_internal_error, should_use_color
 from selveri.common.errors import SelVeriError
 from selveri.compiler import SelVeriCompiler
@@ -58,11 +58,39 @@ def run_pipeline(
     return 0
 
 
+def run_ir(
+    input_path: Path,
+    *,
+    max_steps: int,
+    debug: bool,
+) -> int:
+    with input_path.open("r", encoding="utf-8") as f:
+        ir_text = f.read()
+
+    start_time = perf_counter()
+    verifier = VerificationEngine()
+    result = interpret_ir_text(ir_text, verifier=verifier, max_steps=max_steps)
+    end_time = perf_counter()
+
+    if debug:
+        print(f"\nExecution time: {end_time - start_time:.6f} seconds")
+        print("Final state:")
+        print(result.state)
+        print("\nFinal stack:")
+        print(result.stack)
+        print(f"Steps: {result.steps}")
+    return 0
+
+
 def main() -> int:
     arg_parser = argparse.ArgumentParser(
         description="Run SelVeri parser -> compiler -> interpreter pipeline."
     )
-    arg_parser.add_argument("input", type=Path, help="Path to the .svi source file")
+    arg_parser.add_argument(
+        "input",
+        type=Path,
+        help="Path to the .svi source file (or .svir when using --run-ir)",
+    )
     arg_parser.add_argument(
         "-o",
         "--output-ir",
@@ -91,13 +119,27 @@ def main() -> int:
         action="store_true",
         help="Print debug information",
     )
+    arg_parser.add_argument(
+        "--run-ir",
+        action="store_true",
+        help="Run a .svir file directly, bypassing parser and compiler",
+    )
     args = arg_parser.parse_args()
+
+    if args.run_ir and (args.emit_ir or args.print_ir or args.output_ir is not None):
+        arg_parser.error("--run-ir cannot be combined with --emit-ir, --print-ir, or --output-ir")
 
     output_ir = None
     if args.emit_ir:
         output_ir = args.output_ir if args.output_ir is not None else args.input.with_suffix(".svir")
 
     try:
+        if args.run_ir:
+            return run_ir(
+                args.input,
+                max_steps=args.max_steps,
+                debug=args.debug,
+            )
         return run_pipeline(
             args.input,
             output_ir=output_ir,
