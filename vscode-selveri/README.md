@@ -23,7 +23,7 @@ items: List[Int, 1, 5];
 { ∀ φ in [0...len(items) - 1] . items[&φ] >= 0 };
 
 witness: Int;
-witness := obtain(&w, { Exists w in Int . &w > x });
+witness := obtain(&w, Exists w in Int . &w > x);
 
 { start sorted };
 { sorted := Always items[0] <= items[1] };

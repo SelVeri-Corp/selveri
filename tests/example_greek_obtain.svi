@@ -1,7 +1,7 @@
 // obtain with ∃ and a Greek witness variable
 
 ω : Int;
-ω := obtain(&ξ, { ∃ ξ in Var[Int] . &ξ = 42 });
+ω := obtain(&ξ,  ∃ ξ in Var[Int] . &ξ = 42 );
 
 writeline(ω);
 { ω = 42 };

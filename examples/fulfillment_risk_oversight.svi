@@ -20,13 +20,13 @@ function chooseFastestStockedCenter(stock: List[Int, 1], shipHours: List[Int, 1]
     center : Int;
     // Bug: only stock level and shipping speed are encoded in the witness.
     // Deadline and risk caps are deferred to "later" checks below.
-    center := obtain(&c, {
+    center := obtain(&c,
         Exists c in [0...len(stock) - 1] .
             (stock[&c] >= requestQty) &&
             (Forall other in [0...len(stock) - 1] .
                 (stock[&other] >= requestQty) =>
                     (shipHours[&c] <= shipHours[&other]))
-    });
+    );
 
     { (0 <= center) && (center < len(stock)) };
     { stock[center] >= requestQty };

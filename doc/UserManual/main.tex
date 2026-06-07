@@ -3,6 +3,8 @@
 \usepackage[english]{babel}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
+\DeclareUnicodeCharacter{2124}{\ensuremath{\mathbb{Z}}}
+\DeclareUnicodeCharacter{211D}{\ensuremath{\mathbb{R}}}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{array}
@@ -48,7 +50,8 @@
   frame=single,
   framerule=0.2pt,
   breaklines=true,
-  tabsize=4
+  tabsize=4,
+  literate={ℤ}{{\ensuremath{\mathbb{Z}}}}1 {ℝ}{{\ensuremath{\mathbb{R}}}}1
 }
 
 \title{SelVeri User Manual\\\large Current Source Language and Runtime Functionality}
@@ -553,7 +556,7 @@ y : Int;
 y := 5;
 
 r : Int;
-r := obtain(&x, { Exists x in Int . &x = y });
+r := obtain(&x, Exists x in Int . &x = y);
 { r = 5 };
 \end{lstlisting}
 
@@ -561,9 +564,9 @@ The result can be used anywhere an arithmetic expression is accepted:
 
 \begin{lstlisting}
 r2 : Int;
-r2 := obtain(&a, { Exists a in [1...10] . &a * &a = 9 });
+r2 := obtain(&a, Exists a in [1...10] . &a * &a = 9);
 
-if obtain(&i, { Exists i in [2...5] . &i = 2 }) - 2 then
+if obtain(&i, Exists i in [2...5] . &i = 2) - 2 then
     writeline(1);
 else
     writeline(0);

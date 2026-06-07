@@ -21,10 +21,10 @@ reviewed := [0, 1, 0, 1, 0];
 
 // There is at least one real alert in this batch.
 alertIndex : Int;
-alertIndex := obtain(&i, {
+alertIndex := obtain(&i,
     Exists i in [0...len(amounts) - 1] .
         (amounts[&i] >= 5000) && (reviewed[&i] = 1)
-});
+);
 { amounts[alertIndex] >= 5000 };
 { reviewed[alertIndex] = 1 };
 

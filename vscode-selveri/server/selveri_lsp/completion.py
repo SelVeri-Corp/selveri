@@ -135,7 +135,7 @@ SNIPPETS: list[tuple[str, str, str]] = [
     ("end spec", "{ end ${1:name} };", "named temporal end marker"),
     ("forall", "{ Forall ${1:i} in ${2:[0...n]} . ${3:condition} };", "universal specification"),
     ("exists", "{ Exists ${1:x} in ${2:Int} . ${3:condition} };", "existential specification"),
-    ("obtain", "obtain(&${1:w}, { Exists ${1:w} in ${2:Int} . ${3:&${1:w} > 0} })", "obtain witness expression"),
+    ("obtain", "obtain(&${1:w}, Exists ${1:w} in ${2:Int} . ${3:&${1:w} > 0})", "obtain witness expression"),
     ("read", "read()", "read expression"),
     ("write", "write(${1:expr});", "write statement"),
     ("writeline", "writeline(${1:expr});", "writeline statement"),

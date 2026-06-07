@@ -12,7 +12,7 @@
 
 function chooseFastestCenter(stock: List[Int, 1], shipHours: List[Int, 1], risk: List[Int, 1], requestQty: Int, maxHours: Int, maxRisk: Int) -> Int ::
     center : Int;
-    center := obtain(&c, {
+    center := obtain(&c,
         Exists c in [0...len(stock) - 1] .
             (stock[&c] >= requestQty) &&
             (shipHours[&c] <= maxHours) &&
@@ -22,7 +22,7 @@ function chooseFastestCenter(stock: List[Int, 1], shipHours: List[Int, 1], risk:
                  (shipHours[&other] <= maxHours) &&
                  (risk[&other] <= maxRisk)) =>
                     (shipHours[&c] <= shipHours[&other]))
-    });
+    );
 
     { (0 <= center) && (center < len(stock)) };
     { stock[center] >= requestQty };

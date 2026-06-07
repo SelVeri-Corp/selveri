@@ -161,16 +161,16 @@ S &::=& x:T \mid x:=A \mid x[A]:=A \mid \mathtt{pass}
 \mid \mathtt{call}\ f(\overline{A}) \\[1pt]
 &\mid& \mathtt{write}(A) \mid \mathtt{writeline}(A)
 \mid \mathtt{return}\ A \mid \{\mathit{Spec}\} \\[1pt]
-&\mid& \mathtt{if}\ G\ \mathtt{then}\ S^*
+&\mid& \mathtt{if}\ B\ \mathtt{then}\ S^*
 [\mathtt{else}\ S^*]\ \mathtt{fi} \\[1pt]
-&\mid& \mathtt{while}\ G\ \mathtt{do}\ S^*\ \mathtt{od} \\[3pt]
+&\mid& \mathtt{while}\ B\ \mathtt{do}\ S^*\ \mathtt{od} \\[3pt]
 A &::=& n \mid r \mid x \mid [\overline{A}]
 \mid A\oplus A \mid -A
 \mid x[A] \mid \mathtt{len}(x) \mid \mathtt{read}() \\[1pt]
-&\mid& \mathtt{obtain}(\&x,\{\mathit{Spec}\}) \\[3pt]
-G &::=& \mathtt{true} \mid \mathtt{false}
-\mid A\bowtie A \mid \mathtt{not}\ G
-\mid G\circ G \mid \{\mathit{Spec}\}
+&\mid& \mathtt{obtain}(\&x,\mathit{Spec}) \\[3pt]
+B &::=& \mathtt{true} \mid \mathtt{false}
+\mid A\bowtie A \mid \mathtt{not}\ B
+\mid B\circ B \mid \{\mathit{Spec}\}
 \end{array}
 \]
 \end{mathbox}
@@ -335,7 +335,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{mathbox}[left=0.35cm,right=0.35cm,top=0.18cm,bottom=0.18cm]
 \begin{center}
 \begin{tabular}{l}
-\texttt{x := obtain(\&x, \{} $\exists$ \texttt{y} $\in$ \texttt{Int.} \&y = n*n*n \}) \\
+\texttt{x := obtain(\&x,} $\exists$ \texttt{y} $\in$ \texttt{Int.} \&y = n*n*n\texttt{)} \\
 \end{tabular}
 \end{center}
 \end{mathbox}

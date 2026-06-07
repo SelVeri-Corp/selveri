@@ -113,6 +113,69 @@ def _scan_spec_block(
         hint="close the specification block with `}`",
     )
 
+def _advance_over(text: str, line: int, column: int) -> Tuple[int, int]:
+    for ch in text:
+        line, column = _advance_position(ch, line, column)
+    return line, column
+
+
+def _scan_obtain_spec(
+    src: str,
+    source: SourceFile,
+    start_index: int,
+    obtain_index: int,
+    start_line: int,
+    start_column: int,
+) -> Tuple[str, int, int, int]:
+    """
+    Scan the specification argument of an ``obtain`` call starting just after the
+    separating comma. The argument is no longer brace-delimited, so its extent is
+    found by balancing parentheses (and brackets) up to the closing ``)`` that
+    terminates the ``obtain`` call. The closing ``)`` is left unconsumed.
+
+    Returns ``(raw_text, close_index, line_at_close, column_at_close)``.
+    """
+    depth_paren = 1  # the obtain's own '(' is already open
+    depth_brack = 0
+    index = start_index
+    cur_line = start_line
+    cur_column = start_column
+
+    while index < len(src):
+        if src.startswith("//", index):
+            index, cur_line, cur_column = _consume_line_comment(src, index, cur_line, cur_column)
+            continue
+        if src.startswith("/*", index):
+            index, cur_line, cur_column = _consume_block_comment(src, index, cur_line, cur_column)
+            continue
+
+        ch = src[index]
+        if ch == "(":
+            depth_paren += 1
+        elif ch == ")":
+            depth_paren -= 1
+            if depth_paren == 0:
+                raw_text = src[start_index:index].strip()
+                return raw_text, index, cur_line, cur_column
+        elif ch == "[":
+            depth_brack += 1
+        elif ch == "]":
+            depth_brack -= 1
+
+        index += 1
+        cur_line, cur_column = _advance_position(ch, cur_line, cur_column)
+
+    open_span = SourceSpan.from_positions(source, start_pos=obtain_index, end_pos=obtain_index + 6)
+    raise _preprocessor_error(
+        code=DiagnosticCode.PREPROCESSOR_UNCLOSED_SPEC,
+        title="unclosed obtain expression",
+        message="expected closing `)`",
+        span=open_span,
+        label="`obtain` expression starts here",
+        hint="close the `obtain` expression with `)`",
+    )
+
+
 def _layout_preserving_placeholder(consumed: str, placeholder: str) -> str:
     """
     Preserve the layout of the original source code by adding spaces to the placeholder.
@@ -148,6 +211,54 @@ def extract_raw_specs(src: str, source_file: SourceFile | None = None) -> Tuple[
             next_index, line, column = _consume_block_comment(src, index, line, column)
             rewritten.append(src[index:next_index])
             index = next_index
+            continue
+
+        # `obtain` takes a brace-less specification argument. Emit the call head
+        # verbatim and extract the specification (balanced up to the closing `)`)
+        # into an opaque placeholder, mirroring how `{ ... }` blocks are handled.
+        obtain_match = _OBTAIN_HEAD_RE.match(src, index)
+        if obtain_match and (index == 0 or not _IDENT_CHAR_RE.match(src[index - 1])):
+            head = obtain_match.group(0)
+            rewritten.append(head)
+            spec_start = obtain_match.end()
+            spec_start_line, spec_start_column = _advance_over(head, line, column)
+
+            raw_text, close_index, end_line, end_column = _scan_obtain_spec(
+                src, source, spec_start, index, spec_start_line, spec_start_column
+            )
+            if not raw_text:
+                span = SourceSpan(
+                    source, spec_start_line, spec_start_column, end_line, end_column, spec_start, close_index
+                )
+                raise _preprocessor_error(
+                    code=DiagnosticCode.PREPROCESSOR_EMPTY_SPEC,
+                    title="empty specification",
+                    message="an `obtain` expression must contain a predicate",
+                    span=span,
+                    label="specification is empty",
+                    hint="write a condition such as `obtain(&x, Exists x in Int . &x > 0)`",
+                )
+
+            identifier = next_spec_id
+            next_spec_id += 1
+            placeholder = f"@{identifier}"
+            raw_specs[placeholder] = RawSpec(
+                spec_id=identifier,
+                formula_text=raw_text,
+                location=SourceSpan(
+                    source=source,
+                    start_line=spec_start_line,
+                    start_column=spec_start_column,
+                    end_line=end_line,
+                    end_column=end_column,
+                    start_pos=spec_start,
+                    end_pos=close_index,
+                ),
+                kind=RawSpecKind.SPEC,
+            )
+            rewritten.append(_layout_preserving_placeholder(src[spec_start:close_index], placeholder))
+            line, column = end_line, end_column
+            index = close_index
             continue
 
         ch = src[index]
@@ -217,6 +328,10 @@ def extract_raw_specs(src: str, source_file: SourceFile | None = None) -> Tuple[
     return "".join(rewritten), raw_specs
 
 _IDENT_RE = r"[A-Za-z\u0370-\u03FF\u1F00-\u1FFF][A-Za-z0-9_\u0370-\u03FF\u1F00-\u1FFF]*"
+_IDENT_CHAR_RE = re.compile(r"[A-Za-z0-9_\u0370-\u03FF\u1F00-\u1FFF]")
+# Head of an `obtain` call up to and including the comma that separates the
+# witness variable from the (brace-less) specification argument.
+_OBTAIN_HEAD_RE = re.compile(rf"obtain\s*\(\s*&\s*{_IDENT_RE}\s*,")
 _NAMED_SPEC_RE = re.compile(rf"^({_IDENT_RE})\s*:=\s*(.*)$", re.DOTALL)
 _SPEC_START_RE = re.compile(rf"^start\s+({_IDENT_RE})\s*$")
 _SPEC_END_RE = re.compile(rf"^end\s+({_IDENT_RE})\s*$")

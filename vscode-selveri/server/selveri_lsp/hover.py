@@ -33,7 +33,7 @@ KEYWORD_DOCS: dict[str, str] = {
     "read": "```selveri\nvalue := read();\n```\n\nReads a value from stdin as an arithmetic expression.",
     "write": "```selveri\nwrite(expr);\n```\n\nWrites an expression to stdout.",
     "writeline": "```selveri\nwriteline(expr);\n```\n\nWrites an expression to stdout followed by a newline.",
-    "obtain": "```selveri\nx := obtain(&w, { Exists w in Int . &w > 0 });\n```\n\nFinds a witness for an existential specification and returns it as an arithmetic expression.",
+    "obtain": "```selveri\nx := obtain(&w, Exists w in Int . &w > 0);\n```\n\nFinds a witness for an existential specification and returns it as an arithmetic expression.",
     "Int": "Integer type. Equivalent to `ℤ`.",
     "Real": "Real (floating-point) type. Equivalent to `ℝ`.",
     "ℤ": "Integer type (ℤ). Same as `Int`.",

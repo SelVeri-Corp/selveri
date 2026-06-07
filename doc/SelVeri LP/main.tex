@@ -74,11 +74,11 @@ We extend the $\langle \mathit{AAtom} \rangle$ ruleset to include the \texttt{ob
 && \mid\;
 \mathtt{read}()
 \;\mid\;
-\mathbf{\mathtt{obtain}( \texttt{\&}\langle \mathit{Ident} \rangle, \textbf{\{} \langle \mathit{Spec} \rangle \textbf{\}} )} \\[4pt]
+\mathbf{\mathtt{obtain}( \texttt{\&}\langle \mathit{Ident} \rangle, \langle \mathit{Spec} \rangle )} \\[4pt]
 \end{array}
 \]
 
-Because \texttt{obtain} is an arithmetic expression, it can appear anywhere a value is expected: in assignments (\texttt{y := obtain(\&x, \{$\phi$\})}), as an argument to I/O functions (\texttt{writeline(obtain(\&x, \{$\phi$\}))}), inside arithmetic operations (\texttt{obtain(...) + 1}), and so on.
+Because \texttt{obtain} is an arithmetic expression, it can appear anywhere a value is expected: in assignments (\texttt{y := obtain(\&x, $\phi$)}), as an argument to I/O functions (\texttt{writeline(obtain(\&x, $\phi$))}), inside arithmetic operations (\texttt{obtain(...) + 1}), and so on.
 
 \section{Extended High-Level Semantics}
 
@@ -117,7 +117,7 @@ Because \texttt{obtain} is an arithmetic expression, its semantics extend the ar
 \makebox[\textwidth][c]{%
 \fbox{%
 \begin{tabular}{rl}
-\(\mathcal{A}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \}), \sigma, s)\) & \(=
+\(\mathcal{A}(\mathtt{obtain}(\texttt{\&}x, \phi), \sigma, s)\) & \(=
 \left\{
   \begin{array}{ll}
     v & \text{if } \mathcal{W}(x, \phi, \sigma, s) = v \neq \bot \\
@@ -132,13 +132,13 @@ Because \texttt{obtain} is an arithmetic expression, its semantics extend the ar
 
 When $\mathcal{A}$ yields $\bot$, the standard error propagation rule of the base language applies: any statement evaluating an arithmetic expression that produces $\bot$ transitions to the erroneous state $\hat{\sigma}$. Otherwise, the expression evaluates to the concrete witness value $v$, which can be used directly in any arithmetic context. For example:
 \begin{verbatim}
-    y := obtain(&x, {Exists x in Int . &x = 5});
-    writeline(obtain(&w, {Exists w in Int . &w = 42}));
+    y := obtain(&x, Exists x in Int . &x = 5);
+    writeline(obtain(&w, Exists w in Int . &w = 42));
 \end{verbatim}
 
 \subsection{Accepted Forms of \texttt{obtain}}
 
-The concrete syntax is \texttt{obtain(\&$x$, \{$\phi$\})} where \texttt{\&$x$} names the target bound variable whose witness is extracted, and $\phi$ is a specification containing an existential quantifier binding~$x$. The specification $\phi$ must contain a sub-formula of the form $\exists\, x \in D.\; \psi$ for some domain $D$ and body $\psi$.
+The concrete syntax is \texttt{obtain(\&$x$, $\phi$)} where \texttt{\&$x$} names the target bound variable whose witness is extracted, and $\phi$ is a specification containing an existential quantifier binding~$x$. The specification $\phi$ must contain a sub-formula of the form $\exists\, x \in D.\; \psi$ for some domain $D$ and body $\psi$.
 
 \subsubsection*{Supported Domains}
 
@@ -269,7 +269,7 @@ $\begin{array}{ll}
 
 \mathcal{CB}(\{ \phi \}) = \mathtt{VERIP}\; id_\phi, \phi \\[1.5ex]
 
-\mathcal{CA}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})) = 
+\mathcal{CA}(\mathtt{obtain}(\texttt{\&}x, \phi)) = 
 \mathtt{OBT}\; x,\, id_\phi,\, \phi\\[1.5ex]
 
 \end{array}$%
@@ -323,7 +323,7 @@ In the edge case where $\mathtt{Z3}$ returns \texttt{unknown} (or times out), th
 
 \subsection{Correctness of Witness Extraction (\texttt{obtain})}
 
-\textbf{Theorem:} For any valid arithmetic expression $E = \mathtt{obtain}(\texttt{\&}x, \{ \phi \})$, its compilation is correct. Assuming the witness extraction succeeds ($\mathcal{W}(x, \phi, \sigma, s) = v \neq \bot$):
+\textbf{Theorem:} For any valid arithmetic expression $E = \mathtt{obtain}(\texttt{\&}x, \phi)$, its compilation is correct. Assuming the witness extraction succeeds ($\mathcal{W}(x, \phi, \sigma, s) = v \neq \bot$):
 \[
 \mathcal{A}(E, \sigma, s) = v
 \]
@@ -337,7 +337,7 @@ We evaluate the compilation function $\mathcal{CA}$ mapped to the \texttt{obtain
 \[
 \begin{aligned}
 \langle \mathcal{CA}(E) : c,\, e,\, \sigma,\, s,\, pc \rangle 
-&= \langle \mathcal{CA}(\mathtt{obtain}(\texttt{\&}x, \{ \phi \})) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
+&= \langle \mathcal{CA}(\mathtt{obtain}(\texttt{\&}x, \phi)) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
 &= \langle \mathtt{OBT}\; x,\, id_\phi,\, \phi : c,\, e,\, \sigma,\, s,\, pc \rangle && \text{(definition of $\mathcal{CA}$)} \\
 &\triangleright \langle c,\, v : e,\, \sigma,\, s,\, pc + 1 \rangle && \text{(operational semantics of \texttt{OBT})}
 \end{aligned}

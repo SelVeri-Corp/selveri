@@ -4,23 +4,23 @@
 
 function chooseDispatchPlan(centerStock: List[Int, 1], centerRegion: List[Int, 1], courierRegion: List[Int, 1], courierCapacity: List[Int, 1], requestQty: Int, targetRegion: Int) -> List[Int, 1] ::
     center : Int;
-    center := obtain(&center, {
+    center := obtain(&center,
         Exists center in [0...len(centerStock) - 1] .
             Exists courier in [0...len(courierCapacity) - 1] .
                 (centerStock[&center] >= requestQty) &&
                 (centerRegion[&center] = targetRegion) &&
                 (courierRegion[&courier] = targetRegion) &&
                 (courierCapacity[&courier] >= requestQty)
-    });
+    );
 
     courier : Int;
-    courier := obtain(&courier, {
+    courier := obtain(&courier,
         Exists courier in [0...len(courierCapacity) - 1] .
             (centerStock[center] >= requestQty) &&
             (centerRegion[center] = targetRegion) &&
             (courierRegion[&courier] = targetRegion) &&
             (courierCapacity[&courier] >= requestQty)
-    });
+    );
 
     { centerStock[center] >= requestQty };
     { centerRegion[center] = targetRegion };

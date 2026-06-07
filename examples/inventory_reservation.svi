@@ -20,10 +20,10 @@ requestQty : Int;
 requestQty := 2;
 
 skuToReserve : Int;
-skuToReserve := obtain(&sku, {
+skuToReserve := obtain(&sku,
     Exists sku in [0...len(stock) - 1] .
         stock[&sku] - reserved[&sku] - safetyStock[&sku] >= requestQty
-});
+);
 
 // The witness is not trusted blindly; it is verified against live state.
 { stock[skuToReserve] - reserved[skuToReserve] - safetyStock[skuToReserve] >= requestQty };

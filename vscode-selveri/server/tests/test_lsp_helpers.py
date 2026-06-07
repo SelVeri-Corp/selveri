@@ -67,7 +67,7 @@ def test_hover_current_keywords_and_declarations() -> None:
     assert "Universal quantifier" in _hover_text(unicode_source, 0, 2)
     assert "Existential quantifier" in _hover_text(unicode_source, 0, 19)
 
-    obtain_source = "x: Int;\nx := obtain(&w, { Exists w in Int . &w > 0 });\n"
+    obtain_source = "x: Int;\nx := obtain(&w, Exists w in Int . &w > 0);\n"
     assert "obtain" in _hover_text(obtain_source, 1, 6)
 
 
