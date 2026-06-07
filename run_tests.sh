@@ -39,9 +39,9 @@ for f in "$EXAMPLES_DIR"/*.svi; do
     total=$((total + 1))
 
     if [ "$name" = "test_io.svi" ]; then
-        output=$(echo -e "5\n3.14" | selveri "$f" 2>&1)
+        output=$(echo -e "5\n3.14" | selveri --debug "$f" 2>&1)
     else
-        output=$(selveri "$f" 2>&1)
+        output=$(selveri --debug "$f" 2>&1)
     fi
     exit_code=$?
 
@@ -69,7 +69,7 @@ for f in "$PASS_DIR"/*.svi; do
     name=$(basename "$f")
     total=$((total + 1))
 
-    output=$(selveri "$f" 2>&1)
+    output=$(selveri --debug "$f" 2>&1)
     exit_code=$?
 
     if [ $exit_code -eq 0 ]; then
@@ -100,7 +100,7 @@ for f in "$FAIL_DIR"/*.svi; do
     exit_code=$?
 
     if echo "$output" | grep -qE "VerificationError|IRRuntimeError"; then
-        spec=$(echo "$output" | grep -oP 'Specification #\K\d+' || echo "?")
+        spec=$(echo "$output" | grep -oP '[Ss]pecification #?\K\d+' | head -1 || echo "?")
         error_type=$(echo "$output" | grep -oP '(VerificationError|IRRuntimeError)' | head -1)
         echo -e "  ${GREEN}✓${RESET} ${name}  (${error_type}, spec #${spec})"
         passed=$((passed + 1))
@@ -182,7 +182,7 @@ for f in "$SELVERI_LP_PASS_DIR"/*.svi; do
     name=$(basename "$f")
     total=$((total + 1))
 
-    output=$(selveri "$f" 2>&1)
+    output=$(selveri --debug "$f" 2>&1)
     exit_code=$?
 
     if [ $exit_code -eq 0 ]; then
@@ -213,7 +213,7 @@ for f in "$SELVERI_LP_FAIL_DIR"/*.svi; do
     exit_code=$?
 
     if echo "$output" | grep -qE "VerificationError|IRRuntimeError|RuntimeError"; then
-        spec=$(echo "$output" | grep -oP 'Specification #\K\d+' || echo "?")
+        spec=$(echo "$output" | grep -oP '[Ss]pecification #?\K\d+' | head -1 || echo "?")
         error_type=$(echo "$output" | grep -oE '(VerificationError|IRRuntimeError|RuntimeError)' | head -1)
         if echo "$output" | grep -q "obtain failed"; then
             echo -e "  ${GREEN}✓${RESET} ${name}  (${error_type}, obtain unsat)"
