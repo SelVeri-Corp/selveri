@@ -1,0 +1,63 @@
+// EXPECTED OUTCOME: VerificationError (SV-V001).
+//
+// This is a realistic v1 dispatch handler: it reads live order constraints,
+// picks the fastest warehouse with enough stock, and only then checks policy.
+// That ordering looks fine in manual QA — until a tight risk cap exposes that
+// the witness search never enforced maxRisk or maxHours in the first place.
+//
+// Run (should fail verification, not crash):
+//   echo -e "3\n5\n3" | selveri examples/fulfillment_risk_oversight.svi
+//
+// Stdin values:
+//   requestQty = 3
+//   maxHours   = 5
+//   maxRisk    = 3
+//
+// Center 3 is fastest among stocked warehouses, but its risk score is 4.
+// The post-selection spec catches what the obtain witness omitted.
+
+function chooseFastestStockedCenter(stock: List[Int, 1], shipHours: List[Int, 1], risk: List[Int, 1], requestQty: Int, maxHours: Int, maxRisk: Int) -> Int ::
+    center : Int;
+    // Bug: only stock level and shipping speed are encoded in the witness.
+    // Deadline and risk caps are deferred to "later" checks below.
+    center := obtain(&c, {
+        Exists c in [0...len(stock) - 1] .
+            (stock[&c] >= requestQty) &&
+            (Forall other in [0...len(stock) - 1] .
+                (stock[&other] >= requestQty) =>
+                    (shipHours[&c] <= shipHours[&other]))
+    });
+
+    { (0 <= center) && (center < len(stock)) };
+    { stock[center] >= requestQty };
+    // These specs are where SelVeri stops the bad dispatch plan.
+    { shipHours[center] <= maxHours };
+    { risk[center] <= maxRisk };
+
+    return center;
+end
+
+stock : List[Int, 1, 4];
+stock := [0, 4, 10, 3];
+
+shipHours : List[Int, 1, 4];
+shipHours := [12, 5, 2, 1];
+
+risk : List[Int, 1, 4];
+risk := [20, 7, 50, 4];
+
+requestQty : Int;
+requestQty := read();
+
+maxHours : Int;
+maxHours := read();
+
+maxRisk : Int;
+maxRisk := read();
+
+call chooseFastestStockedCenter(stock, shipHours, risk, requestQty, maxHours, maxRisk);
+center : Int;
+center := retvar;
+
+stock[center] := stock[center] - requestQty;
+writeline(center);

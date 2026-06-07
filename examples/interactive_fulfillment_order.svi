@@ -1,20 +1,22 @@
-// Obtain as constraint-based selection.
-// Instead of hand-writing a search loop, the program asks SelVeri for a center
-// that satisfies the business constraints and is fastest among eligible centers.
+// Interactive fulfillment: order parameters come from stdin.
+// SelVeri verifies the chosen center against business rules even when
+// requestQty, maxHours, and maxRisk are not known at compile time.
+//
+// Input from stdin:
+//   3
+//   5
+//   10
+//
+// Or from the shell:
+//   echo -e "3\n5\n10" | selveri examples/interactive_fulfillment_order.svi
 
 function chooseFastestCenter(stock: List[Int, 1], shipHours: List[Int, 1], risk: List[Int, 1], requestQty: Int, maxHours: Int, maxRisk: Int) -> Int ::
     center : Int;
     center := obtain(&c, {
-        // Pick a fulfillment center index c such that:
         Exists c in [0...len(stock) - 1] .
-            // The center has enough inventory to cover the order.
             (stock[&c] >= requestQty) &&
-            // The center can ship within the customer's deadline.
             (shipHours[&c] <= maxHours) &&
-            // The center's fraud or operational risk is within policy.
             (risk[&c] <= maxRisk) &&
-            // Among every center that meets the rules above, c is tied for
-            // the shortest shipping time (fastest fulfillment wins).
             (Forall other in [0...len(stock) - 1] .
                 ((stock[&other] >= requestQty) &&
                  (shipHours[&other] <= maxHours) &&
@@ -40,18 +42,26 @@ risk : List[Int, 1, 4];
 risk := [20, 7, 50, 4];
 
 requestQty : Int;
-requestQty := 3;
+requestQty := read();
 
-call chooseFastestCenter(stock, shipHours, risk, requestQty, 5, 10);
+maxHours : Int;
+maxHours := read();
+
+maxRisk : Int;
+maxRisk := read();
+
+{ requestQty > 0 };
+{ maxHours > 0 };
+{ maxRisk >= 0 };
+
+call chooseFastestCenter(stock, shipHours, risk, requestQty, maxHours, maxRisk);
 center : Int;
 center := retvar;
 
-// Center 3 is the only eligible center that ships in one hour.
-{ center = 3 };
-
 stock[center] := stock[center] - requestQty;
-{ stock[center] = 0 };
+
+{ stock[center] >= 0 };
+{ Forall i in [0...len(stock) - 1] . stock[&i] >= 0 };
 
 writeline(center);
 writeline(stock);
-
