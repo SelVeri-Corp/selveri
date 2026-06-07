@@ -4,12 +4,12 @@
 
 set -uo pipefail
 
-PASS_DIR="tests/verifier_tests/pass_test"
-FAIL_DIR="tests/verifier_tests/fail_tests"
-SELVERI_LP_PASS_DIR="tests/selveri_lp_tests/pass_test"
-SELVERI_LP_FAIL_DIR="tests/selveri_lp_tests/fail_tests"
-DIAGNOSTICS_FAIL_DIR="tests/diagnostics/fail"
-EXAMPLES_DIR="tests"
+PASS_DIR="test/verifier_tests/pass_test"
+FAIL_DIR="test/verifier_tests/fail_tests"
+SELVERI_LP_PASS_DIR="test/selveri_lp_tests/pass_test"
+SELVERI_LP_FAIL_DIR="test/selveri_lp_tests/fail_tests"
+DIAGNOSTICS_FAIL_DIR="test/diagnostics/fail"
+EXAMPLES_DIR="test"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -38,7 +38,7 @@ for f in "$EXAMPLES_DIR"/*.svi; do
     name=$(basename "$f")
     total=$((total + 1))
 
-    if [ "$name" = "example_io.svi" ]; then
+    if [ "$name" = "test_io.svi" ]; then
         output=$(echo -e "5\n3.14" | selveri "$f" 2>&1)
     else
         output=$(selveri "$f" 2>&1)
