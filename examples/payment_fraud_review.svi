@@ -1,0 +1,47 @@
+// Payment fraud review stream.
+// FOL checks batch facts; pLTL checks that the live review history contains
+// evidence for every high-risk state that has occurred so far.
+
+amounts : List[Int, 1, 5];   // cents
+amounts := [1250, 8900, 450, 17600, 3200];
+
+risk : List[Int, 1, 5];      // 0..100
+risk := [12, 91, 8, 97, 31];
+
+reviewed : List[Int, 1, 5];  // 1 means a human reviewed the payment
+reviewed := [0, 1, 0, 1, 0];
+
+// Every transaction is non-negative.
+{ Forall i in [0...len(amounts) - 1] . amounts[&i] >= 0 };
+
+// Large or very risky transactions must have human review.
+{ Forall i in [0...len(amounts) - 1] .
+    ((amounts[&i] >= 5000) || (risk[&i] >= 90)) => (reviewed[&i] = 1)
+};
+
+// There is at least one real alert in this batch.
+alertIndex : Int;
+alertIndex := obtain(&i, {
+    Exists i in [0...len(amounts) - 1] .
+        (amounts[&i] >= 5000) && (reviewed[&i] = 1)
+});
+{ amounts[alertIndex] >= 5000 };
+{ reviewed[alertIndex] = 1 };
+
+// Live stream monitor: if high risk has ever appeared, an analyst review must
+// also have appeared in the history.
+currentRisk : Int;
+currentRisk := 12;
+manualReview : Int;
+manualReview := 0;
+
+currentRisk := 91;
+manualReview := 1;
+{ (Once currentRisk >= 90) => (Once manualReview = 1) };
+
+currentRisk := 25;
+manualReview := 0;
+{ (Once currentRisk >= 90) => (Once manualReview = 1) };
+
+writeline(alertIndex);
+

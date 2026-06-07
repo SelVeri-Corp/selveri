@@ -1,0 +1,48 @@
+// Parentheses balance checker.
+// Token encoding: 1 = LPAREN, 2 = RPAREN, 0 = other token.
+
+function checkParentheses(tokens: List[Int, 1]) -> Int ::
+    i : Int;
+    i := 0;
+    balance : Int;
+    balance := 0;
+    valid : Int;
+    valid := 1;
+
+    while i < len(tokens) do
+        if tokens[i] = 1 then
+            balance := balance + 1;
+        fi
+
+        if tokens[i] = 2 then
+            balance := balance - 1;
+        fi
+
+        if balance < 0 then
+            valid := 0;
+        fi
+
+        { (valid = 1) => (balance >= 0) };
+        i := i + 1;
+    od
+
+    if balance > 0 then
+        valid := 0;
+    fi
+
+    { Historically ((balance >= 0) || (valid = 0)) };
+    { (valid = 1) => (balance = 0) };
+
+    return valid;
+end
+
+tokens : List[Int, 1, 8];
+tokens := [1, 0, 1, 2, 0, 2, 0, 0];
+
+call checkParentheses(tokens);
+valid : Int;
+valid := retvar;
+{ valid = 1 };
+
+writeline(valid);
+

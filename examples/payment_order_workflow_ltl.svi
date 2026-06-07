@@ -1,0 +1,64 @@
+// Payment/order workflow.
+// Event encoding: 1 = pay, 2 = ship, 3 = cancel, 4 = refund.
+
+function processOrder(events: List[Int, 1]) -> List[Int, 1] ::
+    paid : Int;
+    paid := 0;
+    shipped : Int;
+    shipped := 0;
+    cancelled : Int;
+    cancelled := 0;
+    refunded : Int;
+    refunded := 0;
+    i : Int;
+    i := 0;
+
+    { orderRules :=
+        (Always ((shipped = 1) => (paid = 1))) &&
+        (Always (((cancelled = 1) && (paid = 1)) => (Eventually refunded = 1))) &&
+        (Always ((refunded = 1) => (shipped = 0)))
+    };
+
+    while i < len(events) do
+        if events[i] = 1 then
+            paid := 1;
+        fi
+
+        if (events[i] = 2) and (paid = 1) and (cancelled = 0) and (refunded = 0) then
+            shipped := 1;
+        fi
+
+        if events[i] = 3 then
+            cancelled := 1;
+        fi
+
+        if (events[i] = 4) and (paid = 1) and (cancelled = 1) then
+            refunded := 1;
+        fi
+
+        i := i + 1;
+    od
+
+    { end orderRules };
+
+    state : List[Int, 1, 4];
+    state[0] := paid;
+    state[1] := shipped;
+    state[2] := cancelled;
+    state[3] := refunded;
+    return state;
+end
+
+events : List[Int, 1, 3];
+events := [1, 3, 4];
+
+state : List[Int, 1, 4];
+call processOrder(events);
+state := retvar;
+
+{ state[0] = 1 };
+{ state[1] = 0 };
+{ state[2] = 1 };
+{ state[3] = 1 };
+
+writeline(state);

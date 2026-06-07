@@ -1,0 +1,53 @@
+// Binary search correctness over a sorted list.
+
+function binarySearch(arr: List[Int, 1], target: Int) -> Int ::
+    { Forall i in [0...len(arr) - 2] . arr[&i] <= arr[&i + 1] };
+
+    lo : Int;
+    lo := 0;
+    hi : Int;
+    hi := len(arr) - 1;
+    found : Int;
+    found := 0;
+    pos : Int;
+    pos := -1;
+
+    while (lo <= hi) and (found = 0) do
+        mid : Int;
+        mid := (lo + hi) / 2;
+        { (0 <= mid) && (mid < len(arr)) };
+
+        if arr[mid] = target then
+            found := 1;
+            pos := mid;
+        else
+            if arr[mid] < target then
+                lo := mid + 1;
+            else
+                hi := mid - 1;
+            fi
+        fi
+    od
+
+    { (found = 1) => ((0 <= pos) && (pos < len(arr)) && (arr[pos] = target)) };
+    { (found = 0) => (Forall i in [0...len(arr) - 1] . !(arr[&i] = target)) };
+
+    return pos;
+end
+
+arr : List[Int, 1, 7];
+arr := [1, 3, 5, 7, 9, 11, 13];
+
+call binarySearch(arr, 7);
+hit : Int;
+hit := retvar;
+{ hit = 3 };
+
+call binarySearch(arr, 6);
+miss : Int;
+miss := retvar;
+{ miss = -1 };
+
+writeline(hit);
+writeline(miss);
+

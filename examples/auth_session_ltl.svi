@@ -1,0 +1,56 @@
+// Authentication/session state machine.
+// Event encoding: 1 = login success, 2 = login fail, 3 = logout.
+
+function replaySession(events: List[Int, 1]) -> Int ::
+    loggedIn : Int;
+    loggedIn := 0;
+    locked : Int;
+    locked := 0;
+    failed : Int;
+    failed := 0;
+    i : Int;
+    i := 0;
+
+    { authSafety :=
+        (Always ((locked = 1) => (loggedIn = 0))) &&
+        (Always ((loggedIn = 1) => (locked = 0))) &&
+        (Always ((failed >= 3) => (Eventually locked = 1)))
+    };
+
+    while i < len(events) do
+        if (events[i] = 1) and (locked = 0) then
+            loggedIn := 1;
+            failed := 0;
+        fi
+
+        if events[i] = 2 then
+            failed := failed + 1;
+        fi
+
+        if failed >= 3 then
+            locked := 1;
+            loggedIn := 0;
+        fi
+
+        if events[i] = 3 then
+            loggedIn := 0;
+        fi
+
+        { (locked = 1) => (loggedIn = 0) };
+        i := i + 1;
+    od
+
+    { end authSafety };
+    return locked;
+end
+
+events : List[Int, 1, 5];
+events := [2, 2, 2, 1, 3];
+
+call replaySession(events);
+locked : Int;
+locked := retvar;
+
+{ locked = 1 };
+writeline(locked);
+

@@ -1,0 +1,34 @@
+// Order fulfillment workflow.
+// A past condition, "payment has been captured", activates a future guarantee:
+// the order must be packed, shipped, and not cancelled before the workflow ends.
+
+paid : Int;
+paid := 0;
+packed : Int;
+packed := 0;
+shipped : Int;
+shipped := 0;
+cancelled : Int;
+cancelled := 0;
+
+{ start fulfillment };
+
+paid := 1;
+
+{ fulfillment :=
+    (Once paid = 1) =>
+    ((packed = 0 Until packed = 1) && (Eventually shipped = 1) && (Always cancelled = 0))
+};
+
+packed := 1;
+shipped := 1;
+
+{ end fulfillment };
+
+{ paid = 1 };
+{ packed = 1 };
+{ shipped = 1 };
+{ cancelled = 0 };
+
+writeline(shipped);
+

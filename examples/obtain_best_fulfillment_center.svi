@@ -1,0 +1,51 @@
+// Obtain as constraint-based selection.
+// Instead of hand-writing a search loop, the program asks SelVeri for a center
+// that satisfies the business constraints and is fastest among eligible centers.
+
+function chooseFastestCenter(stock: List[Int, 1], shipHours: List[Int, 1], risk: List[Int, 1], requestQty: Int, maxHours: Int, maxRisk: Int) -> Int ::
+    center : Int;
+    center := obtain(&c, {
+        Exists c in [0...len(stock) - 1] .
+            (stock[&c] >= requestQty) &&
+            (shipHours[&c] <= maxHours) &&
+            (risk[&c] <= maxRisk) &&
+            (Forall other in [0...len(stock) - 1] .
+                ((stock[&other] >= requestQty) &&
+                 (shipHours[&other] <= maxHours) &&
+                 (risk[&other] <= maxRisk)) =>
+                    (shipHours[&c] <= shipHours[&other]))
+    });
+
+    { (0 <= center) && (center < len(stock)) };
+    { stock[center] >= requestQty };
+    { shipHours[center] <= maxHours };
+    { risk[center] <= maxRisk };
+
+    return center;
+end
+
+stock : List[Int, 1, 4];
+stock := [0, 4, 10, 3];
+
+shipHours : List[Int, 1, 4];
+shipHours := [12, 5, 2, 1];
+
+risk : List[Int, 1, 4];
+risk := [20, 7, 50, 4];
+
+requestQty : Int;
+requestQty := 3;
+
+call chooseFastestCenter(stock, shipHours, risk, requestQty, 5, 10);
+center : Int;
+center := retvar;
+
+// Center 3 is the only eligible center that ships in one hour.
+{ center = 3 };
+
+stock[center] := stock[center] - requestQty;
+{ stock[center] = 0 };
+
+writeline(center);
+writeline(stock);
+

@@ -1,0 +1,31 @@
+// Compiler optimization correctness for "x * 2" -> "x + x".
+
+function rewriteMulByTwo(x: Int, rewriteEnabled: Int) -> Int ::
+    before : Int;
+    before := x * 2;
+
+    after : Int;
+    if rewriteEnabled = 1 then
+        after := x + x;
+    else
+        after := x * 2;
+    fi
+
+    { after = before };
+    return after;
+end
+
+{ Forall input in [-3...3] . (&input + &input) = (&input * 2) };
+
+call rewriteMulByTwo(21, 1);
+optimized : Int;
+optimized := retvar;
+{ optimized = 42 };
+
+call rewriteMulByTwo(21, 0);
+baseline : Int;
+baseline := retvar;
+{ baseline = optimized };
+
+writeline(optimized);
+

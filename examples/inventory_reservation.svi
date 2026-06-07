@@ -1,0 +1,40 @@
+// Inventory reservation without overselling.
+// The useful part is that the SKU choice comes from a logical witness, then
+// the same FOL invariant checks that the mutation was safe.
+
+stock : List[Int, 1, 4];
+stock := [18, 3, 11, 0];
+
+reserved : List[Int, 1, 4];
+reserved := [10, 1, 7, 0];
+
+safetyStock : List[Int, 1, 4];
+safetyStock := [2, 1, 2, 0];
+
+// Current warehouse state: no reservation eats into safety stock.
+{ Forall sku in [0...len(stock) - 1] .
+    reserved[&sku] + safetyStock[&sku] <= stock[&sku]
+};
+
+requestQty : Int;
+requestQty := 2;
+
+skuToReserve : Int;
+skuToReserve := obtain(&sku, {
+    Exists sku in [0...len(stock) - 1] .
+        stock[&sku] - reserved[&sku] - safetyStock[&sku] >= requestQty
+});
+
+// The witness is not trusted blindly; it is verified against live state.
+{ stock[skuToReserve] - reserved[skuToReserve] - safetyStock[skuToReserve] >= requestQty };
+
+reserved[skuToReserve] := reserved[skuToReserve] + requestQty;
+
+// The invariant still holds after the reservation.
+{ Forall sku in [0...len(stock) - 1] .
+    reserved[&sku] + safetyStock[&sku] <= stock[&sku]
+};
+
+writeline(skuToReserve);
+writeline(reserved);
+

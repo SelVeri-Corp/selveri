@@ -1,0 +1,50 @@
+// Min-heap insertion.
+
+function heapInsert(heap: List[Int, 1], x: Int) -> List[Int, 1] ::
+    { Forall c in [1...len(heap) - 1] . heap[(&c - 1) / 2] <= heap[&c] };
+
+    out : List[Int, 1, len(heap) + 1];
+    i : Int;
+    i := 0;
+    while i < len(heap) do
+        out[i] := heap[i];
+        i := i + 1;
+    od
+
+    out[len(heap)] := x;
+
+    idx : Int;
+    idx := len(out) - 1;
+    while idx > 0 do
+        parent : Int;
+        parent := (idx - 1) / 2;
+
+        if out[parent] <= out[idx] then
+            idx := 0;
+        else
+            tmp : Int;
+            tmp := out[parent];
+            out[parent] := out[idx];
+            out[idx] := tmp;
+            idx := parent;
+        fi
+    od
+
+    { Forall c in [1...len(out) - 1] . out[(&c - 1) / 2] <= out[&c] };
+    { Exists where in [0...len(out) - 1] . out[&where] = x };
+
+    return out;
+end
+
+heap : List[Int, 1, 4];
+heap := [2, 5, 8, 9];
+
+updated : List[Int, 1, 5];
+call heapInsert(heap, 1);
+updated := retvar;
+
+{ updated[0] = 1 };
+{ Forall c in [1...len(updated) - 1] . updated[(&c - 1) / 2] <= updated[&c] };
+
+writeline(updated);
+

@@ -1,0 +1,48 @@
+// Shortest-path relaxation safety for one Bellman-Ford pass.
+
+function relaxOnce(dist: List[Int, 1], edgeFrom: List[Int, 1], edgeTo: List[Int, 1], weight: List[Int, 1]) -> List[Int, 1] ::
+    e : Int;
+    e := 0;
+
+    while e < len(edgeFrom) do
+        u : Int;
+        u := edgeFrom[e];
+        v : Int;
+        v := edgeTo[e];
+        previous : Int;
+        previous := dist[v];
+
+        if dist[u] + weight[e] < dist[v] then
+            dist[v] := dist[u] + weight[e];
+        fi
+
+        { dist[v] <= previous };
+        e := e + 1;
+    od
+
+    { Forall edge in [0...len(edgeFrom) - 1] .
+        dist[edgeTo[&edge]] <= dist[edgeFrom[&edge]] + weight[&edge]
+    };
+
+    return dist;
+end
+
+dist : List[Int, 1, 4];
+dist := [0, 100, 100, 100];
+edgeFrom : List[Int, 1, 4];
+edgeFrom := [0, 0, 1, 2];
+edgeTo : List[Int, 1, 4];
+edgeTo := [1, 2, 3, 3];
+weight : List[Int, 1, 4];
+weight := [4, 1, 2, 7];
+
+relaxed : List[Int, 1, 4];
+call relaxOnce(dist, edgeFrom, edgeTo, weight);
+relaxed := retvar;
+
+{ relaxed[1] = 4 };
+{ relaxed[2] = 1 };
+{ relaxed[3] = 6 };
+
+writeline(relaxed);
+

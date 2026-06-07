@@ -1,0 +1,62 @@
+// Obtain as witness extraction for a coordinated plan.
+// The first obtain proves that some warehouse/courier pair exists. The second
+// obtain extracts the courier compatible with the chosen warehouse.
+
+function chooseDispatchPlan(centerStock: List[Int, 1], centerRegion: List[Int, 1], courierRegion: List[Int, 1], courierCapacity: List[Int, 1], requestQty: Int, targetRegion: Int) -> List[Int, 1] ::
+    center : Int;
+    center := obtain(&center, {
+        Exists center in [0...len(centerStock) - 1] .
+            Exists courier in [0...len(courierCapacity) - 1] .
+                (centerStock[&center] >= requestQty) &&
+                (centerRegion[&center] = targetRegion) &&
+                (courierRegion[&courier] = targetRegion) &&
+                (courierCapacity[&courier] >= requestQty)
+    });
+
+    courier : Int;
+    courier := obtain(&courier, {
+        Exists courier in [0...len(courierCapacity) - 1] .
+            (centerStock[center] >= requestQty) &&
+            (centerRegion[center] = targetRegion) &&
+            (courierRegion[&courier] = targetRegion) &&
+            (courierCapacity[&courier] >= requestQty)
+    });
+
+    { centerStock[center] >= requestQty };
+    { centerRegion[center] = targetRegion };
+    { courierRegion[courier] = targetRegion };
+    { courierCapacity[courier] >= requestQty };
+
+    plan : List[Int, 1, 2];
+    plan[0] := center;
+    plan[1] := courier;
+    return plan;
+end
+
+centerStock : List[Int, 1, 3];
+centerStock := [5, 1, 8];
+
+centerRegion : List[Int, 1, 3];
+centerRegion := [1, 2, 2];
+
+courierRegion : List[Int, 1, 3];
+courierRegion := [2, 1, 2];
+
+courierCapacity : List[Int, 1, 3];
+courierCapacity := [2, 4, 10];
+
+plan : List[Int, 1, 2];
+call chooseDispatchPlan(centerStock, centerRegion, courierRegion, courierCapacity, 6, 2);
+plan := retvar;
+
+{ plan[0] = 2 };
+{ plan[1] = 2 };
+
+centerStock[plan[0]] := centerStock[plan[0]] - 6;
+courierCapacity[plan[1]] := courierCapacity[plan[1]] - 6;
+
+{ centerStock[plan[0]] = 2 };
+{ courierCapacity[plan[1]] = 4 };
+
+writeline(plan);
+

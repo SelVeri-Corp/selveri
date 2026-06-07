@@ -1,0 +1,39 @@
+// Hospital triage monitor.
+// Critical vitals in the past trigger a bounded future obligation: the patient
+// must be seen and stabilized before this triage window closes.
+
+heartRate : Int;
+heartRate := 82;
+oxygen : Int;
+oxygen := 98;
+seenByDoctor : Int;
+seenByDoctor := 0;
+stable : Int;
+stable := 1;
+discharged : Int;
+discharged := 0;
+
+{ start triage };
+
+heartRate := 132;
+oxygen := 90;
+stable := 0;
+
+{ triage :=
+    (Once ((heartRate >= 130) || (oxygen < 92))) =>
+    ((Eventually seenByDoctor = 1) && (Eventually stable = 1) && (discharged = 0 Until stable = 1))
+};
+
+seenByDoctor := 1;
+oxygen := 96;
+heartRate := 94;
+stable := 1;
+
+{ end triage };
+
+{ seenByDoctor = 1 };
+{ stable = 1 };
+{ discharged = 0 };
+
+writeline(heartRate);
+

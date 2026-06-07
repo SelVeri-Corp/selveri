@@ -1,0 +1,77 @@
+// Quicksort partition correctness.
+// The function returns the partitioned list with the pivot index appended.
+
+function appendIndex(lst: List[Int, 1], idx: Int) -> List[Int, 1] ::
+    out : List[Int, 1, len(lst) + 1];
+    i : Int;
+    i := 0;
+    while i < len(lst) do
+        out[i] := lst[i];
+        i := i + 1;
+    od
+    out[len(lst)] := idx;
+    return out;
+end
+
+function partition(lst: List[Int, 1], low: Int, high: Int) -> List[Int, 1] ::
+    pivot : Int;
+    pivot := lst[high];
+
+    i : Int;
+    i := low - 1;
+
+    j : Int;
+    j := low;
+
+    while j < high do
+        if lst[j] <= pivot then
+            i := i + 1;
+
+            tmp : Int;
+            tmp := lst[i];
+            lst[i] := lst[j];
+            lst[j] := tmp;
+        fi
+        j := j + 1;
+    od
+
+    tmp : Int;
+    tmp := lst[i + 1];
+    lst[i + 1] := lst[high];
+    lst[high] := tmp;
+
+    p : Int;
+    p := i + 1;
+
+    { (low <= p) && (p <= high) };
+    { Forall k in [low...p - 1] . lst[&k] <= lst[p] };
+    { Forall k in [p + 1...high] . lst[&k] >= lst[p] };
+
+    call appendIndex(lst, p);
+    return retvar;
+end
+
+values : List[Int, 1, 5];
+values := [4, 2, 5, 1, 3];
+
+encoded : List[Int, 1, 6];
+call partition(values, 0, 4);
+encoded := retvar;
+
+partitioned : List[Int, 1, 5];
+partitioned[0] := encoded[0];
+partitioned[1] := encoded[1];
+partitioned[2] := encoded[2];
+partitioned[3] := encoded[3];
+partitioned[4] := encoded[4];
+
+pivotIndex : Int;
+pivotIndex := encoded[5];
+
+{ pivotIndex = 2 };
+{ partitioned[pivotIndex] = 3 };
+{ Forall k in [0...pivotIndex - 1] . partitioned[&k] <= partitioned[pivotIndex] };
+{ Forall k in [pivotIndex + 1...len(partitioned) - 1] . partitioned[&k] >= partitioned[pivotIndex] };
+
+writeline(partitioned);
+writeline(pivotIndex);

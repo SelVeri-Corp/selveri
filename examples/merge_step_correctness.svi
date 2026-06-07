@@ -1,0 +1,59 @@
+// Merge step in merge sort.
+
+function mergeSorted(left: List[Int, 1], right: List[Int, 1]) -> List[Int, 1] ::
+    { Forall i in [0...len(left) - 2] . left[&i] <= left[&i + 1] };
+    { Forall i in [0...len(right) - 2] . right[&i] <= right[&i + 1] };
+
+    res : List[Int, 1, len(left) + len(right)];
+    i : Int;
+    i := 0;
+    j : Int;
+    j := 0;
+    k : Int;
+    k := 0;
+
+    while (i < len(left)) and (j < len(right)) do
+        if left[i] <= right[j] then
+            res[k] := left[i];
+            i := i + 1;
+        else
+            res[k] := right[j];
+            j := j + 1;
+        fi
+        k := k + 1;
+        { k <= len(res) };
+    od
+
+    while i < len(left) do
+        res[k] := left[i];
+        i := i + 1;
+        k := k + 1;
+    od
+
+    while j < len(right) do
+        res[k] := right[j];
+        j := j + 1;
+        k := k + 1;
+    od
+
+    { k = len(res) };
+    { Forall t in [0...len(res) - 2] . res[&t] <= res[&t + 1] };
+
+    return res;
+end
+
+left : List[Int, 1, 4];
+left := [1, 4, 8, 10];
+right : List[Int, 1, 4];
+right := [2, 3, 9, 12];
+
+merged : List[Int, 1, 8];
+call mergeSorted(left, right);
+merged := retvar;
+
+{ Forall t in [0...len(merged) - 2] . merged[&t] <= merged[&t + 1] };
+{ merged[0] = 1 };
+{ merged[7] = 12 };
+
+writeline(merged);
+

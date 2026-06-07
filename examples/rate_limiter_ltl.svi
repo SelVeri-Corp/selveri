@@ -1,0 +1,54 @@
+// Token bucket rate limiter.
+// requests[i] = 1 means an incoming request, refills[i] = 1 means a refill tick.
+
+function runTokenBucket(requests: List[Int, 1], refills: List[Int, 1]) -> Int ::
+    capacity : Int;
+    capacity := 3;
+    refillAmount : Int;
+    refillAmount := 2;
+
+    tokens : Int;
+    tokens := capacity;
+    allowed : Int;
+    allowed := 0;
+    i : Int;
+    i := 0;
+
+    { bucketSafety := Always ((0 <= tokens) && (tokens <= capacity)) };
+
+    while i < len(requests) do
+        if refills[i] = 1 then
+            tokens := tokens + refillAmount;
+            if tokens > capacity then
+                tokens := capacity;
+            fi
+        fi
+
+        if (requests[i] = 1) and (tokens > 0) then
+            tokens := tokens - 1;
+            allowed := allowed + 1;
+        fi
+
+        { (0 <= tokens) && (tokens <= capacity) };
+        { allowed <= i + 1 };
+        i := i + 1;
+    od
+
+    { end bucketSafety };
+    { allowed <= len(requests) };
+
+    return allowed;
+end
+
+requests : List[Int, 1, 6];
+requests := [1, 1, 1, 1, 1, 1];
+refills : List[Int, 1, 6];
+refills := [0, 0, 0, 1, 0, 1];
+
+call runTokenBucket(requests, refills);
+allowed : Int;
+allowed := retvar;
+
+{ allowed = 6 };
+writeline(allowed);
+
