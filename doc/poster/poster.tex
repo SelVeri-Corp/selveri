@@ -11,6 +11,7 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usepackage[most]{tcolorbox}
+\usepackage{qrcode}
 \usetikzlibrary{arrows.meta,positioning}
 
 \usetheme{default}
@@ -115,7 +116,13 @@
   {\usebeamerfont{author}\color{white}\insertauthor\par}
  \end{minipage}%
 \begin{minipage}[c]{0.15\textwidth}
-  \hfill
+  \centering
+  \begin{mathbox}[width=4.8cm, nobeforeafter, halign=center, boxsep=0pt, left=0.3cm, right=0.3cm, top=0.3cm, bottom=0.3cm]
+    \color{posterblue}\qrcode[height=4.0cm]{https://github.com/SelVeri-Corp/selveri}
+  \end{mathbox}
+  
+  \vspace{0.2cm}
+  {\fontsize{15}{19}\selectfont\color{posterlight} Scan the QR code to checkout\\[0.05cm]SelVeri GitHub repository!\par}
 \end{minipage}
 \end{tcolorbox}
 
@@ -290,14 +297,16 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \textbf{SelVeri program} & $\Longrightarrow$ & \textbf{SelVerIR program} \\
 \begin{tabular}{l}
 \texttt{x : Int;} \\
-\texttt{x := 3 + 4;} \\
+\texttt{x := 7 + 9;} \\
+\texttt{\{ }$\exists y \in \mathbb{Z} . x =$\texttt{ \&y * \&y \};} \\
 \texttt{write(x);}
 \end{tabular}
 &
 &
 \begin{tabular}{l}
 \texttt{DECL INT x} \\
-\texttt{PUSH 3 : PUSH 4 : ADD : STORE x} \\
+\texttt{PUSH 9 : PUSH 7 : ADD : STORE x} \\
+\texttt{VERI '}$\exists y \in \mathbb{Z} . x =$\texttt{ \&y * \&y'} \\
 \texttt{LOAD x : WRITE}
 \end{tabular}
 \end{tabular}
@@ -319,7 +328,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{mathbox}[left=0.35cm,right=0.35cm,top=0.18cm,bottom=0.18cm]
 \begin{center}
 \begin{tabular}{l}
-\texttt{if \{ Historically y >= x + z => b != 0 \} then} \\
+\texttt{if \{ Historically ((y >= x + z) => (b != 0)) \} then} \\
 \texttt{\ \ b := 1;} \\
 \texttt{else} \\
 \texttt{\ \ b := 0;} \\
@@ -537,16 +546,18 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 
 \begin{column}{0.245\textwidth}
 
-\begin{posterbox}[height=18.6cm,compactboxtitle]{Future Work}
+\begin{posterbox}[height=25.1cm,compactboxtitle]{Future Work}
 {\posterbodyfont
 \begin{itemize}
   \item \textbf{Better user feedback:} Counter-example generation for failed specifications, failure recovery during parsing, and more informative error messages for undefined behavior.
 
-  \item \textbf{Faster checks:} Dependency-aware LTL verification and definite accept state detection for DFAs, more optimized (possibly incremental) SMT queries, more efficient encoding of runtime configurations, and multi-threading for Verification Engine.
+  \item \textbf{Optimization:} More \textbf{optimized abstract machine} (possibly written in a faster language), dependency-aware LTL verification and definite accept state detection for DFAs, more optimized (possibly incremental) SMT queries, more efficient encoding of runtime configurations, and multi-threading for Verification Engine.
 
   \item \textbf{Language features:} More basic types (such as \texttt{String}), new dependent types (such as \texttt{Pair<t1,t2>}), and anything else a user can expect from a modern programming language.
 
-  \item \textbf{Idiomatic formalization:} SelVeri's formalization, although strong, has been done with pen and paper. A more rigorous mechanized formalization in a proof assistant such as Lean or Isabelle would be a valuable future contribution. 
+  \item \textbf{Idiomatic formalization:} SelVeri's formalization, although strong, has been done with pen and paper. A more rigorous mechanized formalization in a \textbf{proof assistant} such as Lean or Isabelle would be a valuable future contribution. 
+
+  \item \textbf{Further extending SelVeri LP:} Logic programming extension to SelVeri language can be extended even further, for example by adding \textbf{when-triggers} which activates at the moment when a given logical specification becomes true.
 \end{itemize}
 }
 \end{posterbox}
@@ -569,7 +580,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 
 \vspace{0.25cm}
 
-\begin{posterbox}[height=30.41cm,compactboxtitle]{References}
+\begin{posterbox}[height=23.91cm,compactboxtitle]{References}
 {\posterbodyfont
 \begin{enumerate}
   \setlength{\itemsep}{0.03cm}
