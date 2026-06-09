@@ -261,7 +261,7 @@ s      & scope, mapping variables to declared types \\
 \[
 \begin{aligned}
 \mathcal{C}&:\mathbf{Code}_{\text{SelVeri}}\to\mathbf{Code}_{\text{IR}},&
-\mathcal{CA}&:\mathbf{AExp}\to\mathbf{Code}_{\text{IR}},\\
+\mathcal{CA}&:\mathbf{AExp}\to\mathbf{Code}_{\text{IR}},&
 \mathcal{CB}&:\mathbf{BExp}\to\mathbf{Code}_{\text{IR}}
 \end{aligned}
 \]
@@ -298,7 +298,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{tabular}{l}
 \texttt{x : Int;} \\
 \texttt{x := 7 + 9;} \\
-\texttt{\{ }$\exists y \in \mathbb{Z} . x =$\texttt{ \&y * \&y \};} \\
+\texttt{\{ }$\exists \mathtt{y} \in \mathbb{Z}$\texttt{. x = \&y * \&y \};} \\
 \texttt{write(x);}
 \end{tabular}
 &
@@ -306,7 +306,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{tabular}{l}
 \texttt{DECL INT x} \\
 \texttt{PUSH 9 : PUSH 7 : ADD : STORE x} \\
-\texttt{VERI '}$\exists y \in \mathbb{Z} . x =$\texttt{ \&y * \&y'} \\
+\texttt{VERI '}$\exists \texttt{y} \in \mathbb{Z}$\texttt{. x = \&y * \&y'} \\
 \texttt{LOAD x : WRITE}
 \end{tabular}
 \end{tabular}
@@ -344,7 +344,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{mathbox}[left=0.35cm,right=0.35cm,top=0.18cm,bottom=0.18cm]
 \begin{center}
 \begin{tabular}{l}
-\texttt{x := obtain(\&x,} $\exists$ \texttt{y} $\in$ \texttt{Int.} \&y = n*n*n\texttt{)} \\
+\texttt{x := obtain(\&x,} $\exists$ \texttt{y} $\in$ \texttt{Int. \&y = n*n*n)} \\
 \end{tabular}
 \end{center}
 \end{mathbox}
@@ -453,7 +453,7 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{tabular}{@{}m{0.27\linewidth}@{\hspace{0.35cm}}m{0.06\linewidth}@{\hspace{0.35cm}}m{0.58\linewidth}@{}}
 \centering
 {\posterdensefont
-\texttt{Once(Historically p}\\
+\texttt{Once(Historically(p)}\\
 \texttt{\&\& (q Since r))}
 }
 &
@@ -482,8 +482,8 @@ $L_h:\mathcal{CB}(b):\mathtt{JZ}\ L_o:\mathcal{C}(S):\mathtt{GOTO}\ L_h:L_o$
 \begin{tabular}{@{}m{0.31\linewidth}@{\hspace{0.35cm}}m{0.06\linewidth}@{\hspace{0.35cm}}m{0.55\linewidth}@{}}
 \centering
 {\posterdensefont
-\texttt{Eventually((Always(p)}\\
-\texttt{\&\& (q Until r)))}
+\texttt{Eventually(Always(p)}\\
+\texttt{\&\& (q Until r))}
 }
 &
 \centering{\posterdensefont $\Rightarrow$}
