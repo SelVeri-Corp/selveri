@@ -152,7 +152,7 @@ cd vscode-selveri
 npm install
 npm run compile
 npx vsce package
-code --install-extension selveri-0.9.4.vsix
+code --install-extension selveri-1.0.0.vsix
 ```
 
 ## Development

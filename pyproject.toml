@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "selveri"
-version = "0.9.4"
+version = "1.0.0"
 authors = [
     { name = "Yağız Kaan Aydoğdu", email = "y.kaan.aydogdu@gmail.com" },
     { name = "Yusuf Demir", email = "yusufdemir12610@gmail.com" },
