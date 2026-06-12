@@ -6,6 +6,7 @@
 
 % Set page size and margins
 % Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
 
 % Useful packages
 \usepackage{amsmath}
@@ -16,8 +17,10 @@
 
 \setlength{\parskip}{\smallskipamount}
 \setlength{\parindent}{0pt}
+% Allow extra stretch as a last resort to avoid lines spilling into the margin
+\setlength{\emergencystretch}{2em}
 
-\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v0.9.1}
+\title{SelVeri: Self-Verifying Programming Language \\ High Level Language Syntax and Semantics Document \\ v1.0.0}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -233,16 +236,18 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 &::=&
 \langle \mathit{SpecTemp} \rangle\;\mathtt{Since}\;\langle \mathit{SpecUnary} \rangle
 \;\mid\;
-\langle \mathit{SpecTemp} \rangle\;\mathtt{Until}\;\langle \mathit{SpecUnary} \rangle
-\;\mid\;
+\langle \mathit{SpecTemp} \rangle\;\mathtt{Until}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
+&&
+\mid\;
 \langle \mathit{SpecUnary} \rangle \\[4pt]
 
 \langle \mathit{SpecUnary} \rangle
 &::=&
 \mathtt{!}\;\langle \mathit{SpecUnary} \rangle
 \;\mid\;
-\mathtt{Previously}\;\langle \mathit{SpecUnary} \rangle
-\;\mid\;
+\mathtt{Previously}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
+&&
+\mid\;
 \mathtt{Once}\;\langle \mathit{SpecUnary} \rangle
 \;\mid\;
 \mathtt{Historically}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
@@ -255,8 +260,9 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 \mathtt{Always}\;\langle \mathit{SpecUnary} \rangle \\[2pt]
 &&
 \mid\;
-\mathtt{Forall}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle
-\;\mid\;
+\mathtt{Forall}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle \\[2pt]
+&&
+\mid\;
 \mathtt{Exists}\;\langle \mathit{Ident} \rangle\; \mathtt{:}\; \langle \mathit{Domain} \rangle\;\texttt{.}\;\langle \mathit{Spec} \rangle \\[2pt]
 &&
 \mid\;
@@ -268,26 +274,28 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 &::=&
 \mathtt{[}\; \langle \mathit{IntLit} \rangle \; \mathtt{...}\; \langle \mathit{IntLit} \rangle \; \mathtt{)}
 \;\mid\;
-\mathtt{[}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{]}
-\;\mid\;
-\mathtt{(}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{)} \\[2pt]
-&&
-\mathtt{[}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{)}
-\;\mid\;
-\mathtt{(}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{]} \\[2pt]
+\mathtt{[}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{]} \\[2pt]
 &&
 \mid\;
+\mathtt{(}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{)}
+\;\mid\;
+\mathtt{[}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{)} \\[2pt]
+&&
+\mid\;
+\mathtt{(}\; \langle \mathit{RealLit} \rangle \; \mathtt{,}\; \langle \mathit{RealLit} \rangle \; \mathtt{]}
+\;\mid\;
 \langle \mathit{Ident} \rangle
 \;\mid\;
-\langle \mathit{BasicType} \rangle
-\;\mid\;
+\langle \mathit{BasicType} \rangle \\[2pt]
+&&
+\mid\;
 \mathtt{Var[} \; \langle \mathit{BasicType} \rangle \; \mathtt{]}
 \;\mid\;
 \langle \mathit{ListLit} \rangle \\[4pt]
 \end{array}
 \]
 
-\footnotetext{This approach might lead to the generation of broken IR code as a non-valid specification is accepted by the parser. However, in the final design, IR generation is planned to be in memory (i.e. no IR code file to be generated). Thus, in the final implementation, after the generation of IR code of the input program, all specifications will be parsed in the memory with position information before the beginning of execution. This way, a compiler error can still be thrown for invalid specification statements.}
+\footnotetext{This approach might lead to the generation of broken IR code as a non-valid specification is accepted by the parser. However, this is not a problem as the verification module will reject any non-valid specification and the user will be notified about the error.}
 
 \subsection{Statements, Functions, and Programs}
 
@@ -388,7 +396,7 @@ Here the syntax is also constructed in a way that establishes operator precedenc
 
 \langle \mathit{FuncStmtSeq} \rangle
 &::=&
-\langle \mathit{FuncStmt} \rangle^*\footnotemark \\[4pt]
+\langle \mathit{FuncStmt} \rangle^* \\[4pt]
 
 \langle \mathit{FuncStmt} \rangle
 &::=&
@@ -555,7 +563,6 @@ Moreover, each scope comes along with a (possibly empty) \texttt{parent\_scope}.
 
 Finally, each scope comes with a unique id, which is utilized by \texttt{SelVerifier} to differentiate variables with same name that are declared in different scopes.
 
-\newpage
 \subsubsection{Program states}
 
 Let \textbf{State} be the set of all possible program states and \textbf{Val} \footnote{The reader can notice that $ran\mathcal{I}$, $ran\mathcal{R}$ and $ran\mathcal{L}$ are all subsets of \textbf{Val}.} be the set of all semantic values. Each state is in fact a map from \textbf{Var} and \textbf{Scope} to \textbf{Val}, representing the value of a given variable in the specified scope. Formally,
@@ -633,7 +640,7 @@ To support this, we define all possible sequences of input streams as \textbf{In
 which represents the sequence of values provided by the environment.
 \footnotetext{Here, $n$ represents the number of inputs provided by the user through the execution of the program. Normally it is equal to the number of occurences of the \texttt{read()} statement.}
 
-\newpage
+
 \subsection{Semantics of arithmetic expressions}
 
 We define the arithmetic valuation function $\mathcal{A}$, representing the semantics of the arithmetic expressions in \texttt{SelVeri}.
@@ -677,7 +684,7 @@ $
     \mathcal{A}(a_1, \sigma, s, \iota) - \mathcal{A}(a_2, \sigma, s, \iota) & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) \neq \bot \land \mathcal{A}(a_2, \sigma, s, \iota) \neq \bot \\
     \bot & \text{if } \mathcal{A}(a_1, \sigma, s, \iota) = \bot \lor \mathcal{A}(a_2, \sigma, s, \iota) = \bot
 \end{cases} \\
-\mathcal{A}(a_1 / a_2, \sigma, s, \iota) &= 
+\mathcal{A}(a_1 / a_2, \sigma, s, \iota)\footnotemark &=
 \begin{cases}
     \mathcal{A}(a_1, \sigma, s, \iota) / \mathcal{A}(a_2, \sigma, s, \iota) & \text{if } \mathcal{A}(a_2, \sigma, s, \iota) \neq 0 \land \mathcal{A}(a_1, \sigma, s, \iota) \neq \bot \land \mathcal{A}(a_2, \sigma, s, \iota) \neq \bot \\
     \bot & \text{if } \mathcal{A}(a_2, \sigma, s, \iota) = 0 \lor \mathcal{A}(a_1, \sigma, s, \iota) = \bot \lor \mathcal{A}(a_2, \sigma, s, \iota) = \bot
@@ -770,7 +777,7 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 
 \begin{table}[!ht]
 \centering
-\renewcommand{\arraystretch}{1.3} % Significantly increased global line spacing
+\renewcommand{\arraystretch}{1.7} % Significantly increased global line spacing
 \makebox[\textwidth][c]{%
 \begin{tabular}{|r l|}
 \hline
@@ -888,7 +895,7 @@ Let \textbf{BExp} be the set of all boolean expressions. We define the arithmeti
 \label{tab:while-semantics}
 \end{table}
 
-\newpage
+
 Note that not all possible configurations are included in the table above. In any case which is absent from the table, program state is transitioned into $\hat{\sigma}$. \\
 
 Moreover, for each if-rule, an \texttt{if}-statement without the \texttt{else}-part, namely a statement of the form "\texttt{if} $b$ \texttt{then} $S$ \texttt{fi}" can be treated as "\texttt{if} $b$ \texttt{then} $S$ \texttt{else pass fi}"
@@ -917,6 +924,7 @@ We proceed by structural induction on $S$, showing that for any given configurat
 
 Because the expressions are deterministic and the transition rules for statements are mutually exclusive, it is impossible for more than one operational semantic rule to apply to any given configuration. Therefore, $\gamma_1 = \gamma_2$, and the semantics of \texttt{SelVeri} are strictly deterministic. $\blacksquare$
 
+\newpage
 \section{Turing-completeness of \texttt{SelVeri}}
 
 To formally establish the Turing-completeness of \texttt{SelVeri}, we demonstrate that the language can compute all $\mu$-recursive (general recursive) functions. By the Church-Turing thesis, any computational model capable of representing the basic functions and closed under composition, primitive recursion, and minimization is Turing-complete. 
@@ -978,7 +986,7 @@ function h(x_1: t_1, ..., x_n : t_n) -> t_r ::
 end
 \end{verbatim}
 
-\newpage
+
 \textit{3. Closure Under Primitive Recursion} \\
 A function defined by primitive recursion takes the form:
 \begin{align*}
@@ -1027,7 +1035,6 @@ end
 The base case of \texttt{y = 0} and strict decrease of \texttt{y} in non-base cases ensure the completion of the function call.
 
 
-\newpage
 \textit{4. Closure Under Minimization ($\mu$-operator)} \\
 The minimization operator $\mu y [f(\vec{x}, y) = 0]$ finds the smallest $y$ such that $f(\vec{x}, y) = 0$. This unbounded search introduces the potential for partial functions (non-halting programs), a strict requirement for full Turing-completeness. In \texttt{SelVeri}, this translates to an unbounded $\mathtt{while}$ loop checking an arithmetic evaluation interpreted as a boolean:
 \begin{verbatim}
@@ -1051,5 +1058,10 @@ end
 By the operational semantics of boolean expressions established in Table 2, the $\mathtt{while}$ condition evaluates the equality constraint $\mathcal{B}(\mathtt{not}\; (\mathtt{res} \;\mathtt{=}\; 0), \sigma, s)$, causing the loop to terminate and return $y$ if and only if such a $y$ exists.
 
 \textbf{Conclusion:} Because \texttt{SelVeri} represents the basic functions and is closed under composition, primitive recursion, and unbounded minimization using its explicitly defined structural operational semantics, it is capable of computing any $\mu$-recursive function. Thus, \texttt{SelVeri} is Turing-complete. $\blacksquare$
+
+\newpage
+\begin{thebibliography}{9}
+\bibitem{nielson2007} H. R. Nielson and F. Nielson, \emph{Semantics with Applications: An Appetizer}, 2007.
+\end{thebibliography}
 
 \end{document}

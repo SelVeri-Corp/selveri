@@ -21,7 +21,7 @@
 
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 
-\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v0.9}
+\title{SelVerIR: Self-Verifying Programming Language \\ Intermediate Representation Syntax and Semantics Document \\ v1.0.0}
 \author{Yusuf Demir \\ Yağız Kaan Aydoğdu}
 
 \begin{document}
@@ -187,7 +187,7 @@ An IR-configuration is the representation of the execution state in the form of 
     
 \end{itemize}
 
-\newpage
+
 \subsection{Small-step operational semantics of \texttt{SelverIR} commands}
 Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. For simplicity, we omit explicitly writing last 3 elements of the IR-configuration throughout the document, including the correctness proof at section \textbf{4}. Reader must be aware of the fact that these remain unchanged unless explicitly specified. Note that any configuration which is not explicitly stated in the tables above leads to the erroneous state, $\hat{\sigma}$ and increments $pc$ by exactly 1.
 
@@ -198,39 +198,39 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \centering
 \renewcommand{\arraystretch}{2.2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\quad \triangleright \quad\)} >{\(}l<{\)} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\;\triangleright\;\)} >{\(}l<{\)} @{}}
 \hline\hline
 
 \langle \texttt{DECL}\;t\, x : c ,\, e,\, \sigma,\, s,\, pc \rangle & 
 \begin{cases}
-\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto t],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t \in \{\texttt{INT}, \texttt{REAL}\} \;\land\; s(x) = \textbf{Void}\\
+\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto t],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t \in \{\texttt{INT}, \texttt{REAL}\} \\ \qquad \;\land\; s(x) = \textbf{Void}\\
 \end{cases} \\
 
 \langle \texttt{LDECL}\;t\,x : c ,\, n : e,\, \sigma,\, s,\, pc \rangle & 
 \begin{cases}
-\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto \texttt{LIST[INT, $n$]}],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t = \texttt{LIST[INT]}]\;\land\; s(x) = \textbf{Void}\\
+\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto \texttt{LIST[INT, $n$]}],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t = \texttt{LIST[INT]}] \\ \qquad \;\land\; s(x) = \textbf{Void}\\
 
-\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto \texttt{LIST[REAL, $n$]}],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t = \texttt{LIST[REAL]}]\;\land\; s(x) = \textbf{Void}\\
+\langle c,\, e,\, \sigma[x \mapsto \textbf{0}],\, s[x \mapsto \texttt{LIST[REAL, $n$]}],\, pc+1 \rangle \\ \qquad \text{if } x \in \textbf{Var} \;\land\; t = \texttt{LIST[REAL]}] \\ \qquad \;\land\; s(x) = \textbf{Void}\\
 
 \langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise}\\
 \end{cases} \\
 
 \langle \texttt{PUSH}\; x : c,\,  e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
-    \langle c,\, \mathcal{V}(x) : e,\, \sigma,\, s,\, pc+1 \rangle \qquad \text{if $x \in \textbf{Imm} \land x$ is of basic type }   \\
-    \langle c,\, size(\textbf{List[$t,d,\vec{n}$]}) :  \mathcal{V}(x) : e,\, \sigma,\, s,\, pc+1 \rangle \qquad \text{if $x \in \textbf{Imm} \land $ type of $x$ is \textbf{List[$t,d,\vec{n}$]} }   \\ 
+    \langle c,\, \mathcal{V}(x) : e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if $x \in \textbf{Imm} \land x$ is of basic type }   \\
+    \langle c,\, size(\textbf{List[$t,d,\vec{n}$]}) :  \mathcal{V}(x) : e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if $x \in \textbf{Imm} \land $ type of $x$ is \textbf{List[$t,d,\vec{n}$]} }   \\
 \end{cases}  \\
 
 
 \langle \texttt{LOAD}\; x : c,\,  e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
-\langle c,\, \sigma(x,s) : e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) \in \{\texttt{INT}, \texttt{REAL}\} \land n=1 \land v_1 \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
-\langle c,\, n : \sigma(x\texttt{[0]},s) : \dots : \sigma(x\texttt{[n-1]},s): e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t, n$]} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, \sigma(x,s) : e,\, \sigma,\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) \in \{\texttt{INT}, \texttt{REAL}\} \land n=1 & \\ \qquad \land\; v_1 \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
+{\begin{array}[t]{@{}l@{}}\langle c,\, n : \sigma(x\texttt{[0]},s) : \dots \\ \quad : \sigma(x\texttt{[n-1]},s): e,\, \sigma,\, s,\, pc+1 \rangle\end{array}} & \\ \qquad \text{if } s(x) = \texttt{LIST[$t, n$]} \land x \in \textbf{Var} \\[2pt]
 \langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise}
 \end{cases} \\
 
 
-\langle \texttt{STORE}\; x : c,\, v_0 : v_1 : \dots : v_n : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
-\langle c,\, e,\, \sigma[x \mapsto v_0],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) \in \{\texttt{INT}, \texttt{REAL}\} \land n=0 \land v_0 \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
-\langle c,\, e,\, \sigma[x \mapsto [v_1, \dots, v_n]],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t, v_0$]}\land v_1, \dots v_n \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
+{\begin{array}[t]{@{}l@{}}\langle \texttt{STORE}\; x : c,\, \\ \quad v_0 : v_1 : \dots : v_n : e,\, \\ \quad \sigma,\, s,\, pc \rangle\end{array}} & \begin{cases}
+\langle c,\, e,\, \sigma[x \mapsto v_0],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) \in \{\texttt{INT}, \texttt{REAL}\} \land n=0 & \\ \qquad \land\; v_0 \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
+\langle c,\, e,\, \sigma[x \mapsto [v_1, \dots, v_n]],\, s,\, pc+1 \rangle & \\ \qquad \text{if } s(x) = \texttt{LIST[$t, v_0$]} & \\ \qquad \land\; v_1, \dots v_n \in \mathbb{R} \land x \in \textbf{Var} \\[2pt]
 \langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \qquad \text{otherwise} \\
 \end{cases}\\
 
@@ -261,7 +261,7 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \centering
 \renewcommand{\arraystretch}{2.2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\quad \triangleright \quad\)} >{\(}l<{\)} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\;\triangleright\;\)} >{\(}l<{\)} @{}}
 \hline\hline
 
 
@@ -281,9 +281,9 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc+1 \rangle & \text{otherwise}
 \end{cases} \\
 
-\langle \texttt{LEN}\; x : c ,\, e,\, \sigma,\, s,\, pc \rangle & \begin{cases} 
+\langle \texttt{LEN}\; x : c ,\, e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
 \langle c,\, 0 : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } s(x) \in \{\texttt{INT}, \texttt{REAL}\} \\
-\langle c,\, \mathcal{A}(\texttt{\_$lst$\_len\_1}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } s(x) = \texttt{LIST[t, $n$]} \\
+{\begin{array}[t]{@{}l@{}}\langle c,\, \mathcal{A}(\texttt{\_$lst$\_len\_1}, \sigma, s) : e,\, \\ \quad \sigma,\, s,\, pc+1 \rangle\end{array}} & \text{if } s(x) = \texttt{LIST[t, $n$]} \\
 \langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc+1 \rangle & \text{otherwise}
 \end{cases} \\
 
@@ -301,7 +301,7 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \centering
 \renewcommand{\arraystretch}{2.2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\quad \triangleright \quad\)} >{\(}l<{\)} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\;\triangleright\;\)} >{\(}l<{\)} @{}}
 \hline\hline
 
 \langle \texttt{EQ} : c ,\, v_1 : v_2 : e,\, \sigma,\, s,\, pc \rangle & \langle c,\, (v_1 = v_2) : e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{if } v_1, v_2 \in \mathbb{R} \\
@@ -340,6 +340,72 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \end{table}
 
 \newpage
+\subsubsection{Small-step operational semantics of control-flow commands}
+
+\begin{table}[htb!]
+\setlength{\tabcolsep}{0pt}
+\centering
+\renewcommand{\arraystretch}{2.2} 
+\large
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\;\triangleright\;\)} >{\(}l<{\)} @{}}
+\hline\hline
+\langle \texttt{JZ}\; z: c,\, b : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
+\langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b = 1 \\
+\langle P[\mathcal{I}(z):],\, e,\, \sigma,\, s,\, \mathcal{I}(z) \rangle & \text{if } b = 0 \; \land \; z \in \textbf{Imm $\cap$ Int}
+\end{cases} \\
+
+\langle \texttt{GOTO}\; z : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle P[\mathcal{I}(z):],\, e,\, \sigma,\, s,\, \mathcal{I}(z) \rangle \quad \text{if } z \in \textbf{Imm $\cap$ Int} \\
+
+{\begin{array}[t]{@{}l@{}}\langle \texttt{CALL}\; f : c ,\, \\ \quad e,\, \sigma,\, s,\, pc,\, ras \rangle\end{array}} &
+{\renewcommand{\arraystretch}{1.0}
+\begin{array}[t]{@{}l@{}}
+\langle P[pc_f:],\, e,\, \sigma,\, s,\, pc_f,\, (pc+1) : ras \rangle \\
+\quad \text{if } f \in \textbf{Func} \land \Gamma(f) \neq \emptyset
+\end{array}} \\
+
+\langle \texttt{CSCOPE} : c ,\, e,\, \sigma,\, s,\, pc \rangle &
+{\renewcommand{\arraystretch}{1.0}
+\begin{array}[t]{@{}l@{}}
+\langle c,\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc+1 \rangle \\
+\quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}
+\end{array}}  \\
+
+\langle \texttt{PSCOPE} : c ,\, e,\, \sigma_c,\, s_c,\, pc \rangle &
+{\renewcommand{\arraystretch}{1.0}
+\begin{array}[t]{@{}l@{}}
+\langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \\
+\quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}
+\end{array}}  \\
+
+{\begin{array}[t]{@{}l@{}}\langle \texttt{FUNCENV}\; f, t_r : c ,\, \\ \quad e,\, \sigma,\, s,\, pc \rangle\end{array}} &
+{\renewcommand{\arraystretch}{1.0}
+\begin{array}[t]{@{}l@{}}
+\langle c,\, e,\, \tilde{\sigma}',\, \tilde{s}',\, pc+1 \rangle \\
+\quad \text{where $f$ names the current function} \\
+\quad \text{and $\sigma$ and $s$ is of the caller}
+\end{array}}  \\
+
+{\begin{array}[t]{@{}l@{}}\langle \texttt{RET} : c ,\, v : e,\, \\ \quad \sigma',\, s',\, pc ,\, ra : ras \rangle\end{array}} &
+{\renewcommand{\arraystretch}{1.0}
+\begin{array}[t]{@{}l@{}}
+\langle P[ra:],\, e,\, \sigma[\texttt{retvar} \mapsto v],\, \\
+\quad s[\texttt{retvar} \mapsto s'(v)],\, ra ,\, ras \rangle \\
+\quad \text{if the return-type of the function called} \\
+\quad \text{is equal to $s'(v)$} \\
+\quad \text{and $\sigma$ and $s$ is of the caller}
+\end{array}} \\
+
+\langle \texttt{NOOP} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \\
+
+\langle i : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \quad \text{where $i$ is any command} \\
+\hline\hline
+\end{tabular*}
+\caption{Operational semantics of control-flow commands}
+\label{tab:am-sos-ctrl}
+\end{table}
+
+As one can notice from the tables above, we do not have type-specific commands for \texttt{ADD}, \texttt{SUB} and \texttt{MUL} or boolean operators as these operations are closed under $\mathbb{Z}$ \footnote{Although syntactically different in \texttt{SelVeri} high level language; semantically, we do not interpret any integer differently than its real number counterpart.}. However, since this is not the case for division, we have separate instructions for integer and real division, namely \texttt{iDIV} and \texttt{rDIV}.
+
 \subsubsection{Small-step operational semantics of I/O commands}
 
 \begin{table}[htb!]
@@ -347,7 +413,7 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \centering
 \renewcommand{\arraystretch}{2.2} 
 \large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\quad \triangleright \quad\)} >{\(}l<{\)} @{}}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\;\triangleright\;\)} >{\(}l<{\)} @{}}
 \hline\hline
 
 \langle \texttt{READ} : c ,\, e,\, \sigma,\, s,\, pc,\, ras,\, i : \iota,\, \Omega \rangle & 
@@ -369,43 +435,6 @@ Let $P$ be any \texttt{SelVerIR} program throughout the section \textbf{2.2}. Fo
 \end{table}
 
 \texttt{nl} denotes the newline character in the usual sense and is handled by the abstract machine and its interaction with the operating system. It is included for convenience and SelVerIR still does not have any direct interaction with the IO stream or char types. Write mode does not affect the operational semantics in any way.
-
-\subsubsection{Small-step operational semantics of control-flow commands}
-
-\begin{table}[htb!]
-\setlength{\tabcolsep}{0pt}
-\centering
-\renewcommand{\arraystretch}{2.2} 
-\large
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} >{\(}l<{\)} @{\(\quad \triangleright \quad\)} >{\(}l<{\)} @{}}
-\hline\hline
-\langle \texttt{JZ}\; z: c,\, b : e,\, \sigma,\, s,\, pc \rangle & \begin{cases}
-\langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle & \text{if } b = 1 \\
-\langle P[\mathcal{I}(z):],\, e,\, \sigma,\, s,\, \mathcal{I}(z) \rangle & \text{if } b = 0 \; \land \; z \in \textbf{Imm $\cap$ Int}
-\end{cases} \\
-
-\langle \texttt{GOTO}\; z : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle P[\mathcal{I}(z):],\, e,\, \sigma,\, s,\, \mathcal{I}(z) \rangle \quad \text{if } z \in \textbf{Imm $\cap$ Int} \\
-
-\langle \texttt{CALL}\; f : c ,\, e,\, \sigma,\, s,\, pc,\, ras \rangle & \langle P[pc_f:],\, e,\, \sigma,\, s,\, pc_f,\, (pc+1) : ras \rangle \quad \text{if } f \in \textbf{Func} \land \Gamma(f) \neq \emptyset \\
-
-\langle \texttt{CSCOPE} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
-
-\langle \texttt{PSCOPE} : c ,\, e,\, \sigma_c,\, s_c,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \quad \text{where $\sigma$ and $s$ are the parents of $\sigma_c$ and $s_c$}  \\
-
-\langle \texttt{FUNCENV}\; f, t_r : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \tilde{\sigma}',\, \tilde{s}',\, pc+1 \rangle \quad \text{where $f$ names the current function and $\sigma$ and $s$ is of the caller}  \\
-
-\langle \texttt{RET} : c ,\, v : e,\, \sigma',\, s',\, pc ,\, ra : ras \rangle & \langle P[ra:],\, e,\, \sigma[\texttt{retvar} \mapsto v],\, s[\texttt{retvar} \mapsto s'(v)],\, ra ,\, ras \rangle \quad \text{if the return-type of the function called is equal to $s'(v)$ and $\sigma$ and $s$ is of the caller} \\
-
-\langle \texttt{NOOP} : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \sigma,\, s,\, pc+1 \rangle \\
-
-\langle i : c ,\, e,\, \sigma,\, s,\, pc \rangle & \langle c,\, e,\, \hat{\sigma},\, s,\, pc+1 \rangle \quad \text{where $i$ is any command} \\
-\hline\hline
-\end{tabular*}
-\caption{Operational semantics of control-flow commands}
-\label{tab:am-sos-ctrl}
-\end{table}
-
-As one can notice from the tables above, we do not have type-specific commands for \texttt{ADD}, \texttt{SUB} and \texttt{MUL} or boolean operators as these operations are closed under $\mathbb{Z}$ \footnote{Although syntactically different in \texttt{SelVeri} high level language; semantically, we do not interpret any integer differently than its real number counterpart.}. However, since this is not the case for division, we have separate instructions for integer and real division, namely \texttt{iDIV} and \texttt{rDIV}.
 
 \newpage
 \section{Determinism of \texttt{SelVerIR}}
@@ -498,7 +527,6 @@ However, $\mathit{LF}$ only formalizes list-accesses in \texttt{SelVerIR}, but w
 Observe that the valuation of \texttt{size\_IR}($t$) is equal $size(t)$. With the help of $\mathit{LF}$ and \texttt{size\_IR}, we will be able to correctly define the compilation of list-accesses and list-declarations in \textbf{sections 4.2} and \textbf{4.4}.
 
 
-\newpage
 \subsection{Compilation of arithmetic expressions}
 
 In order to formally define the compilation of arithmetic expressions, we define a helper function:
@@ -593,19 +621,18 @@ Finally, with the help of $\mathcal{CA}$ and $\mathcal{CB}$, we are ready to pro
 \centering
 \renewcommand{\arraystretch}{1.8} 
 
-% \resizebox dynamically scales the box to exactly the width of the line.
-\resizebox{\linewidth}{!}{%
 \fbox{%
-$\begin{array}{ll}
+\begin{minipage}{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}
+\setlength{\arraycolsep}{0pt}
+\noindent
+$\begin{array}{@{}l@{}}
 
 \mathcal{C}(x \;\texttt{:}\; t) = \texttt{DECL}\; t\;x \qquad \text{if } x \in \textbf{Var} \text{ and $t \in \textbf{BasicType}$}
 \\[1.5ex]
 
-\mathcal{C}(lst \;\texttt{:}\; \textbf{List[$t, d, \vec{a}$]})
-\\ \quad =
-\texttt{DECL INT}\;\texttt{\_$lst$\_len\_1} : \mathcal{CA}(a_1) : \texttt{STORE}\;\texttt{\_$lst$\_len\_1} : \dots : \texttt{DECL INT}\;\texttt{\_$lst$\_len\_$d$} : \mathcal{CA}(a_d) : \texttt{STORE}\;\texttt{\_$lst$\_len\_$d$} 
-\\ \quad
-: \mathcal{CA}(\texttt{size\_IR(} \textbf{List[$t,d,\vec{a}$]} \texttt{)} ) : \texttt{LDECL LIST[$t$]}\;lst
+\mathcal{C}(lst \;\texttt{:}\; \textbf{List[$t, d, \vec{a}$]}) =
+\\ \quad \texttt{DECL INT}\;\texttt{\_$lst$\_len\_1} : \mathcal{CA}(a_1) : \texttt{STORE}\;\texttt{\_$lst$\_len\_1} : \dots
+\\ \quad : \texttt{DECL INT}\;\texttt{\_$lst$\_len\_$d$} : \mathcal{CA}(a_d) : \texttt{STORE}\;\texttt{\_$lst$\_len\_$d$} : \mathcal{CA}(\texttt{size\_IR(} \textbf{List[$t,d,\vec{a}$]} \texttt{)} ) : \texttt{LDECL LIST[$t$]}\;lst
 \\[1.5ex]
 
 \mathcal{C}(x \;\texttt{:=}\; a) = \mathcal{CA}(a) : \texttt{STORE}\;x \qquad \text{if } x \in \textbf{Var} \text{ and $x$ is of a basic type}
@@ -624,17 +651,16 @@ $\begin{array}{ll}
 \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP}
 \\[1.5ex]
 
-\mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}) 
-\\ \quad = 
-\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP}
+\mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}) =
+\\ \quad \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP}
 \\[1.5ex]
 
-\mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}) = 
-\mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP}
+\mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}) =
+\\ \quad \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP}
 \\[1.5ex]
 
-\mathcal{C}(\texttt{function}\; f(x_1 : t_1 \dots, x_n : t_n) \,\texttt{->}\, t_r \,\texttt{::}\, S_f) 
-\\ \quad = \texttt{FUNCENV}\; f, t_r : [\texttt{L}]\texttt{DECL}\; t_1\;x_1 : \texttt{STORE}\; x_1 :  \dots : [\texttt{L}]\texttt{DECL}\; t_n\;x_n : \texttt{STORE}\; x_n : \mathcal{C}(S_f)
+\mathcal{C}(\texttt{function}\; f(x_1 : t_1 \dots, x_n : t_n) \,\texttt{->}\, t_r \,\texttt{::}\, S_f) =
+\\ \quad \texttt{FUNCENV}\; f, t_r : [\texttt{L}]\texttt{DECL}\; t_1\;x_1 : \texttt{STORE}\; x_1 :  \dots : [\texttt{L}]\texttt{DECL}\; t_n\;x_n : \texttt{STORE}\; x_n : \mathcal{C}(S_f)
 \\[1.5ex]
 
 \mathcal{C}(\texttt{call}\; f(a_1 \dots, a_n)) = 
@@ -662,8 +688,8 @@ $\begin{array}{ll}
     \right.
 \\[1.5ex]
 \end{array}$%
+\end{minipage}%
 }%
-} % <-- closes \resizebox
 \end{table}
 
 Please note that, during the compilation phase, compiler labels each compiled command with a corresponding program counter, using a simple incrementing counter. Therefore, $pc$ variables seen in the compilation of the control-flow statements are actually replaced with syntactic integer-immediates.
@@ -698,7 +724,7 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(v) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \texttt{PUSH}\;v   : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
@@ -714,7 +740,7 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(v) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \texttt{PUSH}\;v   : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
@@ -730,7 +756,7 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(x) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \texttt{LOAD}\;x : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
@@ -748,7 +774,7 @@ We will prove this by structural induction on arithmetic expressions.
 
   \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(lst) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \texttt{LOAD}\;lst : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
@@ -766,7 +792,7 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(lst\texttt{[$i_1$]}\dots\texttt{[$i_d$]}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(\mathit{LF}(lst; i_1, \dots, i_d)) : \texttt{LLOAD}\;lst : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
@@ -778,7 +804,7 @@ We will prove this by structural induction on arithmetic expressions.
         && \text{(operational semantics)} \\
         &= \langle c,\, \sigma(lst\texttt{[$\mathcal{A}(\mathit{LF}(lst\;; i_1, \dots, i_d), \sigma, s)$]}, s):  e,\, \sigma,\, s,\, pc + l_j + 1 \rangle
         && \text{(definition of } \mathit{LF}\text{)} \\
-        &= \langle c,\, \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_d, \sigma, s)$]}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle 
+        &= \langle c,\, \mathcal{A}(lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_d, \sigma, s)$]}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle
         && \text{(list flattening)} \\
         &= \langle c,\, \mathcal{A}(lst\texttt{[$i_1$]}\dots\texttt{[$i_d$]}, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle
         && \text{(definition of } \mathcal{A}\text{)} \\
@@ -798,15 +824,15 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(a_1 + a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{ADD} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
         &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{ADD} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
         && \text{(induction hypothesis 2)} \\
-        &\triangleright^{\ast} \langle \texttt{ADD} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+        &\triangleright^{\ast} \langle \texttt{ADD} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
         && \text{(induction hypothesis 1)} \\
-        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) + \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) + \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
         && \text{(operational semantics)} \\
         &= \langle c,\, \mathcal{A}(a_1 + a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
         && \text{(definition of } \mathcal{A}\text{)} \\
@@ -820,15 +846,15 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(a_1 \ast a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{MUL} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
         &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{MUL} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
         && \text{(induction hypothesis 2)} \\
-        &\triangleright^{\ast} \langle \texttt{MUL} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+        &\triangleright^{\ast} \langle \texttt{MUL} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
         && \text{(induction hypothesis 1)} \\
-        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) \cdot \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) \cdot \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
         && \text{(operational semantics)} \\
         &= \langle c,\, \mathcal{A}(a_1 \ast a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
         && \text{(definition of } \mathcal{A}\text{)} \\
@@ -843,15 +869,15 @@ We will prove this by structural induction on arithmetic expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(a_1 - a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{SUB} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CA}\text{)} \\
         &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{SUB} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
         && \text{(induction hypothesis 2)} \\
-        &\triangleright^{\ast} \langle \texttt{SUB} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+        &\triangleright^{\ast} \langle \texttt{SUB} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
         && \text{(induction hypothesis 1)} \\
-        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) - \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+        &\triangleright \langle c,\, (\mathcal{A}(a_1, \sigma, s) - \mathcal{A}(a_2, \sigma, s)) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
         && \text{(operational semantics)} \\
         &= \langle c,\, \mathcal{A}(a_1 - a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
         && \text{(definition of } \mathcal{A}\text{)} \\
@@ -868,15 +894,15 @@ We will prove this by structural induction on arithmetic expressions.
 
                 \[
               \begin{aligned}
-                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
                 && \text{(definition of } \mathcal{CA}\text{)} \\
                 &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
                 && \text{(induction hypothesis 2)} \\
-                &\triangleright^{\ast} \langle \texttt{iDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                &\triangleright^{\ast} \langle \texttt{iDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
                 && \text{(induction hypothesis 1)} \\
-                &\triangleright \langle c,\, \left\lfloor  \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s)\right\rfloor : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+                &\triangleright \langle c,\, \left\lfloor  \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s)\right\rfloor : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
                 && \text{(operational semantics)} \\
                 &= \langle c,\, \mathcal{A}(a_1 / a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
                 && \text{(definition of } \mathcal{A}\text{)} \\
@@ -888,14 +914,14 @@ We will prove this by structural induction on arithmetic expressions.
 
             \[
               \begin{aligned}
-                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
                 && \text{(definition of } \mathcal{CA}\text{)} \\
                 &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
                 && \text{(induction hypothesis 2)} \\
                 &= \langle \mathcal{CA}(a_1) : \texttt{iDIV} :  c,\, 0 : e,\, \sigma,\, s,\, pc + l_2 \rangle \\
-                &\triangleright^{\ast} \langle \texttt{iDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : 0 : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                &\triangleright^{\ast} \langle \texttt{iDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : 0 : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
                 && \text{(induction hypothesis 1)} \\
                 &\triangleright \langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle 
                 && \text{(operational semantics)} \\
@@ -916,15 +942,15 @@ We will prove this by structural induction on arithmetic expressions.
 
                 \[
               \begin{aligned}
-                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{rDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
                 && \text{(definition of } \mathcal{CA}\text{)} \\
                 &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{rDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
                 && \text{(induction hypothesis 2)} \\
-                &\triangleright^{\ast} \langle \texttt{rDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                &\triangleright^{\ast} \langle \texttt{rDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
                 && \text{(induction hypothesis 1)} \\
-                &\triangleright \langle c,\, \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle 
+                &\triangleright \langle c,\, \mathcal{A} (a_1, \sigma, s) /  \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
                 && \text{(operational semantics)} \\
                 &= \langle c,\, \mathcal{A}(a_1 / a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 + l_1 + 1 \rangle
                 && \text{(definition of } \mathcal{A}\text{)} \\
@@ -936,14 +962,14 @@ We will prove this by structural induction on arithmetic expressions.
 
             \[
               \begin{aligned}
-                \langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+                &\langle  \mathcal{CA}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_1 / a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
                 &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{rDIV} :  c,\, e,\, \sigma,\, s,\, pc \rangle 
                 && \text{(definition of } \mathcal{CA}\text{)} \\
                 &\triangleright^{\ast} \langle \mathcal{CA}(a_1) : \texttt{rDIV} :  c,\, \mathcal{A}(a_2, \sigma, s) : e,\, \sigma,\, s,\, pc + l_2 \rangle 
                 && \text{(induction hypothesis 2)} \\
                 &= \langle \mathcal{CA}(a_1) : \texttt{rDIV} :  c,\, 0.0 : e,\, \sigma,\, s,\, pc + l_2 \rangle \\
-                &\triangleright^{\ast} \langle \texttt{rDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : 0.0 : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle 
+                &\triangleright^{\ast} \langle \texttt{rDIV} :  c,\, \mathcal{A}(a_1, \sigma, s) : 0.0 : e,\, \sigma,\, s,\, pc + l_2 + l_1 \rangle
                 && \text{(induction hypothesis 1)} \\
                 &\triangleright \langle c,\, \bot : e,\, \hat{\sigma},\, s,\, pc + l_2 + l_1 + 1 \rangle 
                 && \text{(operational semantics)} \\
@@ -976,7 +1002,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\ 
         &= \langle \mathcal{CB}(\texttt{true}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \texttt{PUSH 1}   : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -989,12 +1015,13 @@ We will prove this by an induction on the structure of boolean expressions.
         &= \langle c,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc+1 \rangle \\
       \end{aligned}
   \]
-
+    
+    \newpage
     \item \textbf{case 2: } $b = \texttt{false}$
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\ 
         &= \langle \mathcal{CB}(\texttt{false}) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \texttt{PUSH 0}   : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1008,7 +1035,7 @@ We will prove this by an induction on the structure of boolean expressions.
       \end{aligned}
   \]
   
-    \newpage
+    
     \item \textbf{case 3: } $b \in \textbf{AExp}$
 
      \begin{itemize}
@@ -1016,7 +1043,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
          \[
           \begin{aligned}
-            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CB}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CA}(a) : \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} : c,\, e,\, \sigma,\, s,\, pc \rangle
             && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1041,7 +1068,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
          \[
           \begin{aligned}
-            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CB}(a) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CA}(a) : \texttt{PUSH 0} : \texttt{EQ} : \texttt{NEG} : c,\, e,\, \sigma,\, s,\, pc \rangle
             && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1067,7 +1094,7 @@ We will prove this by an induction on the structure of boolean expressions.
      \end{itemize}
 
     
-
+    \newpage
     \item \textbf{case 4: } $b = (a_1 \;\texttt{=}\; a_2)$ for some $a_1, a_2 \in \textbf{AExp}$
 
     \begin{itemize}
@@ -1075,7 +1102,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
         \[
           \begin{aligned}
-            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CB}(a_1 \;\texttt{=}\; a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{EQ} : c,\, e,\, \sigma,\, s,\, pc \rangle
             && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1097,7 +1124,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
         \[
           \begin{aligned}
-            \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle
+            &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CB}(a_1 \;\texttt{=}\; a_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
             &= \langle \mathcal{CA}(a_2) : \mathcal{CA}(a_1) : \texttt{EQ} : c,\, e,\, \sigma,\, s,\, pc \rangle
             && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1123,7 +1150,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\ 
         &= \langle \mathcal{CB}(\texttt{not}\; b') : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CB}(b') : \texttt{NEG} : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1143,7 +1170,7 @@ We will prove this by an induction on the structure of boolean expressions.
 
     \[
       \begin{aligned}
-        \langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle 
+        &\langle  \mathcal{CB}(b) : c,\, e,\, \sigma,\, s,\, pc \rangle \\ 
         &= \langle \mathcal{CB}(b_1 \;\texttt{and}\; b_2) : c,\, e,\, \sigma,\, s,\, pc \rangle \\
         &= \langle \mathcal{CB}(b_2) : \mathcal{CB}(b_1) : \texttt{AND} : c,\, e,\, \sigma,\, s,\, pc \rangle 
         && \text{(definition of } \mathcal{CB}\text{)} \\
@@ -1177,11 +1204,11 @@ Now, as the correctness of arithmetic and boolean expressions is proven, we may 
 Observe that the implication above mentions the correctness of only terminating programs. However, we also claim that the compilation of non-terminating \texttt{SelVeri} programs are also correct, and we will present our arguments in \textbf{section 6}.
 
 \begin{proof}
-If $\underline{\sigma}$ is an erroneous program state, then by section \textbf{2.2.5} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$, the above implication is obviously true \footnote{Furthermore, $\sigma = \sigma_f$ and $s = s_f$, in this case.}.  Therefore, from now on, we assume that $\underline{\sigma}$ represents a non-erroneous program state and will use $\sigma$ to denote it. \\
+If $\underline{\sigma}$ is an erroneous program state, then by section \textbf{2.2.4} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$, the above implication is obviously true \footnote{Furthermore, $\sigma = \sigma_f$ and $s = s_f$, in this case.}.  Therefore, from now on, we assume that $\underline{\sigma}$ represents a non-erroneous program state and will use $\sigma$ to denote it. \\
 
 We will prove the correctness of $\mathcal{C}$ via a strong induction on the number of execution steps, by utilizing the fact that sub-statements naturally require a lesser number of execution steps. The correctness of basic type declarations, I/O and \texttt{pass} statements establish our base cases, since their compilation include only one command.
 
-\newpage
+
 \begin{itemize}
     \item \textbf{(base) case 1:} $P = (x \;\texttt{:}\; t)$
 
@@ -1201,7 +1228,7 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
           \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(x \;\texttt{:}\; t),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \texttt{DECL t},\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\   
@@ -1225,7 +1252,7 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
           \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(x \;\texttt{:}\; t),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \texttt{DECL t},\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\   
@@ -1251,7 +1278,7 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
   \[
       \begin{aligned}
-      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{C}(\texttt{pass}),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
       && \text{(definition of } \mathcal{C}\text{)} \\   
@@ -1279,16 +1306,20 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
           \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(lst \;\texttt{:}\; \textbf{List[$t, a$]}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \texttt{DECL INT}\;\texttt{\_$lst$\_len\_1} : \mathcal{CA}(a_1) : \texttt{STORE}\;\texttt{\_$lst$\_len\_1} : \dots : \texttt{DECL INT}\;\texttt{\_$lst$\_len\_$d$} : \mathcal{CA}(a_d) : \texttt{STORE}\;\texttt{\_$lst$\_len\_$d$} : \mathcal{CA}(\texttt{size\_IR(} \textbf{List[$t,d,\vec{a}$]} \texttt{)} ) : \texttt{LDECL LIST[$t$]}\;lst,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \texttt{DECL INT}\;\texttt{\_$lst$\_len\_1} : \mathcal{CA}(a_1) : \texttt{STORE}\;\texttt{\_$lst$\_len\_1} : \dots \\
+              &\quad : \texttt{DECL INT}\;\texttt{\_$lst$\_len\_$d$} : \mathcal{CA}(a_d) : \texttt{STORE}\;\texttt{\_$lst$\_len\_$d$} \\
+              &\quad : \mathcal{CA}(\texttt{size\_IR(} \textbf{List[$t,d,\vec{a}$]} \texttt{)} ) : \texttt{LDECL LIST[$t$]}\;lst,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\
               &\triangleright^\ast \langle \mathcal{CA}(\texttt{size\_IR(} \textbf{List[$t, a$]} \texttt{)} ) : \texttt{LDECL LIST[$t$]}\;lst,\, e,\, \sigma',\, s',\, pc + l \rangle
               && \text{(operational semantics))} \\
-              &\triangleright \langle \texttt{LDECL LIST[$t$]}\;lst,\, \mathcal{A}(\texttt{size\_IR(} \textbf{List[$t, d, \vec{a}$]} \texttt{)}, \sigma, s) : e,\, \sigma[\texttt{\_$lst$\_len\_1} \mapsto \mathcal{A}(a, \sigma, s)],\, s[\texttt{\_$lst$\_len\_1} \mapsto \texttt{INT}],\, pc + l + l_a \rangle
-              && \text{(correctness of } \mathcal{CA}\text{)} \\ 
-              &\triangleright \langle \epsilon,\, e,\, \sigma'[lst \mapsto \textbf{0}],\, s'[lst \mapsto \texttt{LIST[$t, \mathcal{A}(\texttt{size\_IR(} \textbf{List[$t, d, \vec{a}$]} \texttt{)}, \sigma, s)$]}],\, pc + l + l_a + 1\rangle
-              && \text{(operational semantics)} \\ 
+              &\triangleright \langle \texttt{LDECL LIST[$t$]}\;lst,\, \mathcal{A}(\texttt{size\_IR(} \textbf{List[$t, d, \vec{a}$]} \texttt{)}, \sigma, s) : e,\, \\
+              &\quad \sigma[\texttt{\_$lst$\_len\_1} \mapsto \mathcal{A}(a, \sigma, s)],\, s[\texttt{\_$lst$\_len\_1} \mapsto \texttt{INT}],\, pc + l + l_a \rangle
+              && \text{(correctness of } \mathcal{CA}\text{)} \\
+              &\triangleright \langle \epsilon,\, e,\, \sigma'[lst \mapsto \textbf{0}],\, \\
+              &\quad s'[lst \mapsto \texttt{LIST[$t, \mathcal{A}(\texttt{size\_IR(} \textbf{List[$t, d, \vec{a}$]} \texttt{)}, \sigma, s)$]}],\, pc + l + l_a + 1\rangle
+              && \text{(operational semantics)} \\
               &= \langle \epsilon,\, e,\, \sigma'[lst \mapsto \textbf{0}],\, s'[lst \mapsto \textbf{List[$t, d, \vec{\mathcal{A}(a_i, \sigma, s)}$]}],\,  pc + l + l_a + 2 \rangle
               && \text{(list flattening)} \\ 
               \end{aligned}
@@ -1314,7 +1345,7 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
   \[
       \begin{aligned}
-      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{C}(x \;\texttt{:=}\; a),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{CA}(a) : \texttt{STORE}\;x ,\, e,\, \sigma,\, s,\, pc \rangle
       && \text{(definition of } \mathcal{C}\text{)} \\   
@@ -1341,18 +1372,22 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
   \[
       \begin{aligned}
-      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{C}(lst\texttt{[$i_1$]}\dots\texttt{[$i_d$]} \;\texttt{:=}\; a),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{CA}(a) : \mathcal{CA}(\mathit{LF}(lst; i_1, \dots, i_d)) :  \texttt{LSTORE}\;lst ,\, e,\, \sigma,\, s,\, pc \rangle
       && \text{(definition of } \mathcal{C}\text{)} \\   
-      &\triangleright^\ast \langle \mathcal{CA}(\mathit{LF}(lst; i_1, \dots, i_d)) :  \texttt{LSTORE}\;lst ,\, \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a \rangle
-      && \text{(correctness of } \mathcal{CA}\text{)} \\ 
-      &\triangleright^\ast \langle \texttt{LSTORE}\;lst ,\, \mathcal{A}(\mathit{LF}(lst\;; i_1, \dots, i_d), \sigma, s) : \mathcal{A}(a, \sigma, s) : e,\, \sigma,\, s,\, pc + l_a + l_I \rangle
-      && \text{(correctness of } \mathcal{CA}\text{)} \\ 
-      &\triangleright \langle \epsilon ,\, e,\, \sigma[lst\texttt{[$\mathcal{A}(\mathit{LF}(lst\;; i_1, \dots, i_d), \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)],\, s,\, pc + l_a + l_I + 1\rangle
+      &\triangleright^\ast \langle \mathcal{CA}(\mathit{LF}(lst; i_1, \dots, i_d)) :  \texttt{LSTORE}\;lst ,\, \mathcal{A}(a, \sigma, s) : e,\, \\
+      &\quad \sigma,\, s,\, pc + l_a \rangle
+      && \text{(correctness of } \mathcal{CA}\text{)} \\
+      &\triangleright^\ast \langle \texttt{LSTORE}\;lst ,\, \mathcal{A}(\mathit{LF}(lst\;; i_1, \dots, i_d), \sigma, s) : \mathcal{A}(a, \sigma, s) : e,\, \\
+      &\quad \sigma,\, s,\, pc + l_a + l_I \rangle
+      && \text{(correctness of } \mathcal{CA}\text{)} \\
+      &\triangleright \langle \epsilon ,\, e,\, \sigma[lst\texttt{[$\mathcal{A}(\mathit{LF}(lst\;; i_1, \dots, i_d), \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)],\, \\
+      &\quad s,\, pc + l_a + l_I + 1\rangle
       && \text{(operational semantics)} \\
-      &= \langle \epsilon ,\, e,\, \sigma[lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_d, \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)],\, s,\, pc + l_a + l_I + 1 \rangle
-      && \text{(list flattening)} \\ 
+      &= \langle \epsilon ,\, e,\, \sigma[lst\texttt{[$\mathcal{A}(i_1, \sigma, s)$]}\dots\texttt{[$\mathcal{A}(i_d, \sigma, s)$]} \mapsto \mathcal{A}(a, \sigma, s)],\, \\
+      &\quad s,\, pc + l_a + l_I + 1 \rangle
+      && \text{(list flattening)} \\
       \end{aligned}
   \]
 
@@ -1382,12 +1417,14 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
             \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
-              && \text{(definition of } \mathcal{C}\text{)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
-              && \text{(correctness of } \mathcal{CB}\text{)} \\ 
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \\
+              &\quad e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of } \mathcal{C}\text{)} \\
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \\
+              &\quad \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              && \text{(correctness of } \mathcal{CB}\text{)} \\
               &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\ 
               &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
               && \text{(operational semantics)} \\
@@ -1426,12 +1463,14 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
             \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
-              && \text{(definition of } \mathcal{C}\text{)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
-              && \text{(correctness of } \mathcal{CB}\text{)} \\ 
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \\
+              &\quad e,\, \sigma,\, s,\, pc \rangle
+              && \text{(definition of } \mathcal{C}\text{)} \\
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, \\
+              &\quad \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              && \text{(correctness of } \mathcal{CB}\text{)} \\
               &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} :\texttt{NOOP} ,\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\  
               &\triangleright \langle \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc_{\texttt{NOOP}} \rangle
               && \text{(operational semantics)} \\
@@ -1466,20 +1505,33 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
             \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
               && \text{(correctness of } \mathcal{CB}\text{)} \\
-              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
-              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
+              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP},\, 1 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc + l_b + 1 \rangle
               && \text{(operational semantics)} \\
-              &\triangleright \langle \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
+              &\triangleright \langle \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
               && \text{(operational semantics)} \\
-              &\triangleright^\ast \langle \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \sigma'_c ,\, s'_c,\, pc + l_b + l_{S_1} + 2 \rangle
+              &\triangleright^\ast \langle \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \sigma'_c ,\, s'_c,\, pc + l_b + l_{S_1} + 2 \rangle
               && \text{(induction hypothesis)} \\
-              &\triangleright \langle \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc + l_b + l_{S_1} + 3 \rangle
+              &\triangleright \langle \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc + l_b + l_{S_1} + 3 \rangle
               && \text{(induction hypothesis)} \\
               &\triangleright \langle \texttt{NOOP},\, e',\, \underline{\sigma}' ,\, s',\, pc_{\texttt{NOOP}} \rangle
               && \text{(operational semantics)} \\
@@ -1488,6 +1540,7 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               \end{aligned}
           \]
 
+        \newpage
         \item \textbf{subcase 8.2:} $\mathcal{B}(b, \sigma, s) = 0$
 
             Assume
@@ -1509,13 +1562,19 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
             \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{if } b \texttt{ then } S_1 \texttt{ else } S_2 \texttt{ fi}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP} ,\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP} ,\, \mathcal{B}(b, \sigma, s) : e,\, \sigma,\, s,\, pc + l_b \rangle
               && \text{(correctness of } \mathcal{CB}\text{)} \\
-              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{CSCOPE}_2} : \texttt{CSCOPE} : \mathcal{C}(S_1) : \texttt{PSCOPE} : \\
+              &\quad \texttt{GOTO}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S_2) : \\
+              &\quad \texttt{PSCOPE} : \texttt{NOOP},\, 0 : e,\, \sigma,\, s,\, pc + l_b \rangle \\
               &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc_{\texttt{CSCOPE}_2} \rangle
               && \text{(operational semantics)} \\
               &\triangleright \langle \mathcal{C}(S_2) : \texttt{PSCOPE} : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc_{\texttt{CSCOPE}_2} + 1\rangle
@@ -1551,13 +1610,16 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
             \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
               && \text{(correctness of } \mathcal{CB}\text{)} \\
-              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 0 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 0 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
               &\triangleright \langle \texttt{NOOP},\, e,\, \sigma ,\, s,,\, pc_{\texttt{NOOP}} \rangle
               && \text{(operational semantics)} \\
               &\triangleright \langle \epsilon,\, e,\, \sigma ,\, s,,\, pc_{\texttt{NOOP}} + 1 \rangle
@@ -1586,14 +1648,18 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
 
           \[
               \begin{aligned}
-              \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+              &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e,\, \sigma,\, s,\, pc \rangle \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \sigma,\, s,\, pc \rangle
               && \text{(definition of } \mathcal{C}\text{)} \\   
-              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
+              &\triangleright^\ast \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \mathcal{B}(b, \sigma, s) : e,\, \sigma ,\, s,\, pc + l_b \rangle
               && \text{(correctness of } \mathcal{CB}\text{)} \\
-              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
-              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b + 1 \rangle
+              &= \langle \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, 1 : e,\, \sigma ,\, s,\, pc + l_b \rangle \\
+              &\triangleright \langle \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, \\
+              &\quad 1 : e,\, \sigma ,\, s,\, pc + l_b + 1 \rangle
               && \text{(operational semantics)} \\
               &\triangleright \langle \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e,\, \tilde{\sigma_c},\, \tilde{s_c},\, pc + l_b + 2 \rangle
               && \text{(operational semantics)} \\
@@ -1601,9 +1667,11 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
               && \text{(induction hypothesis)} \\
               &\triangleright \langle \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc + l_b + l_S + 3 \rangle
               && \text{(operational semantics)} \\
-              &\triangleright \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc_b \rangle
+              &\triangleright \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc_b \rangle
               && \text{(operational semantics)} \\
-              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
+              &= \langle \mathcal{CB}(b) : \texttt{JZ}\; pc_{\texttt{NOOP}} : \texttt{CSCOPE} : \mathcal{C}(S) : \\
+              &\quad \texttt{PSCOPE} : \texttt{GOTO}\; pc_b : \texttt{NOOP},\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
               &= \langle \mathcal{C}(\texttt{while } b \texttt{ do } S \texttt{ od}),\, e',\, \underline{\sigma}',\, s',\, pc \rangle \\
               \end{aligned}
           \]
@@ -1620,13 +1688,15 @@ We will prove the correctness of $\mathcal{C}$ via a strong induction on the num
       \begin{aligned}
       \langle P,\, \sigma,\, s \rangle
       &=\langle \texttt{call}\; f(a_1 \dots, a_n),\, \sigma,\, s \rangle \\
-      &\rightarrow \langle x_1 : t_1 \texttt{;} x_1 \,\texttt{:=}\, v_1\, \texttt{;} \dots \texttt{;} x_n : t_n \texttt{;} x_n \,\texttt{:=}\, v_n\, \texttt{;} S_f,\, \tilde{\sigma}', \tilde{s}' \rangle
+      &\rightarrow \langle x_1 : t_1 \texttt{;} x_1 \,\texttt{:=}\, v_1\, \texttt{;} \dots \\
+      &\quad \texttt{;} x_n : t_n \texttt{;} x_n \,\texttt{:=}\, v_n\, \texttt{;} S_f,\, \tilde{\sigma}', \tilde{s}' \rangle
       && [\text{call}_{\text{os}}]   \\
       &\rightarrow^\ast \langle S_f,\, \sigma' ,\, s' \rangle
       && (\text{operational semantics})   \\
       &\rightarrow^\ast \langle \texttt{return}\; a,\, \sigma'' \footnotemark ,\, s'' \rangle
       && (\text{operational semantics},\, \text{return rule})   \\
-      &\rightarrow \langle \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma'', s'')],\; s[\texttt{retvar} \mapsto s''(a)] \rangle
+      &\rightarrow \langle \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma'', s'')],\; \\
+      &\quad s[\texttt{retvar} \mapsto s''(a)] \rangle
       && [\text{ret}_{\text{os}}] \\
       \end{aligned}
   \]
@@ -1635,38 +1705,49 @@ by the induction hypothesis, the compilation of $S_f$ is correct, since the exec
 
 \[
   \begin{aligned}
-  \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc,\, ras \rangle
+  &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc,\, ras \rangle \\
   &= \langle \mathcal{C}(\texttt{call}\; f(a_1 \dots, a_n)),\, e,\, \sigma,\, s,\, pc \rangle \\
   &= \langle \mathcal{CA}(a_n) : \dots : \mathcal{CA}(a_1) : \texttt{CALL}\; f,\, e,\, \sigma,\, s,\, pc,\, ras \rangle
   && (\text{definition of } \mathcal{C})   \\
-  &\triangleright^\ast \langle  \texttt{CALL}\; f,\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc+n,\, ras \rangle
+  &\triangleright^\ast \langle  \texttt{CALL}\; f,\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \\
+  &\quad \sigma,\, s,\, pc+n,\, ras \rangle
   && (\text{correctness of } \mathcal{CA})   \\
-  &\triangleright \langle  P[pc_f],\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
-  && (\text{operational semantics})
-  &= \langle  \texttt{FUNCENV}\; f, t_r : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
+  &\triangleright \langle  P[pc_f],\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \\
+  &\quad \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
+  && (\text{operational semantics}) \\
+  &= \langle  \texttt{FUNCENV}\; f, t_r : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots \\
+  &\quad : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \\
+  &\quad \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \\
+  &\quad \sigma,\, s,\, pc_f,\, (pc+n+1) : ras \rangle
   && (\text{definition of } \mathcal{C})   \\
-  &\triangleright \langle  \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \tilde{\sigma}', \tilde{s}',\, pc_f + 1,\, (pc+n+1) : ras \rangle
+  &\triangleright \langle  \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_1 :  \dots \\
+  &\quad : \texttt{DECL}\;t_1\,x_1 : \texttt{STORE}\; x_n : \mathcal{C}(S_f),\, \\
+  &\quad \mathcal{A}(a_1, \sigma, s) : \dots : \mathcal{A}(a_n, \sigma, s) : e,\, \\
+  &\quad \tilde{\sigma}', \tilde{s}',\, pc_f + 1,\, (pc+n+1) : ras \rangle
   && (\text{operational semantics})   \\
   &\triangleright^\ast \langle \mathcal{C}(S_f),\, e,\, \sigma',\, s',\, pc_f + 2n+1,\, (pc+n+1) : ras \rangle
   && (\text{operational semantics})   \\
-  &\triangleright^\ast \langle \mathcal{C}(\texttt{return}\; a),\, e,\, \sigma'',\, s'',\, pc_f + l + 2n+1,\, (pc+n+1) : ras \rangle
+  &\triangleright^\ast \langle \mathcal{C}(\texttt{return}\; a),\, e,\, \sigma'',\, s'',\, \\
+  &\quad pc_f + l + 2n+1,\, (pc+n+1) : ras \rangle
   && (\text{induction hypothesis},\, \text{return rule})   \\
-  &=\langle \mathcal{CA}(a) : \texttt{RET},\, e,\, \sigma'',\, s'',\, pc_f + l + 2n+1,\, (pc+n+1) : ras \rangle
+  &=\langle \mathcal{CA}(a) : \texttt{RET},\, e,\, \sigma'',\, s'',\, \\
+  &\quad pc_f + l + 2n+1,\, (pc+n+1) : ras \rangle
   && (\text{definition of } \mathcal{C})   \\
-  &\triangleright^\ast \langle \texttt{RET},\, \mathcal{A}(a, \sigma'', s'') : e,\, \sigma'',\, s'',\, pc_f + l' + 2n+1,\, (pc+n+1) : ras \rangle
+  &\triangleright^\ast \langle \texttt{RET},\, \mathcal{A}(a, \sigma'', s'') : e,\, \\
+  &\quad \sigma'',\, s'',\, pc_f + l' + 2n+1,\, (pc+n+1) : ras \rangle
   && (\text{correctness of } \mathcal{CA})   \\
-  &\triangleright \langle P[pc+n+1:],\, e,\, \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma'', s'')],\; s[\texttt{retvar} \mapsto s''(a)],\, pc+n+1,\, ras \rangle
-  && (\text{operational semantics})
+  &\triangleright \langle P[pc+n+1:],\, e,\, \sigma[\texttt{retvar} \mapsto \mathcal{A}(a, \sigma'', s'')],\; \\
+  &\quad s[\texttt{retvar} \mapsto s''(a)],\, pc+n+1,\, ras \rangle
+  && (\text{operational semantics}) \\
   \end{aligned}
 \]
 
 Similar to our proof of the correctness of \texttt{while}-statements, this assumes a finite depth of recursion (0, if there is no recursion) as we have assumed termination. \\
 
-\footnotetext{Note that we do not cover the case where the execution of $S_f$ leads to an erroneous state, as the last semantic rule in the section \textbf{2.2.5} of this document and [$\text{err}_{\text{os}}$] rule of high-level semantics ensure the correctness of the translation in this case.}
+\footnotetext{Note that we do not cover the case where the execution of $S_f$ leads to an erroneous state, as the last semantic rule in the section \textbf{2.2.4} of this document and [$\text{err}_{\text{os}}$] rule of high-level semantics ensure the correctness of the translation in this case.}
 
-  \item \textbf{case 11:} $P = read$
 
-  \item \textbf{case 12:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
+  \item \textbf{case 11:} $P = S_1\texttt{;}S_2$ for some statements $S_1$, $S_2$\\
 
     Assume
 
@@ -1685,7 +1766,7 @@ Similar to our proof of the correctness of \texttt{while}-statements, this assum
 
   \[
       \begin{aligned}
-      \langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle
+      &\langle \mathcal{C}(P),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{C}(S_1\texttt{;}S_2),\, e,\, \sigma,\, s,\, pc \rangle \\
       &= \langle \mathcal{C}(S_1) : \mathcal{C}(S_2) ,\, e,\, \sigma,\, s,\, pc \rangle
       && \text{(definition of } \mathcal{C}\text{)} \\   
@@ -1705,7 +1786,6 @@ Observe that at each case, the resulting program state and scope tuple is the eq
 \\
 \end{proof}
 
-\newpage
 Cautious readers may notice that some (sub)cases including erroneous program states (either as input or output) is omitted in our correctness proofs. One of the following reasons is the justification for this omittance:
 
 \begin{enumerate}
@@ -1713,7 +1793,7 @@ Cautious readers may notice that some (sub)cases including erroneous program sta
 
     \item Such an erroneous case can be detected during compile-time, therefore no \texttt{SelVerIR} code inheriting the error can be generated.
 
-    \item After a finite number of non-erroneous execution steps, which are proven correct in this section, program reaches an error state; but by section \textbf{2.2.5} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$ the remaining finite execution is also correct.
+    \item After a finite number of non-erroneous execution steps, which are proven correct in this section, program reaches an error state; but by section \textbf{2.2.4} of this document and the operational semantic rule of high-level \texttt{SelVeri} language $[ \text{err}_{\text{os}} ]$ the remaining finite execution is also correct.
 \end{enumerate}
 
 No matter the reason, as no statically-correct \texttt{SelVeri} program includes any of the omitted cases, the correctness proofs above are sufficient for establishing the correctness of our implementation. \\
@@ -1789,5 +1869,10 @@ Now, as our formalization enhanced, we can attempt to prove the correctness of d
 \section{Turing-completeness of \texttt{SelVerIR}}
 
 As \texttt{SelVeri} is a Turing-complete programming language that can be embedded into \texttt{SelVerIR} in a semantically-equivalent way, via the compilation function $\mathcal{C}$; \texttt{SelVerIR} is able to compute any computable function, hence is Turing-complete.
+
+\newpage
+\begin{thebibliography}{9}
+\bibitem{nielson2007} H. R. Nielson and F. Nielson, \emph{Semantics with Applications: An Appetizer}, 2007.
+\end{thebibliography}
 
 \end{document}
